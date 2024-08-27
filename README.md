@@ -35,5 +35,6 @@ Or in the `.lua` file:
 mp.add_key_binding('ctrl+a', 'update_anilist', update_anilist)
 ```
 
+You can change the debug info, where it specifies the anime and episode detected by launching via cmd with `mpv 'file.mkv' --log-file=logs.txt -v`
 ## Credits
 This script was inspired by [mpv-open-anilist-page](https://github.com/ehoneyse/mpv-open-anilist-page) by ehoneyse.
