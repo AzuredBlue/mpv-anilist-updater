@@ -14,12 +14,10 @@ pip install guessit requests
 ## Installation
 Copy the `.lua` and `.py` files into your mpv scripts folder.
 
-You **WILL** need an AniList token for it to work, heres how to get one:
-  1. Go to AniList and click on settings.
-  2. Go to the `Developer` section and click on `Create a new client`
-  3. There, simply put the name you wish (`MPV Integration`) and a Redirect URL (doesnt matter, i chose `http://localhost`)
-  4. After that, simply copy your Client ID and go to `https://anilist.co/api/v2/oauth/authorize?client_id={client_id}&response_type=token`, replacing `{client_id}` with yours.
-  5. Then, authorize the app, and you will be redirected to the URL you put before. The Access Token will be on the url: `https://localhost/#access_token={token}&token_type=Bearer&expires_in=31536000`
+You **WILL** need an AniList access token for it to work:
+  1. Visit `https://anilist.co/api/v2/oauth/authorize?client_id=20740&response_type=token`
+  2. Then, authorize the app, and you will be redirected to a localhost url
+  3. Copy the token from the url (`https://localhost/#access_token= {token} &token_type=Bearer&expires_in=31536000`)
 
 After that, you can either create a `anilistToken.txt` file in the scripts folder, or modify the `.py` file (line 10).
 
