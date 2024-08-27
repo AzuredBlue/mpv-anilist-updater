@@ -148,11 +148,9 @@ def get_episode_count(id):
         print(response.json())
         return response.json()['data']['MediaList']['progress']
     elif response.status_code == 404: # Happens if you don't have that anime on your list.
-        print("ANIME NOT IN USER\'S LIST. ABORTING")
-        return None
+        raise Exception("ANIME NOT IN USER\'S LIST. ABORTING")
     else:
-        print(response.json())
-        return None
+        raise Exception("Error while trying to get episode count.")
 
 
 def increment_episode_count(id, progress):
