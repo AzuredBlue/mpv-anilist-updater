@@ -1,2 +1,26 @@
 # mpv-anilist-updater
-mpv script to autoupdate your anilist with anime that you watch
+A script for MPV that automatically updates your AniList based on the file you just watched. It will not update if the anime is not in your user's library or if the episode you are watching isnt newer than your current progress count.
+
+## Requirements
+You will need Python 3 installed, as well as the libraries `guessit` and `requests`:
+```bash
+pip install guessit requests
+```
+
+## Installation
+Simply copy the `.lua` and `.py` files into your mpv scripts folder.
+
+## Usage
+The script will automatically update your anilist when the video you are watching reaches 85% completion. You can also use the keybind `ctrl + a` to do it manually.
+You can change this keybind in your input.conf:
+```bash
+A script-binding update_anilist
+```
+
+Or in the `.lua` file:
+```lua
+mp.add_key_binding('ctrl+a', 'update_anilist', update_anilist)
+```
+
+## Credits
+This script was inspired by [mpv-open-anilist-page](https://github.com/ehoneyse/mpv-open-anilist-page) by ehoneyse.
