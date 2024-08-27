@@ -32,7 +32,6 @@ def get_user_id():
 
     if response.status_code == 200:
         data = response.json()['data']['Viewer']
-        print('ID: ' + str(data['id']))
         return data['id']
     else:
         print("Failed to fetch user information")
@@ -67,9 +66,6 @@ def handle_filename(filename):
     # If there is a part attached, append it to the name.
     if "part" in guess:
         name = name + " " + str(guess["part"])
-
-    # Print the actual name that will be searched at the end
-    print(name)
 
     # Get the id of the anime from AniList's api.
     anime_id = get_anime_id(name)
