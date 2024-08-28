@@ -10,7 +10,6 @@ end
 
 local function get_python_command()
     local os_name = package.config:sub(1,1)
-    print("OS NAME IS " .. package.config)
     if os_name == '\\' then
         -- Windows
         return "python"
@@ -42,14 +41,14 @@ function check_progress()
 end
 
 -- Function to update anilist. Displays an OSD message when 85% of the video has played.
-function update_anilist()
+function update_anilist(action)
     local script_dir = debug.getinfo(1).source:match("@?(.*/)")
     local directory = mp.get_property("working-directory")
     -- It seems like in Linux working-directory sometimes returns it without a "/" at the end
     local path = ((directory:sub(-1) == '/' or directory:sub(-1) == '\\') and directory or directory..'/') .. mp.get_property("path") -- Absolute path of the file we are playing
     local table = {}
     table.name = "subprocess"
-    table.args = {python_command, script_dir.."anilistUpdater.py", path}
+    table.args = {python_command, script_dir.."anilistUpdater.py", path, action}
     local cmd = mp.command_native_async(table, callback)
 end
 
@@ -61,5 +60,11 @@ mp.register_event("file-loaded", function()
     triggered = false
 end)
 
--- Keybind, modify as you please
-mp.add_key_binding('ctrl+a', 'update_anilist', update_anilist)
+-- Keybinds, modify as you please
+mp.add_key_binding('ctrl+a', 'update_anilist', function()
+    update_anilist("update")
+end)
+
+mp.add_key_binding('ctrl+b', 'launch_anilist', function()
+    update_anilist("launch")
+end)
