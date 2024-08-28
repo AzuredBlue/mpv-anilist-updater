@@ -12,10 +12,10 @@ This is a personal project, not sure how efficient it is.
 It uses Guessit to try to get as much information as possible from the file name. Taking into account current formatting formats, 
 it tries to guess if the title obtained is the real one, if it isn't, it will try to get it from the name of the folder it is in.
 
-If the torrent file has absolute numbering (looking at you, SubsPlease) it will try to guess the season and episode.
-However, due to limitations, it can only guess ± 1 season, since AniList api only provides direct relations (direct sequel or prequel).
+If the torrent file has absolute numbering (looking at you, SubsPlease) it will try to guess the season and episode
+by selecting all animes with a similar name that are "TV" and over 21 minutes.
 
-A better solution to absolute numbering is to rename the file with the proper Season and Episode.
+If it still doesn't work, rename the file with the proper Season and Episode.
 
 ## Requirements
 You will need Python 3 installed, as well as the libraries `guessit` and `requests`:

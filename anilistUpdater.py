@@ -5,7 +5,7 @@ import requests
 from guessit import guessit
 
 __location__ = os.path.realpath(os.path.join(os.getcwd(), os.path.dirname(__file__)))
-
+ANILIST_API_URL = 'https://graphql.anilist.co'
 # Reads your AniList Access Token from the anilistToken.txt
 ACCESS_TOKEN = 'xxx' # You can modify it here as well
 if ACCESS_TOKEN == 'xxx':
@@ -21,7 +21,7 @@ def get_user_id():
     '''
 
     response = requests.post(
-        'https://graphql.anilist.co',
+        ANILIST_API_URL,
         headers={
             'Authorization': f'Bearer {ACCESS_TOKEN}',
             'Content-Type': 'application/json',
@@ -39,73 +39,47 @@ def get_user_id():
     
 def get_all_seasons(anime_name):
     query = '''
-    query ($search: String) {
-        Media (search: $search, type: ANIME) {
-            id
-            title {
-                romaji
-            }
-            season
-            seasonYear
-            episodes
-            relations {
-                edges {
-                    relationType
-                    node {
-                        id
-                        title {
-                            romaji
-                        }
-                        season
-                        seasonYear
-                        episodes
-                        format
-                    }
+    query ($search: String, $page: Int) {
+        Page(page: $page) {
+            media(search: $search, type: ANIME) {
+                id
+                title {
+                    romaji
                 }
+                season
+                seasonYear
+                episodes
+                format
+                duration
             }
         }
     }
     '''
 
     variables = {
-        'search': anime_name
+        'search': anime_name,
+        'page': 1
     }
 
     response = requests.post(
-        'https://graphql.anilist.co',
+        ANILIST_API_URL,
         json={'query': query, 'variables': variables}
     )
 
     if response.status_code == 200:
         data = response.json()
-
-        # Extract the current anime season info
-        media = data.get('data', {}).get('Media', {})
-        anime_info = [{
-            'title': media.get('title', {}).get('romaji', 'Unknown'),
-            'episodes': media.get('episodes', 'Unknown'),
-            'seasonYear': media.get('seasonYear', 'Unknown'),
-            'season': media.get('season', 'Unknown')
-        }]
-
-        # Filter the related media for only relevant seasons (SEQUEL, PREQUEL, and TV format)
-        filtered_relations = []
-        for entry in media.get('relations', {}).get('edges', []):
-            related = entry.get('node', {})
-            relation_type = entry.get('relationType', 'Unknown')
-            related_format = related.get('format', 'Unknown')
-
-            if relation_type in ["SEQUEL", "PREQUEL"] and related_format == "TV":
-                filtered_relations.append({
-                    'title': related.get('title', {}).get('romaji', 'Unknown'),
-                    'episodes': related.get('episodes', 'Unknown'),
-                    'seasonYear': related.get('seasonYear', 'Unknown'),
-                    'season': related.get('season', 'Unknown')
+        # Extract the relevant anime data from the Page media
+        anime_seasons = []
+        for media in data.get('data', {}).get('Page', {}).get('media', []):
+            if media.get('format') == 'TV' and media.get('duration') > 21:  # Only include TV format and longer than 21 minutes per episode
+                anime_seasons.append({
+                    'title': media.get('title', {}).get('romaji', 'Unknown'),
+                    'episodes': media.get('episodes', 'Unknown'),
+                    'seasonYear': media.get('seasonYear', 'Unknown'),
+                    'season': media.get('season', 'Unknown')
                 })
-
-        # Combine the current anime info with the related seasons
-        all_seasons = anime_info + filtered_relations
-
+        
+        print (anime_seasons)
         # Define the correct season order
         season_order = {
             'WINTER': 1,
@@ -115,13 +89,12 @@ def get_all_seasons(anime_name):
         }
 
         # Sort by seasonYear and season
-        all_seasons_sorted = sorted(
-            all_seasons,
+        anime_seasons_sorted = sorted(
+            anime_seasons,
             key=lambda x: (x['seasonYear'], season_order.get(x['season'], 5))
         )
 
-        # Return the sorted list of seasons with their episode counts and titles
-        return all_seasons_sorted
+        return anime_seasons_sorted
     else:
         raise Exception(f"Query failed with status code {response.status_code}: {response.text}")
 
@@ -218,8 +191,6 @@ def handle_filename(filename):
 def get_anime_id(name):
     # Get the anime id based on the guessed name.
 
-    ANILIST_API_URL = 'https://graphql.anilist.co'
-
     query = '''
     query ($searchStr: String) { 
         Media (search: $searchStr, type: ANIME) {
@@ -272,7 +243,7 @@ def get_episode_count(id):
     }
 
     response = requests.post(
-        'https://graphql.anilist.co',
+        ANILIST_API_URL,
         headers={
             'Authorization': f'Bearer {ACCESS_TOKEN}',
             'Content-Type': 'application/json',
@@ -335,7 +306,7 @@ def increment_episode_count(id, file_progress, name):
 
     # Send the request to AniList
     response = requests.post(
-        'https://graphql.anilist.co',
+        ANILIST_API_URL,
         headers={
             'Authorization': f'Bearer {ACCESS_TOKEN}',
             'Content-Type': 'application/json',
