@@ -36,6 +36,117 @@ def get_user_id():
     else:
         print("Failed to fetch user information")
         return None
+    
+def get_all_seasons(anime_name):
+    query = '''
+    query ($search: String) {
+        Media (search: $search, type: ANIME) {
+            id
+            title {
+                romaji
+            }
+            season
+            seasonYear
+            episodes
+            relations {
+                edges {
+                    relationType
+                    node {
+                        id
+                        title {
+                            romaji
+                        }
+                        season
+                        seasonYear
+                        episodes
+                        format
+                    }
+                }
+            }
+        }
+    }
+    '''
+
+    variables = {
+        'search': anime_name
+    }
+
+    response = requests.post(
+        'https://graphql.anilist.co',
+        json={'query': query, 'variables': variables}
+    )
+
+    if response.status_code == 200:
+        data = response.json()
+
+        # Extract the current anime season info
+        media = data.get('data', {}).get('Media', {})
+        anime_info = [{
+            'title': media.get('title', {}).get('romaji', 'Unknown'),
+            'episodes': media.get('episodes', 'Unknown'),
+            'seasonYear': media.get('seasonYear', 'Unknown'),
+            'season': media.get('season', 'Unknown')
+        }]
+
+        # Filter the related media for only relevant seasons (SEQUEL, PREQUEL, and TV format)
+        filtered_relations = []
+        for entry in media.get('relations', {}).get('edges', []):
+            related = entry.get('node', {})
+            relation_type = entry.get('relationType', 'Unknown')
+            related_format = related.get('format', 'Unknown')
+
+            if relation_type in ["SEQUEL", "PREQUEL"] and related_format == "TV":
+                filtered_relations.append({
+                    'title': related.get('title', {}).get('romaji', 'Unknown'),
+                    'episodes': related.get('episodes', 'Unknown'),
+                    'seasonYear': related.get('seasonYear', 'Unknown'),
+                    'season': related.get('season', 'Unknown')
+                })
+
+        # Combine the current anime info with the related seasons
+        all_seasons = anime_info + filtered_relations
+
+        # Define the correct season order
+        season_order = {
+            'WINTER': 1,
+            'SPRING': 2,
+            'SUMMER': 3,
+            'FALL': 4
+        }
+
+        # Sort by seasonYear and season
+        all_seasons_sorted = sorted(
+            all_seasons,
+            key=lambda x: (x['seasonYear'], season_order.get(x['season'], 5))
+        )
+
+        # Return the sorted list of seasons with their episode counts and titles
+        return all_seasons_sorted
+    else:
+        raise Exception(f"Query failed with status code {response.status_code}: {response.text}")
+
+def find_season_and_episode(anime_name, absolute_episode):
+    try:
+        seasons = get_all_seasons(anime_name)
+        
+        # Initialize episode accumulation
+        accumulated_episodes = 0
+        
+        for season in seasons:
+            season_episodes = season['episodes']
+            if accumulated_episodes + season_episodes >= absolute_episode:
+                title = season['title']
+                season_year = season['seasonYear']
+                relative_episode = absolute_episode - accumulated_episodes
+                return (title, season_year, relative_episode)
+            
+            accumulated_episodes += season_episodes
+        
+        return None  # If the absolute episode number is higher than the total episodes
+
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        return None
 
 def handle_filename(filename):
     # Attempt to determine the corresponding anime from the filename with guessit
@@ -102,7 +213,7 @@ def handle_filename(filename):
     
     print(name)
     # Increment the episode count
-    increment_episode_count(anime_id, episode)
+    increment_episode_count(anime_id, episode, name)
 
 def get_anime_id(name):
     # Get the anime id based on the guessed name.
@@ -182,7 +293,7 @@ def get_episode_count(id):
         raise Exception("Error while trying to get episode count.")
 
 
-def increment_episode_count(id, file_progress):
+def increment_episode_count(id, file_progress, name):
 
     [current_progress, totalEpisodes] = get_episode_count(id)
 
@@ -195,7 +306,16 @@ def increment_episode_count(id, file_progress):
     
     # If the episode on the file is more than the total number of episodes, they are using absolute formatting (Ex. Jujutsu Kaisen - 46 = Jujutsu Kaisen S2E22)
     if file_progress > totalEpisodes:
-        raise Exception(f"Absolute episode formatting detected. Not updating ({file_progress} > {totalEpisodes})")
+        print("Episode number is in absolute value. Trying to convert to season and episode.")
+        result = find_season_and_episode(name, file_progress)
+        if result:
+            title, season_year, episode = result
+            print(f"Absolute episode {file_progress} corresponds to Anime: {title} ({season_year}), Episode: {episode}")
+            anime_id = get_anime_id(title)
+            increment_episode_count(anime_id, episode, title)
+            return
+        else:
+            print(f"Could not determine the season and episode for absolute episode {episode}.")
     
 
     # Prepare the GraphQL mutation query
