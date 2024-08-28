@@ -2,9 +2,9 @@ local utils = require 'mp.utils'
 
 function callback(success, result, error)
     if result.status == 0 then
-        mp.osd_message("Updated anime list", 1)
+        mp.osd_message("Updated anime correctly.", 1)
     else
-        mp.osd_message("Did not update anime.", 3)
+        mp.osd_message("Could not detect anime.", 3)
     end
 end
 
@@ -29,7 +29,6 @@ end
 
 -- Function to update anilist. Displays an OSD message when 85% of the video has played.
 function update_anilist()
-    mp.osd_message("85% of video played!", 4)
     local script_dir = debug.getinfo(1).source:match("@?(.*/)")
     local path = mp.get_property("working-directory") .. mp.get_property("path") -- Absolute path of the file we are playing
     local table = {}
