@@ -136,6 +136,7 @@ def get_anime_id(name):
 
 def get_episode_count(id):
     # Get the episode count to avoid updating the anime to a lower episode count
+    # Returns an array [progress, totalEpisodes]
     query = '''
     query ($mediaId: Int, $userId: Int) {
      MediaList(mediaId: $mediaId, userId: $userId) {
@@ -148,6 +149,7 @@ def get_episode_count(id):
            romaji
            english
          }
+         episodes
        }
      }
    }
@@ -173,21 +175,28 @@ def get_episode_count(id):
 
     if response.status_code == 200:
         print(response.json())
-        return response.json()['data']['MediaList']['progress']
+        return [response.json()['data']['MediaList']['progress'], response.json()['data']['MediaList']['media']["episodes"]]
     elif response.status_code == 404: # Happens if you don't have that anime on your list.
         raise Exception("ANIME NOT IN USER\'S LIST. ABORTING")
     else:
         raise Exception("Error while trying to get episode count.")
 
 
-def increment_episode_count(id, progress):
+def increment_episode_count(id, file_progress):
 
-    current_progress = get_episode_count(id)
+    [current_progress, totalEpisodes] = get_episode_count(id)
+
     if current_progress is None:
         return
-    # progress is the episode gotten from the filename
-    if progress <= current_progress:
-        raise Exception(f"Episode was not new. Not updating ({progress} <= {current_progress})")
+    
+    # If the episode on the file name is less than your current progress, dont update
+    if file_progress <= current_progress:
+        raise Exception(f"Episode was not new. Not updating ({file_progress} <= {current_progress})")
+    
+    # If the episode on the file is more than the total number of episodes, they are using absolute formatting (Ex. Jujutsu Kaisen - 46 = Jujutsu Kaisen S2E22)
+    if file_progress > totalEpisodes:
+        raise Exception(f"Absolute episode formatting detected. Not updating ({file_progress} > {totalEpisodes})")
+    
 
     # Prepare the GraphQL mutation query
     query = '''
@@ -201,7 +210,7 @@ def increment_episode_count(id, progress):
 
     variables = {
         "mediaId": id,
-        "progress": progress
+        "progress": file_progress
     }
 
     # Send the request to AniList
