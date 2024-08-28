@@ -1,7 +1,10 @@
 # mpv-anilist-updater
 A script for MPV that automatically updates your AniList based on the file you just watched. It will not update if the anime is not in your user's library or if the episode you are watching isnt newer than your current progress count.
 
-KEEP IN MIND, it all depends on how the file is named. Guessit, unfortunately, cannot do magic. If it does not work in some of your torrented anime, try using PowerRename to change it into a better format (`{name} {part?} - {S\dE\d+}`)
+KEEP IN MIND, it all depends on how the file is named. Guessit, unfortunately, cannot do magic. 
+If the file does not have the anime name, make sure the folder containing that anime does have the name and season.
+If it still does not work, try using PowerRename to change it into a better format (`{name} {part?} - {S\dE\d+}`)
+This should work on most torrented anime formats, except on those that use absolute formatting for episodes instead of seasons.
 
 This is a personal project, not sure how efficient it is.
 
