@@ -1,5 +1,6 @@
 import sys
 import os
+import webbrowser
 import requests
 
 from guessit import guessit
@@ -125,7 +126,10 @@ def handle_filename(filename):
     # Attempt to determine the corresponding anime from the filename with guessit
     # Here, we are dealing with filename, which is the absolute path of the file e are playing
     # Split will divide into the diferent directories, you can't have a directory that includes "\"
-    filename = filename.split("\\")
+    if filename[0] == '/':
+        filename = filename.split("/")
+    else:
+        filename = filename.split("\\")
 
     name = ""
     # Attempt to guess with the filename
@@ -186,7 +190,10 @@ def handle_filename(filename):
     
     print(name)
     # Increment the episode count
-    increment_episode_count(anime_id, episode, name)
+    if sys.argv[2] == "update":
+        increment_episode_count(anime_id, episode, name)
+    elif sys.argv[2] == "launch":
+        webbrowser.open_new_tab('https://anilist.co/anime/' + str(anime_id))
 
 def get_anime_id(name):
     # Get the anime id based on the guessed name.
