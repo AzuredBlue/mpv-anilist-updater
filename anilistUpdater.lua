@@ -1,3 +1,5 @@
+local utils = require 'mp.utils'
+
 function callback(success, result, error)
     if result.status == 0 then
         mp.osd_message("Updated anime list", 1)
@@ -29,9 +31,10 @@ end
 function update_anilist()
     mp.osd_message("85% of video played!", 4)
     local script_dir = debug.getinfo(1).source:match("@?(.*/)")
+    local path = mp.get_property("working-directory") .. mp.get_property("path") -- Absolute path of the file we are playing
     local table = {}
     table.name = "subprocess"
-    table.args = {"python", script_dir.."anilistUpdater.py", mp.get_property("filename")}
+    table.args = {"python", script_dir.."anilistUpdater.py", path}
     local cmd = mp.command_native_async(table, callback)
 end
 
