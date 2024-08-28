@@ -12,15 +12,6 @@ This should work on most torrented anime formats, including those that use absol
 
 This is a personal project, not sure how efficient it is.
 
-## How It Works
-It uses Guessit to try to get as much information as possible from the file name. Taking into account current formatting formats, 
-it tries to guess if the title obtained is the real one, if it isn't, it will try to get it from the name of the folder it is in.
-
-If the torrent file has absolute numbering (looking at you, SubsPlease) it will try to guess the season and episode
-by selecting all animes with a similar name that are "TV" and over 21 minutes.
-
-If it still doesn't work, rename the file with the proper Season and Episode.
-
 ## Requirements
 You will need Python 3 installed, as well as the libraries `guessit` and `requests`:
 ```bash
@@ -49,6 +40,16 @@ Or in the `.lua` file:
 mp.add_key_binding('ctrl+a', 'update_anilist', update_anilist)
 ```
 
-To see the debug info (which anime got detected and which episode) launch via cmd with `mpv 'file.mkv'`
+You can also use `ctrl + b` to open in a new tab the AniList page of the anime that got detected, making sure it is the correct one.
+
+## How It Works
+It uses Guessit to try to get as much information as possible from the file name. Taking into account current title formats, 
+it tries to guess if the title obtained is the real one, if it isn't, it will try to get it from the name of the folder it is in.
+
+If the torrent file has absolute numbering (looking at you, SubsPlease) it will try to guess the season and episode
+by selecting all animes with a similar name that are "TV", over 21 minutes and sorting it based on release date.
+
+If it still doesn't work, rename the file with the proper Season and Episode.
+
 ## Credits
 This script was inspired by [mpv-open-anilist-page](https://github.com/ehoneyse/mpv-open-anilist-page) by ehoneyse.
