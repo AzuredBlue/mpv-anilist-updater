@@ -9,7 +9,7 @@ ANILIST_API_URL = 'https://graphql.anilist.co'
 # Reads your AniList Access Token from the anilistToken.txt
 ACCESS_TOKEN = 'xxx' # You can modify it here as well
 if ACCESS_TOKEN == 'xxx':
-    ACCESS_TOKEN = open(os.path.join(__location__, 'anilistToken.txt')).read() 
+    ACCESS_TOKEN = open(os.path.join(__location__, 'anilistToken.txt')).read().replace("\n", "")
 
 def get_user_id():
     query = '''

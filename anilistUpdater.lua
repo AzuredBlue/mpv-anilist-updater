@@ -8,6 +8,20 @@ function callback(success, result, error)
     end
 end
 
+local function get_python_command()
+    local os_name = package.config:sub(1,1)
+    print("OS NAME IS " .. package.config)
+    if os_name == '\\' then
+        -- Windows
+        return "python"
+    else
+        -- Linux
+        return "python3"
+    end
+end
+
+local python_command = get_python_command()
+
 -- Make sure it doesnt trigger twice in 1 video
 local triggered = false
 
@@ -30,10 +44,12 @@ end
 -- Function to update anilist. Displays an OSD message when 85% of the video has played.
 function update_anilist()
     local script_dir = debug.getinfo(1).source:match("@?(.*/)")
-    local path = mp.get_property("working-directory") .. mp.get_property("path") -- Absolute path of the file we are playing
+    local directory = mp.get_property("working-directory")
+    -- It seems like in Linux working-directory sometimes returns it without a "/" at the end
+    local path = ((directory:sub(-1) == '/' or directory:sub(-1) == '\\') and directory or directory..'/') .. mp.get_property("path") -- Absolute path of the file we are playing
     local table = {}
     table.name = "subprocess"
-    table.args = {"python", script_dir.."anilistUpdater.py", path}
+    table.args = {python_command, script_dir.."anilistUpdater.py", path}
     local cmd = mp.command_native_async(table, callback)
 end
 
