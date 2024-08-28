@@ -2,9 +2,13 @@
 A script for MPV that automatically updates your AniList based on the file you just watched. It will not update if the anime is not in your user's library or if the episode you are watching isnt newer than your current progress count.
 
 KEEP IN MIND, it all depends on how the file is named. Guessit, unfortunately, cannot do magic. 
-If the file does not have the anime name, make sure the folder containing that anime does have the name and season.
-If it still does not work, try using PowerRename to change it into a better format (`{name} {part?} - {S\dE\d+}`)
-This should work on most torrented anime formats, except on those that use absolute formatting for episodes instead of seasons.
+If the file does not have the anime name, make sure the folder containing that anime does have the name.
+
+This should work on most torrented anime formats, including those that use absolute formatting:
+
+`[SubsPlease] Boku no Hero Academia - 152 (1080p) [AAC292E7].mkv` will be detected as S7 E14 and updated accordingly.
+
+`E12 - Welcome [F1119374].mkv` will work if the folder that it is in has `86` in the name. If it has `86 Part 2` then it should be `Episode 1`
 
 This is a personal project, not sure how efficient it is.
 
