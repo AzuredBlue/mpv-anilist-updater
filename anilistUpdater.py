@@ -47,11 +47,15 @@ def handle_filename(filename):
     print(guess)
     
     # "Title" is the name's guess from guessit
-    name = guess["title"]
+    if name in guess:
+        name = guess["title"]
+    else:
+        raise Exception("Name not in the guess or filename.") # TO DO: Maybe get the file name from the folder it is in?
 
     # Episode guess from the title.
     if "episode" in guess:
-        episode = guess["episode"]
+        episode = guess["episode"] # For cases in which the episode is 11.5, it will take it as episode 11 and 
+                                   # therefore not updating it, since you watch episode 11 first.
     else:
         episode = 1 # If theres no episode count, assume 1.
 
