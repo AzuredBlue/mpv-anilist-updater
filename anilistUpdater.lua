@@ -34,7 +34,7 @@ function check_progress()
     if duration and position then
         local progress = position / duration
         if progress >= 0.85 then
-            update_anilist()
+            update_anilist("update")
             triggered = true
         end
     end
