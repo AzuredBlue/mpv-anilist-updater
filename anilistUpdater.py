@@ -2,42 +2,61 @@ import sys
 import os
 import webbrowser
 import requests
-
 from guessit import guessit
-
 __location__ = os.path.realpath(os.path.join(os.getcwd(), os.path.dirname(__file__)))
+TXTPATH = os.path.join(__location__, 'anilistToken.txt')
+
 ANILIST_API_URL = 'https://graphql.anilist.co'
-# Reads your AniList Access Token from the anilistToken.txt
+
 ACCESS_TOKEN = 'xxx' # You can modify it here as well
+# Reads your AniList Access Token from the anilistToken.txt
 if ACCESS_TOKEN == 'xxx':
-    ACCESS_TOKEN = open(os.path.join(__location__, 'anilistToken.txt')).read().replace("\n", "")
+    txt = open(TXTPATH).read().replace("\n", "")
+    if ':' in txt:
+        ACCESS_TOKEN = txt.split(":")[1]
+    else:
+        ACCESS_TOKEN = txt
 
 def get_user_id():
-    query = '''
-    query {
-        Viewer {
-            id
-        }
-    }
-    '''
-
-    response = requests.post(
-        ANILIST_API_URL,
-        headers={
-            'Authorization': f'Bearer {ACCESS_TOKEN}',
-            'Content-Type': 'application/json',
-            'Accept': 'application/json'
-        },
-        json={'query': query}
-    )
-
-    if response.status_code == 200:
-        data = response.json()['data']['Viewer']
-        return data['id']
+    # Cache the user id
+    txt = open(TXTPATH).read().replace("\n", "")
+    if ':' in txt:
+        return int(txt.split(':')[0])
     else:
-        print("Failed to fetch user information")
-        return None
+        query = '''
+        query {
+            Viewer {
+                id
+            }
+        }
+        '''
+
+        response = requests.post(
+            ANILIST_API_URL,
+            headers={
+                'Authorization': f'Bearer {ACCESS_TOKEN}',
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
+            json={'query': query}
+        )
+
+        if response.status_code == 200:
+            user_id = response.json()['data']['Viewer']['id']
+
+            with open(TXTPATH, 'r') as file:
+                existing_content = file.read()
+            
+            with open(TXTPATH, 'w') as file:
+                file.write(str(user_id) + ':' + existing_content)
+            
+            return user_id;
+        else:
+            print("Failed to fetch user information")
+            return None
     
+
+# Only gets ran when we need to figure out the season of an anime with absolute numbering
 def get_all_seasons(anime_name):
     query = '''
     query ($search: String, $page: Int) {
@@ -75,6 +94,7 @@ def get_all_seasons(anime_name):
             if media.get('format') == 'TV' and media.get('duration') > 21:  # Only include TV format and longer than 21 minutes per episode
                 anime_seasons.append({
                     'title': media.get('title', {}).get('romaji', 'Unknown'),
+                    'id': media.get('id', 'Unknown'),
                     'episodes': media.get('episodes', 'Unknown'),
                     'seasonYear': media.get('seasonYear', 'Unknown'),
                     'season': media.get('season', 'Unknown')
@@ -99,6 +119,7 @@ def get_all_seasons(anime_name):
     else:
         raise Exception(f"Query failed with status code {response.status_code}: {response.text}")
 
+# Only gets ran when we need to figure out the season of an anime with absolute numbering
 def find_season_and_episode(anime_name, absolute_episode):
     try:
         seasons = get_all_seasons(anime_name)
@@ -110,9 +131,9 @@ def find_season_and_episode(anime_name, absolute_episode):
             season_episodes = season['episodes']
             if accumulated_episodes + season_episodes >= absolute_episode:
                 title = season['title']
-                season_year = season['seasonYear']
+                id = season['id']
                 relative_episode = absolute_episode - accumulated_episodes
-                return (title, season_year, relative_episode)
+                return (title, id, relative_episode)
             
             accumulated_episodes += season_episodes
         
@@ -199,7 +220,6 @@ def get_anime_id(name):
     query ($searchStr: String) { 
         Media (search: $searchStr, type: ANIME) {
             id
-            siteUrl
         }
     }
     '''
@@ -245,15 +265,7 @@ def get_episode_count(id):
 
     response = requests.post(
         ANILIST_API_URL,
-        headers={
-            'Authorization': f'Bearer {ACCESS_TOKEN}',
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-        },
-        json={
-            'query': query,
-            'variables': variables,
-        }
+        json={'query': query, 'variables': variables}
     )
 
     if response.status_code == 200:
@@ -266,7 +278,7 @@ def get_episode_count(id):
 
 
 def increment_episode_count(id, file_progress, name):
-    print("AAAAAAAAAAAAAAAAAAAAA:" + sys.argv[2])
+
     [current_progress, totalEpisodes] = get_episode_count(id)
 
     if current_progress is None:
@@ -277,9 +289,8 @@ def increment_episode_count(id, file_progress, name):
         print("Episode number is in absolute value. Trying to convert to season and episode.")
         result = find_season_and_episode(name, file_progress)
         if result:
-            title, season_year, episode = result
-            print(f"Absolute episode {file_progress} corresponds to Anime: {title} ({season_year}), Episode: {episode}")
-            anime_id = get_anime_id(title)
+            title, anime_id, episode = result
+            print(f"Absolute episode {file_progress} corresponds to Anime: {title}, Episode: {episode}")
             increment_episode_count(anime_id, episode, title)
             return
 
