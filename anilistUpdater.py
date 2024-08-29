@@ -190,10 +190,7 @@ def handle_filename(filename):
     
     print(name)
     # Increment the episode count
-    if sys.argv[2] == "update":
-        increment_episode_count(anime_id, episode, name)
-    elif sys.argv[2] == "launch":
-        webbrowser.open_new_tab('https://anilist.co/anime/' + str(anime_id))
+    increment_episode_count(anime_id, episode, name)
 
 def get_anime_id(name):
     # Get the anime id based on the guessed name.
@@ -219,9 +216,6 @@ def get_anime_id(name):
         return response.json()["data"]["Media"]["id"]
     else:
         raise Exception("Query failed!")
-
-    return None
-
 
 def get_episode_count(id):
     # Get the episode count to avoid updating the anime to a lower episode count
@@ -272,15 +266,11 @@ def get_episode_count(id):
 
 
 def increment_episode_count(id, file_progress, name):
-
+    print("AAAAAAAAAAAAAAAAAAAAA:" + sys.argv[2])
     [current_progress, totalEpisodes] = get_episode_count(id)
 
     if current_progress is None:
         return
-    
-    # If the episode on the file name is less than your current progress, dont update
-    if file_progress <= current_progress:
-        raise Exception(f"Episode was not new. Not updating ({file_progress} <= {current_progress})")
     
     # If the episode on the file is more than the total number of episodes, they are using absolute formatting (Ex. Jujutsu Kaisen - 46 = Jujutsu Kaisen S2E22)
     if file_progress > totalEpisodes:
@@ -292,9 +282,16 @@ def increment_episode_count(id, file_progress, name):
             anime_id = get_anime_id(title)
             increment_episode_count(anime_id, episode, title)
             return
-        else:
-            print(f"Could not determine the season and episode for absolute episode {episode}.")
+
+        
+    # Make sure its after it was converted from absolute numbering to Season and Episode
+    if sys.argv[2] == "launch":
+        webbrowser.open_new_tab('https://anilist.co/anime/' + str(id))
+        return
     
+    # If the episode on the file name is less than your current progress, dont update
+    if file_progress <= current_progress:
+        raise Exception(f"Episode was not new. Not updating ({file_progress} <= {current_progress})")
 
     # Prepare the GraphQL mutation query
     query = '''
@@ -331,8 +328,6 @@ def increment_episode_count(id, file_progress, name):
     else:
         print(f"Failed to update episode count: {response.status_code}")
         print(response.json())
-
-
 
 if __name__ == "__main__":
     try:
