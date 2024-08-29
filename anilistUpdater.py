@@ -19,7 +19,12 @@ if ACCESS_TOKEN == 'xxx':
 
 def get_user_id():
     # Cache the user id
-    txt = open(TXTPATH).read().replace('\n', '')
+    txt = ''
+    try:
+        txt = open(TXTPATH).read().replace('\n', '')
+    except Exception as e:
+        print('Error trying to read file: ' + str(e))
+
     if ':' in txt:
         return int(txt.split(':')[0])
     else:
@@ -43,13 +48,15 @@ def get_user_id():
 
         if response.status_code == 200:
             user_id = response.json()['data']['Viewer']['id']
+            try:
+                with open(TXTPATH, 'r') as file:
+                    existing_content = file.read()
 
-            with open(TXTPATH, 'r') as file:
-                existing_content = file.read()
-            
-            with open(TXTPATH, 'w') as file:
-                file.write(str(user_id) + ':' + existing_content)
-            
+                with open(TXTPATH, 'w') as file:
+                    file.write(str(user_id) + ':' + existing_content)
+            except Exception as e:
+                print('Error trying to read file: ' + str(e))
+
             return user_id;
         else:
             print('Failed to fetch user information')
