@@ -40,8 +40,9 @@ function check_progress()
     end
 end
 
--- Function to update anilist. Displays an OSD message when 85% of the video has played.
+-- Function to launch the .py script
 function update_anilist(action)
+    if action == "launch" then mp.osd_message("Launching AniList", 2) end
     local script_dir = debug.getinfo(1).source:match("@?(.*/)")
     local directory = mp.get_property("working-directory")
     -- It seems like in Linux working-directory sometimes returns it without a "/" at the end
