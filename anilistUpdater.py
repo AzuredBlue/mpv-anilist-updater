@@ -57,7 +57,7 @@ def get_user_id():
             except Exception as e:
                 print('Error trying to read file: ' + str(e))
 
-            return user_id;
+            return user_id
         else:
             print('Failed to fetch user information')
             return None
