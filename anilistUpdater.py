@@ -239,10 +239,12 @@ class AniListUpdater:
 
     # Update the anime based on file progress
     def update_episode_count(self, anime_id, file_progress, anime_name):
-        current_progress, total_episodes = self.get_episode_count(anime_id)
+        result = self.get_episode_count(anime_id)
 
-        if current_progress is None:
+        if result is None:
             return
+        
+        current_progress, total_episodes = result
 
         # If the episode in the file name is larger than the total amount of episodes
         # Then they are using absolute numbering format for episodes (looking at you SubsPlease)
