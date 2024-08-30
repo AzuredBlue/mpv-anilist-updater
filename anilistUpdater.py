@@ -3,31 +3,37 @@ import os
 import webbrowser
 import requests
 from guessit import guessit
-__location__ = os.path.realpath(os.path.join(os.getcwd(), os.path.dirname(__file__)))
-TXTPATH = os.path.join(__location__, 'anilistToken.txt')
 
-ANILIST_API_URL = 'https://graphql.anilist.co'
-ACCESS_TOKEN = 'xxx' # You can modify it here as well
+class AniListUpdater:
+    ANILIST_API_URL = 'https://graphql.anilist.co'
+    
+    # Load token and user id
+    def __init__(self):
+        self.access_token = self.load_access_token() # Replace token here if you don't use the .txt
+        self.user_id = self.get_user_id()
 
-# Reads your AniList Access Token from the anilistToken.txt
-if ACCESS_TOKEN == 'xxx':
-    txt = open(TXTPATH).read().replace('\n', '')
-    if ':' in txt:
-        ACCESS_TOKEN = txt.split(':')[1]
-    else:
-        ACCESS_TOKEN = txt
+    # Load token from anilistToken.txt
+    def load_access_token(self):
+        token_path = os.path.join(os.path.dirname(__file__), 'anilistToken.txt')
+        try:
+            with open(token_path, 'r') as file:
+                content = file.read().strip()
+                return content.split(':')[1] if ':' in content else content
+        except Exception as e:
+            print(f'Error reading access token: {e}')
+            return None
 
-def get_user_id():
-    # Cache the user id
-    txt = ''
-    try:
-        txt = open(TXTPATH).read().replace('\n', '')
-    except Exception as e:
-        print('Error trying to read file: ' + str(e))
+    # Load user id from file, if not then make api request and save it.
+    def get_user_id(self):
+        token_path = os.path.join(os.path.dirname(__file__), 'anilistToken.txt')
+        try:
+            with open(token_path, 'r') as file:
+                content = file.read().strip()
+                if ':' in content:
+                    return int(content.split(':')[0])
+        except Exception as e:
+            print(f'Error reading user ID: {e}')
 
-    if ':' in txt:
-        return int(txt.split(':')[0])
-    else:
         query = '''
         query {
             Viewer {
@@ -35,341 +41,255 @@ def get_user_id():
             }
         }
         '''
-
-        response = requests.post(
-            ANILIST_API_URL,
-            headers={
-                'Authorization': f'Bearer {ACCESS_TOKEN}',
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-            },
-            json={'query': query}
-        )
-
-        if response.status_code == 200:
-            user_id = response.json()['data']['Viewer']['id']
-            try:
-                with open(TXTPATH, 'r') as file:
-                    existing_content = file.read()
-
-                with open(TXTPATH, 'w') as file:
-                    file.write(str(user_id) + ':' + existing_content)
-            except Exception as e:
-                print('Error trying to read file: ' + str(e))
-
+        response = self.make_api_request(query, None, self.access_token)
+        if response and 'data' in response:
+            user_id = response['data']['Viewer']['id']
+            self.save_user_id(user_id)
             return user_id
+        return None
+
+    # Cache user id
+    def save_user_id(self, user_id):
+        token_path = os.path.join(os.path.dirname(__file__), 'anilistToken.txt')
+        try:
+            with open(token_path, 'r+') as file:
+                content = file.read()
+                file.seek(0)
+                file.write(f'{user_id}:{content}')
+        except Exception as e:
+            print(f'Error saving user ID: {e}')
+
+    # Function to make an api request to AniList's api
+    def make_api_request(self, query, variables=None, access_token=None):
+        headers = {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+        }
+        if access_token:
+            headers['Authorization'] = f'Bearer {access_token}'
+        
+        response = requests.post(self.ANILIST_API_URL, json={'query': query, 'variables': variables}, headers=headers)
+        if response.status_code == 200:
+            return response.json()
         else:
-            print('Failed to fetch user information')
+            print(f'API request failed: {response.status_code} - {response.text}')
             return None
-    
-# Only gets ran when we need to figure out the season of an anime with absolute numbering
-def get_all_seasons(anime_name):
-    query = '''
-    query ($search: String, $page: Int) {
-        Page(page: $page) {
-            media(search: $search, type: ANIME, format:TV, duration_greater:21) {
-                id
-                title {
-                    romaji
+
+    # Gets all seasons of an anime
+    def get_anime_seasons(self, anime_name):
+        query = '''
+        query ($search: String, $page: Int) {
+            Page(page: $page) {
+                media(search: $search, type: ANIME, format: TV, duration_greater: 21) {
+                    id
+                    title { romaji }
+                    season
+                    seasonYear
+                    episodes
                 }
-                season
-                seasonYear
-                episodes
-                format
-                duration
             }
         }
-    }
-    '''
+        '''
+        variables = {'search': anime_name, 'page': 1}
+        response = self.make_api_request(query, variables)
+        if response and 'data' in response:
+            seasons = response['data']['Page']['media']
+            return sorted(seasons, key=lambda x: (x['seasonYear'], self.season_order(x['season'])))
+        return []
 
-    variables = {
-        'search': anime_name,
-        'page': 1
-    }
+    @staticmethod
+    def season_order(season):
+        return {'WINTER': 1, 'SPRING': 2, 'SUMMER': 3, 'FALL': 4}.get(season, 5)
 
-    response = requests.post(
-        ANILIST_API_URL,
-        json={'query': query, 'variables': variables}
-    )
-
-    if response.status_code == 200:
-        data = response.json()
-        anime_seasons = []
-
-        for media in data['data']['Page']['media']:
-            anime_seasons.append({
-                'title': media['title']['romaji'],
-                'id': media['id'],
-                'episodes': media['episodes'],
-                'seasonYear': media['seasonYear'],
-                'season': media['season']
-            })
-        
-        # Needed to sort the seasons correctly.
-        season_order = {
-            'WINTER': 1,
-            'SPRING': 2,
-            'SUMMER': 3,
-            'FALL': 4
-        }
-
-        # Sort by seasonYear and season
-        anime_seasons_sorted = sorted(
-            anime_seasons,
-            key=lambda x: (x['seasonYear'], season_order.get(x['season'], 5))
-        )
-
-        return anime_seasons_sorted
-    else:
-        raise Exception(f'Query failed with status code {response.status_code}: {response.text}')
-
-# Only gets ran when we need to figure out the season of an anime with absolute numbering
-def find_season_and_episode(anime_name, absolute_episode):
-    try:
-        seasons = get_all_seasons(anime_name)
-        
-        # Initialize episode accumulation
+    # Finds the season and episode of an anime with absolute numbering
+    def find_season_and_episode(self, anime_name, absolute_episode):
+        seasons = self.get_anime_seasons(anime_name)
         accumulated_episodes = 0
-        
         for season in seasons:
             season_episodes = season['episodes']
             if accumulated_episodes + season_episodes >= absolute_episode:
-                title = season['title']
-                id = season['id']
-                relative_episode = absolute_episode - accumulated_episodes
-                return (title, id, relative_episode)
-            
+                return (
+                    season['title']['romaji'],
+                    season['id'],
+                    absolute_episode - accumulated_episodes
+                )
             accumulated_episodes += season_episodes
-        
-        return None  # If the absolute episode number is higher than the total episodes
-
-    except Exception as e:
-        print(f'An error occurred: {e}')
         return None
 
-def handle_filename(filename):
-    # Attempt to determine the corresponding anime from the filename with guessit
-    # Here, we are dealing with filename, which is the absolute path of the file e are playing
-    # Split will divide into the diferent directories, you can't have a directory that includes "\"
-    if filename[0] == '/':
-        filename = filename.split('/')
-    else:
-        filename = filename.split('\\')
+    def handle_filename(self, filename):
+        file_info = self.parse_filename(filename)
+        anime_id = self.get_anime_id(file_info['name'])
+        self.update_episode_count(anime_id, file_info['episode'], file_info['name'])
 
-    name = ''
-    season = ''
-    part = ''
+    # Parse the file name using guessit
+    def parse_filename(self, filepath):
+        path_parts = filepath.replace('\\', '/').split('/')
+        filename = path_parts[-1]
+        folder_name = path_parts[-2] if len(path_parts) > 1 else ''
 
-    season_index = -1
-    episode_index = -1
+        name = ''
+        season = ''
+        part = ''
+        episode = 1
+        season_index = -1
+        episode_index = -1
+
+        # First, try to guess from the filename
+        guess = guessit(filename, {'type': 'episode'})
+        print('File name guess: ' + str(guess))
+        keys = list(guess.keys())
+
+        # Episode guess from the title.
+        # Usually, releases are formated [Release Group] Title - S01EX
     
-    # Attempt to guess with the filename
-    guess = guessit(filename[-1], {'type': 'episode'})
-    # Debugging
-    print('File name guess: ' + str(guess))
-    keys = list(guess.keys())
-
-    # Episode guess from the title.
-    # Usually, releases are formated [Release Group] Title - S01EX
-
-    # If the episode index is 0, that would mean that the episode is before the title in the filename
-    # Which is a horrible way of formatting it, so assume its wrong
-
-    # If its 1, then the title is probably 0, so its okay. (Unless season is 0)
-    # Really? What is the format "S1E1 - {title}"? That's almost psycopathic.
-
-    # If its >2, theres probably a Release Group and Title / Season / Part, so its good
-
-    if 'episode' in guess:
-        episode = guess['episode'] # For cases in which the episode is 11.5, it will take it as episode 11 and 
-                                   # therefore not updating it, since you watch episode 11 first.
-        episode_index = keys.index('episode')
-        # print("EPISODE INDEX: " + str(episode_index))
-    else:
-        episode = 1 # If theres no episode count, assume 1.
-        episode_index = 1 # If it has no episode, its probably a movie and it should be okay
+        # If the episode index is 0, that would mean that the episode is before the title in the filename
+        # Which is a horrible way of formatting it, so assume its wrong
     
-    # Store the "season" and "part" of the original file name if they have.
-    if 'season' in guess:
-        season_index = keys.index('season')
-        season = str(guess['season'])
-
-    if 'part' in guess:
-        part = str(guess['part'])
+        # If its 1, then the title is probably 0, so its okay. (Unless season is 0)
+        # Really? What is the format "S1E1 - {title}"? That's almost psycopathic.
     
-    # "Title" is the name's guess from guessit
-    # If the episode index > 0 and season index > 0, its safe to assume that the title is in the file name
-    if 'title' in guess and (episode_index > 0 and (season_index > 0 or season_index == -1)):
-        name = guess['title']
-    else:
-        # If it isnt in the name of the file, try to guess using the name of the folder it is stored in
-        guess = guessit(filename[-2], {'type': 'episode'})
-        print('Folder guess:' + str(guess))
-        name = guess['title']
+        # If its >2, theres probably a Release Group and Title / Season / Part, so its good
 
-        # Add if they werent in the original file
-        if not season and 'season' in guess:
+        if 'episode' in guess:
+            episode = guess['episode']
+            episode_index = keys.index('episode')
+        else:
+            episode_index = 1  # Assume it's a movie if no episode
+
+        if 'season' in guess:
+            season_index = keys.index('season')
             season = str(guess['season'])
 
-        if not part and 'part' in guess:
+        if 'part' in guess:
             part = str(guess['part'])
 
-    if season:
-        name = name + ' ' + season
-    
-    if part:
-        name = name + ' ' + part
-    
-    # Adding the season AND part sometimes has its problems
-    # See EIGHTY SIX SEASON 1 PART 2:
-    # "EIGHTY SIX 1 2" does not give results searching, however
-    # "EIGHTY SIX 2" does
+        # If the title is not in the filename or episode index is 0, try the folder name
+        # If the episode index > 0 and season index > 0, its safe to assume that the title is in the file name
 
-    print('Guessed name: ' + name)
+        if 'title' in guess and (episode_index > 0 and (season_index > 0 or season_index == -1)):
+            name = guess['title']
+        else:
+            # If it isnt in the name of the file, try to guess using the name of the folder it is stored in
+            folder_guess = guessit(folder_name, {'type': 'episode'})
+            print('Folder guess: ' + str(folder_guess))
+            
+            if 'title' in folder_guess:
+                name = str(folder_guess['title'])
+            
+            # Add if they werent in the original file
+            if not season and 'season' in folder_guess:
+                season = str(folder_guess['season'])
+            
+            if not part and 'part' in folder_guess:
+                part = str(folder_guess['part'])
 
-    # Get the id of the anime from AniList's api.
-    anime_id = get_anime_id(name)
-    
-    # Increment the episode count
-    increment_episode_count(anime_id, episode, name)
+        # Add season and part if there are
+        if season:
+            name += f" {season}"
+        if part:
+            name += f" {part}"
 
-def get_anime_id(name):
-    # Get the anime id based on the guessed name.
+        print('Guessed name: ' + name)
 
-    query = '''
-    query ($searchStr: String) { 
-        Media (search: $searchStr, type: ANIME) {
-            id
-            siteUrl
+        return {
+            'name': name,
+            'episode': episode,
         }
-    }
-    '''
 
-    variables = {
-        'searchStr': name
-    }
-
-    response = requests.post(ANILIST_API_URL, json={'query': query, 'variables': variables})
-
-    if response.status_code == 200:
-        # Print the whole response for debugging.
-        print(response.json())
-        return response.json()['data']['Media']['id']
-    else:
-        raise Exception('Query failed!')
-
-def get_episode_count(id):
-    # Get the episode count to avoid updating the anime to a lower episode count
-    # Returns an array [progress, totalEpisodes]
-    query = '''
-    query ($mediaId: Int, $userId: Int) {
-     MediaList(mediaId: $mediaId, userId: $userId) {
-       id
-       mediaId
-       status
-       progress
-       media {
-         title {
-           romaji
-           english
-         }
-         episodes
-       }
-     }
-   }
-    '''
-
-    variables = {
-        'mediaId': id,
-        'userId': get_user_id() # Your user id, not sure if there's a way to get your current progress without it. I tried it and it kept saying "Completed" on status.
-    }
-
-    response = requests.post(
-        ANILIST_API_URL,
-        json={'query': query, 'variables': variables}
-    )
-
-    if response.status_code == 200:
-        print(response.json())
-        return [response.json()['data']['MediaList']['progress'], response.json()['data']['MediaList']['media']['episodes']]
-    elif response.status_code == 404: # Happens if you don't have that anime on your list.
-        
-        # Still try to launch the anilist, might be wrong if its in absolute numbering
-        # For it to work properly, you'd need the anime on your watch list
-        if sys.argv[2] == 'launch':
-            webbrowser.open_new_tab('https://anilist.co/anime/' + str(id))
-
-        raise Exception('ANIME NOT IN USER\'S LIST. ABORTING')
-    else:
-        raise Exception('Error while trying to get episode count.')
-
-
-def increment_episode_count(id, file_progress, name):
-
-    [current_progress, totalEpisodes] = get_episode_count(id)
-
-    if current_progress is None:
-        return
+    # Get the anime's id from the guessed name
+    def get_anime_id(self, name):
+        query = '''
+        query ($search: String) { 
+            Media (search: $search, type: ANIME) {
+                id
+                siteUrl
+            }
+        }
+        '''
+        variables = {'search': name}
+        response = self.make_api_request(query, variables)
+        if response and 'data' in response:
+            return response['data']['Media']['id']
+        return None
     
-    # If the episode on the file is more than the total number of episodes, they are using absolute formatting (Ex. Jujutsu Kaisen - 46 = Jujutsu Kaisen S2E22)
-    if file_progress > totalEpisodes:
-        print('Episode number is in absolute value. Trying to convert to season and episode.')
-        result = find_season_and_episode(name, file_progress)
-        if result:
-            title, anime_id, episode = result
-            print(f'Absolute episode {file_progress} corresponds to Anime: {title}, Episode: {episode}')
-            increment_episode_count(anime_id, episode, title)
+    # Gets episode count from id. Returns [progress, totalEpisodes]
+    def get_episode_count(self, anime_id):
+        query = '''
+        query ($mediaId: Int, $userId: Int) {
+            MediaList(mediaId: $mediaId, userId: $userId) {
+                progress
+                media {
+                    episodes
+                }
+            }
+        }
+        '''
+        variables = {'mediaId': anime_id, 'userId': self.user_id}
+
+        response = self.make_api_request(query, variables)
+
+        if response and 'data' in response and response['data']['MediaList']:
+            media_list = response['data']['MediaList']
+            return media_list['progress'], media_list['media']['episodes']
+        
+        if sys.argv[2] == 'launch':
+            webbrowser.open_new_tab(f'https://anilist.co/anime/{anime_id}')
+            return
+        return None, None
+
+    # Update the anime based on file progress
+    def update_episode_count(self, anime_id, file_progress, anime_name):
+        current_progress, total_episodes = self.get_episode_count(anime_id)
+
+        if current_progress is None:
             return
 
-        
-    # Make sure its after it was converted from absolute numbering to Season and Episode
-    if sys.argv[2] == 'launch':
-        webbrowser.open_new_tab('https://anilist.co/anime/' + str(id))
-        return
-    
-    # If the episode on the file name is less than your current progress, dont update
-    if file_progress <= current_progress:
-        raise Exception(f'Episode was not new. Not updating ({file_progress} <= {current_progress})')
+        # If the episode in the file name is larger than the total amount of episodes
+        # Then they are using absolute numbering format for episodes (looking at you SubsPlease)
+        # Try to guess season and episode.
+        if file_progress > total_episodes:
+            print('Episode number is in absolute value. Converting to season and episode.')
+            result = self.find_season_and_episode(anime_name, file_progress)
+            if result:
+                title, new_anime_id, new_episode = result
+                print(f'Absolute episode {file_progress} corresponds to Anime: {title}, Episode: {new_episode}')
+                # Call the function again with the updated anime id and episode.
+                self.update_episode_count(new_anime_id, new_episode, title)
+                return
 
-    # Prepare the GraphQL mutation query
-    query = '''
-    mutation ($mediaId: Int, $progress: Int) {
-        SaveMediaListEntry (mediaId: $mediaId, progress: $progress) {
-            id
-            progress
+        # Only launch anilist
+        if sys.argv[2] == 'launch':
+            webbrowser.open_new_tab(f'https://anilist.co/anime/{anime_id}')
+            return
+
+        # If its lower than the current progress, dont update.
+        if file_progress <= current_progress:
+            raise Exception(f'Episode was not new. Not updating ({file_progress} <= {current_progress})')
+
+        query = '''
+        mutation ($mediaId: Int, $progress: Int) {
+            SaveMediaListEntry (mediaId: $mediaId, progress: $progress) {
+                id
+                progress
+            }
         }
-    }
-    '''
+        '''
+        variables = {'mediaId': anime_id, 'progress': file_progress}
 
-    variables = {
-        'mediaId': id,
-        'progress': file_progress
-    }
+        response = self.make_api_request(query, variables, self.access_token)
+        if response and 'data' in response:
+            updated_progress = response['data']['SaveMediaListEntry']['progress']
+            print(f'Episode count updated successfully! New progress: {updated_progress}')
+        else:
+            print('Failed to update episode count.')
 
-    # Send the request to AniList
-    response = requests.post(
-        ANILIST_API_URL,
-        headers={
-            'Authorization': f'Bearer {ACCESS_TOKEN}',
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-        },
-        json={
-            'query': query,
-            'variables': variables,
-        }
-    )
-
-    if response.status_code == 200:
-        updated_progress = response.json()['data']['SaveMediaListEntry']['progress']
-        print(f'Episode count updated successfully! New progress: {updated_progress}')
-    else:
-        print(f'Failed to update episode count: {response.status_code}')
-        print(response.json())
+def main():
+    try:
+        updater = AniListUpdater()
+        updater.handle_filename(sys.argv[1])
+    except Exception as e:
+        print(f'ERROR: {e}')
+        sys.exit(1)
 
 if __name__ == '__main__':
-    try:
-        handle_filename(sys.argv[1])
-    except Exception as e:
-        print('ERROR: {}'.format(e))
-        sys.exit(1)
+    main()
