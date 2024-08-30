@@ -62,7 +62,6 @@ def get_user_id():
             print('Failed to fetch user information')
             return None
     
-
 # Only gets ran when we need to figure out the season of an anime with absolute numbering
 def get_all_seasons(anime_name):
     query = '''
@@ -295,6 +294,12 @@ def get_episode_count(id):
         print(response.json())
         return [response.json()['data']['MediaList']['progress'], response.json()['data']['MediaList']['media']['episodes']]
     elif response.status_code == 404: # Happens if you don't have that anime on your list.
+        
+        # Still try to launch the anilist, might be wrong if its in absolute numbering
+        # For it to work properly, you'd need the anime on your watch list
+        if sys.argv[2] == 'launch':
+            webbrowser.open_new_tab('https://anilist.co/anime/' + str(id))
+
         raise Exception('ANIME NOT IN USER\'S LIST. ABORTING')
     else:
         raise Exception('Error while trying to get episode count.')
