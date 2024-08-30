@@ -65,6 +65,7 @@ class AniListUpdater:
             'Content-Type': 'application/json',
             'Accept': 'application/json'
         }
+
         if access_token:
             headers['Authorization'] = f'Bearer {access_token}'
         
@@ -249,7 +250,7 @@ class AniListUpdater:
         # If the episode in the file name is larger than the total amount of episodes
         # Then they are using absolute numbering format for episodes (looking at you SubsPlease)
         # Try to guess season and episode.
-        if file_progress > total_episodes:
+        if total_episodes != None and file_progress > total_episodes:
             print('Episode number is in absolute value. Converting to season and episode.')
             result = self.find_season_and_episode(anime_name, file_progress)
             if result:
