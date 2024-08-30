@@ -162,9 +162,11 @@ def handle_filename(filename):
     season = ''
     part = ''
 
+    season_index = -1
+    episode_index = -1
+    
     # Attempt to guess with the filename
     guess = guessit(filename[-1], {'type': 'episode'})
-
     # Debugging
     print('File name guess: ' + str(guess))
     keys = list(guess.keys())
@@ -199,7 +201,7 @@ def handle_filename(filename):
     
     # "Title" is the name's guess from guessit
     # If the episode index > 0 and season index > 0, its safe to assume that the title is in the file name
-    if 'title' in guess and (episode_index > 0 and season_index > 0):
+    if 'title' in guess and (episode_index > 0 and (season_index > 0 or season_index == -1)):
         name = guess['title']
     else:
         # If it isnt in the name of the file, try to guess using the name of the folder it is stored in
@@ -240,6 +242,7 @@ def get_anime_id(name):
     query ($searchStr: String) { 
         Media (search: $searchStr, type: ANIME) {
             id
+            siteUrl
         }
     }
     '''
@@ -252,6 +255,7 @@ def get_anime_id(name):
 
     if response.status_code == 200:
         # Print the whole response for debugging.
+        print(response.json())
         return response.json()['data']['Media']['id']
     else:
         raise Exception('Query failed!')
