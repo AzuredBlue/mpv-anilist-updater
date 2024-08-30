@@ -26,30 +26,45 @@ You **WILL** need an AniList access token for it to work:
   2. Then, authorize the app, and you will be redirected to a localhost url
   3. Copy the token from the url (`https://localhost/#access_token= {token} &token_type=Bearer&expires_in=31536000`)
 
-After that, you can either create a `anilistToken.txt` file in the scripts folder, or modify the `.py` file (line 10).
+After that, you can either create a `anilistToken.txt` file in the scripts folder, or modify the `.py` file (line 12).
 
 ## Usage
-The script will automatically update your anilist when the video you are watching reaches 85% completion. You can also use the keybind `ctrl + a` to do it manually.
-You can change this keybind in your input.conf:
+This script has 2 keybinds:
+  - Ctrl + A: Manually updates your AniList with the current episode you are watching.
+  - Ctrl + B: Opens the AniList page of the anime you are watching on your browser. Useful to see if it guessed the anime correctly.
+
+The script will automatically update your AniList when the video you are watching reaches 85% completion.
+
+You can change the keybinds in your input.conf:
 ```bash
 A script-binding update_anilist
+B script-binding launch_anilist
 ```
 
 Or in the `.lua` file:
 ```lua
-mp.add_key_binding('ctrl+a', 'update_anilist', update_anilist)
+mp.add_key_binding('ctrl+a', 'update_anilist', function()
+    update_anilist("update")
+end)
+
+mp.add_key_binding('ctrl+b', 'launch_anilist', function()
+    update_anilist("launch")
+end)
 ```
 
-You can also use `ctrl + b` to open in a new tab the AniList page of the anime that got detected, making sure it is the correct one.
-
 ## How It Works
-It uses Guessit to try to get as much information as possible from the file name. Taking into account current title formats, 
-it tries to guess if the title obtained is the real one, if it isn't, it will try to get it from the name of the folder it is in.
+The script uses Guessit to try to get as much information as possible from the file name.
 
-If the torrent file has absolute numbering (looking at you, SubsPlease) it will try to guess the season and episode
-by selecting all animes with a similar name that are "TV", over 21 minutes and sorting it based on release date.
+If the "episode" and "season" guess are before the title, it will consider that title wrong and try to get the title from the name of the folder it is in.
 
-If it still doesn't work, rename the file with the proper Season and Episode.
+If the torrent file has absolute numbering (looking at you, SubsPlease), it will try to guess the season and episode by:
+  1. Searching for the anime name on the AniList API.
+  2. Get all results with a similar name, whose format are `TV` and the duration greater than 21 minutes.
+  3. Sort them based on release date.
+  4. Get the season based on the absolute episode number
+
+It is not a flawless method. It won't work properly if the anime has seasons as ONA's. If it doesn't work properly, consider 
+changing the episode number to the normal format yourself, or simply give up on that series.
 
 ## Credits
 This script was inspired by [mpv-open-anilist-page](https://github.com/ehoneyse/mpv-open-anilist-page) by ehoneyse.
