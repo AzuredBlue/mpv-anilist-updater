@@ -4,12 +4,6 @@ A script for MPV that automatically updates your AniList based on the file you j
 KEEP IN MIND, it all depends on how the file is named. Guessit, unfortunately, cannot do magic. 
 If the file does not have the anime name, make sure the folder containing that anime does have the name.
 
-This should work on most torrented anime formats, including those that use absolute formatting:
-
-`[SubsPlease] Boku no Hero Academia - 152 (1080p) [AAC292E7].mkv` will be detected as S7 E14 and updated accordingly.
-
-`E12 - Welcome [F1119374].mkv` will work if the folder that it is in has `86` in the name. If it has `86 Part 2` then it should be `Episode 1`
-
 This is a personal project, not sure how efficient it is.
 
 ## Requirements
@@ -65,6 +59,31 @@ If the torrent file has absolute numbering (looking at you, SubsPlease), it will
 
 It is not a flawless method. It won't work properly if the anime has seasons as ONA's. If it doesn't work properly, consider 
 changing the episode number to the normal format yourself, or simply give up on that series.
+
+## FAQ (Probably)
+  **Q: On what formats does it work?**
+
+  A: It should work on most formats as long as the name is present in the file itself or the folder name.
+
+  `[SubsPlease] Boku no Hero Academia - 152 (1080p) [AAC292E7].mkv` will be detected as S7 E14 and updated accordingly.
+
+  `E12 - Welcome [F1119374].mkv` will work if the folder that it is in has `86` in the name. If it has `86 Part 2` then it should be `Episode 1`
+
+  If it does not, try changing the name of the file / folder, so the search has a better chance at finding it
+
+  **Q: Can I see which anime got detected before it updates?**
+
+  A: Ctrl + B will launch the AniList page of the anime it detects. To see more debug info launch via command line with `mpv file.mkv`
+
+  **Q: Can it wrongfully update my anime?**
+
+  A: No, AniList's API does not allow updating an anime which isnt on your watch list. If it didn't detect your anime correctly, then it will
+  simply error.
+
+  **Q: It does not work with X format. What do I do?**
+  
+  A: You can try launching the file through the command line with `mpv file.mkv` and see `Guessed name: X`. Try changing the file's name or folder so it has
+  a better chance at guessing the anime. If it still doesn't work, try opening a GitHub issue.
 
 ## Credits
 This script was inspired by [mpv-open-anilist-page](https://github.com/ehoneyse/mpv-open-anilist-page) by ehoneyse.
