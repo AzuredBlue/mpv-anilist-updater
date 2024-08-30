@@ -67,7 +67,7 @@ def get_all_seasons(anime_name):
     query = '''
     query ($search: String, $page: Int) {
         Page(page: $page) {
-            media(search: $search, type: ANIME) {
+            media(search: $search, type: ANIME, format:TV, duration_greater:21) {
                 id
                 title {
                     romaji
@@ -97,14 +97,13 @@ def get_all_seasons(anime_name):
         anime_seasons = []
 
         for media in data['data']['Page']['media']:
-            if media['format'] == 'TV' and media['duration'] > 21:  # Only include TV format and longer than 21 minutes per episode
-                anime_seasons.append({
-                    'title': media['title']['romaji'],
-                    'id': media['id'],
-                    'episodes': media['episodes'],
-                    'seasonYear': media['seasonYear'],
-                    'season': media['season']
-                })
+            anime_seasons.append({
+                'title': media['title']['romaji'],
+                'id': media['id'],
+                'episodes': media['episodes'],
+                'seasonYear': media['seasonYear'],
+                'season': media['season']
+            })
         
         # Needed to sort the seasons correctly.
         season_order = {
