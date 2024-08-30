@@ -247,6 +247,10 @@ class AniListUpdater:
         
         current_progress, total_episodes = result
 
+        # 'episode': [86, 13], lol.
+        if isinstance(file_progress, list):
+            file_progress = min(file_progress)
+
         # If the episode in the file name is larger than the total amount of episodes
         # Then they are using absolute numbering format for episodes (looking at you SubsPlease)
         # Try to guess season and episode.
