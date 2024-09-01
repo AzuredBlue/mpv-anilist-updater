@@ -186,9 +186,9 @@ class AniListUpdater:
 
         # Add season and part if there are
         if season:
-            name += f" {season}"
+            name += f" Season {season}"
         if part:
-            name += f" {part}"
+            name += f" Part {part}"
 
         print('Guessed name: ' + name)
 
