@@ -119,8 +119,8 @@ class AniListUpdater:
 
     def handle_filename(self, filename):
         file_info = self.parse_filename(filename)
-        anime_id = self.get_anime_id(file_info['name'])
-        self.update_episode_count(anime_id, file_info['episode'], file_info['name'])
+        anime_id, actual_name = self.get_anime_info(file_info['name'])
+        self.update_episode_count(anime_id, file_info['episode'], actual_name)
 
     # Parse the file name using guessit
     def parse_filename(self, filepath):
@@ -198,19 +198,22 @@ class AniListUpdater:
         }
 
     # Get the anime's id from the guessed name
-    def get_anime_id(self, name):
+    def get_anime_info(self, name):
         query = '''
         query ($search: String) { 
             Media (search: $search, type: ANIME) {
                 id
                 siteUrl
+                title {
+                    romaji
+                }
             }
         }
         '''
         variables = {'search': name}
         response = self.make_api_request(query, variables)
         if response and 'data' in response:
-            return response['data']['Media']['id']
+            return (response['data']['Media']['id'], response['data']['Media']['title']['romaji'])
         return None
     
     # Gets episode count from id. Returns [progress, totalEpisodes]
