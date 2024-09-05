@@ -28,12 +28,10 @@ local triggered = false
 function check_progress()
     if triggered then return end
 
-    local duration = mp.get_property_number("duration")
-    local position = mp.get_property_number("time-pos")
+    local percent_pos = mp.get_property_number("percent-pos")
     
-    if duration and position then
-        local progress = position / duration
-        if progress >= 0.85 then
+    if percent_pos then
+        if percent_pos >= 85 then
             update_anilist("update")
             triggered = true
         end
@@ -54,7 +52,7 @@ function update_anilist(action)
 end
 
 -- Checks progress every second
-mp.observe_property("time-pos", "number", check_progress)
+mp.observe_property("percent-pos", "number", check_progress)
 
 -- Reset triggered
 mp.register_event("file-loaded", function()
