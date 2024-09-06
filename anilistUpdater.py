@@ -119,7 +119,7 @@ class AniListUpdater:
 
     def handle_filename(self, filename):
         file_info = self.parse_filename(filename)
-        anime_id, actual_name = self.get_anime_info(file_info['name'])
+        anime_id, actual_name = self.get_anime_info(file_info['name'], file_info['year'])
         self.update_episode_count(anime_id, file_info['episode'], actual_name)
 
     # Parse the file name using guessit
@@ -131,6 +131,7 @@ class AniListUpdater:
         name = ''
         season = ''
         part = ''
+        year = ''
         episode = 1
         season_index = -1
         episode_index = -1
@@ -164,6 +165,9 @@ class AniListUpdater:
         if 'part' in guess:
             part = str(guess['part'])
 
+        if 'year' in guess:
+            year = str(guess['year'])
+
         # If the title is not in the filename or episode index is 0, try the folder name
         # If the episode index > 0 and season index > 0, its safe to assume that the title is in the file name
 
@@ -184,11 +188,15 @@ class AniListUpdater:
             if not part and 'part' in folder_guess:
                 part = str(folder_guess['part'])
 
+            if not year and 'year' in folder_guess:
+                year = str(folder_guess['year'])
+
         # Add season and part if there are
         if season:
             # Don't add season 1 (redudant?) unless theres a part
             if season != "1" or part:
                 name += f" Season {season}"
+
         if part:
             name += f" Part {part}"
 
@@ -197,22 +205,38 @@ class AniListUpdater:
         return {
             'name': name,
             'episode': episode,
+            'year': year,
         }
 
     # Get the anime's id from the guessed name
-    def get_anime_info(self, name):
-        query = '''
-        query ($search: String) { 
-            Media (search: $search, type: ANIME) {
-                id
-                siteUrl
-                title {
-                    romaji
+    def get_anime_info(self, name, year=None):
+        if year:
+            query = '''
+            query ($search: String, $year: Int) { 
+                Media (search: $search, type: ANIME, seasonYear: $year) {
+                    id
+                    siteUrl
+                    title {
+                        romaji
+                    }
                 }
             }
-        }
-        '''
-        variables = {'search': name}
+            '''
+            variables = {'search': name, 'year': year}
+        else:
+            query = '''
+            query ($search: String) { 
+                Media (search: $search, type: ANIME) {
+                    id
+                    siteUrl
+                    title {
+                        romaji
+                    }
+                }
+            }
+            '''
+            variables = {'search': name}
+        
         response = self.make_api_request(query, variables)
         if response and 'data' in response:
             return (response['data']['Media']['id'], response['data']['Media']['title']['romaji'])
