@@ -186,7 +186,9 @@ class AniListUpdater:
 
         # Add season and part if there are
         if season:
-            name += f" Season {season}"
+            # Don't add season 1 (redudant?) unless theres a part
+            if season != 1 and part:
+                name += f" Season {season}"
         if part:
             name += f" Part {part}"
 
