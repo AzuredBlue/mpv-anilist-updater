@@ -51,7 +51,6 @@ function update_anilist(action)
     local cmd = mp.command_native_async(table, callback)
 end
 
--- Checks progress every second
 mp.observe_property("percent-pos", "number", check_progress)
 
 -- Reset triggered
