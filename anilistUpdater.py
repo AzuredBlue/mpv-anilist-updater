@@ -326,9 +326,7 @@ class AniListUpdater:
             }
             '''
             variables = {'mediaId': anime_id, 'progress': file_progress}
-            
-        print(current_status)
-        if current_status == "PLANNING": print ("UPDATING TO CURRENT")
+
         response = self.make_api_request(query, variables, self.access_token)
         if response and 'data' in response:
             updated_progress = response['data']['SaveMediaListEntry']['progress']
