@@ -247,6 +247,7 @@ class AniListUpdater:
         query = '''
         query ($mediaId: Int, $userId: Int) {
             MediaList(mediaId: $mediaId, userId: $userId) {
+                status
                 progress
                 media {
                     episodes
@@ -260,7 +261,7 @@ class AniListUpdater:
 
         if response and 'data' in response and response['data']['MediaList']:
             media_list = response['data']['MediaList']
-            return media_list['progress'], media_list['media']['episodes']
+            return media_list['progress'], media_list['media']['episodes'], media_list['status']
         
         if sys.argv[2] == 'launch':
             webbrowser.open_new_tab(f'https://anilist.co/anime/{anime_id}')
@@ -274,7 +275,7 @@ class AniListUpdater:
         if result is None:
             return
         
-        current_progress, total_episodes = result
+        current_progress, total_episodes, current_status = result
 
         # 'episode': [86, 13], lol.
         if isinstance(file_progress, list):
@@ -302,16 +303,32 @@ class AniListUpdater:
         if file_progress <= current_progress:
             raise Exception(f'Episode was not new. Not updating ({file_progress} <= {current_progress})')
 
-        query = '''
-        mutation ($mediaId: Int, $progress: Int) {
-            SaveMediaListEntry (mediaId: $mediaId, progress: $progress) {
-                id
-                progress
+        # Handle changing "Planned to watch" animes to "Watching"
+        if current_status == "PLANNING" and file_progress != total_episodes: # Update only if its on "PLANNING" and it isn't the final episode.
+            query = '''
+            mutation ($mediaId: Int, $progress: Int, $status: MediaListStatus) {
+                SaveMediaListEntry (mediaId: $mediaId, progress: $progress, status: $status) {
+                    status
+                    id
+                    progress
+                }
             }
-        }
-        '''
-        variables = {'mediaId': anime_id, 'progress': file_progress}
-
+            '''
+            variables = {'mediaId': anime_id, 'progress': file_progress, 'status': "CURRENT"}
+        else:
+            query = '''
+            mutation ($mediaId: Int, $progress: Int) {
+                SaveMediaListEntry (mediaId: $mediaId, progress: $progress) {
+                    status
+                    id
+                    progress
+                }
+            }
+            '''
+            variables = {'mediaId': anime_id, 'progress': file_progress}
+            
+        print(current_status)
+        if current_status == "PLANNING": print ("UPDATING TO CURRENT")
         response = self.make_api_request(query, variables, self.access_token)
         if response and 'data' in response:
             updated_progress = response['data']['SaveMediaListEntry']['progress']
