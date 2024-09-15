@@ -304,28 +304,20 @@ class AniListUpdater:
             raise Exception(f'Episode was not new. Not updating ({file_progress} <= {current_progress})')
 
         # Handle changing "Planned to watch" animes to "Watching"
-        if current_status == "PLANNING" and file_progress != total_episodes: # Update only if its on "PLANNING" and it isn't the final episode.
-            query = '''
-            mutation ($mediaId: Int, $progress: Int, $status: MediaListStatus) {
-                SaveMediaListEntry (mediaId: $mediaId, progress: $progress, status: $status) {
-                    status
-                    id
-                    progress
-                }
+        query = '''
+        mutation ($mediaId: Int, $progress: Int, $status: MediaListStatus) {
+            SaveMediaListEntry (mediaId: $mediaId, progress: $progress, status: $status) {
+                status
+                id
+                progress
             }
-            '''
-            variables = {'mediaId': anime_id, 'progress': file_progress, 'status': "CURRENT"}
-        else:
-            query = '''
-            mutation ($mediaId: Int, $progress: Int) {
-                SaveMediaListEntry (mediaId: $mediaId, progress: $progress) {
-                    status
-                    id
-                    progress
-                }
-            }
-            '''
-            variables = {'mediaId': anime_id, 'progress': file_progress}
+        }
+        '''
+
+        variables = {'mediaId': anime_id, 'progress': file_progress}
+
+        if current_status == "PLANNING" and file_progress != total_episodes:
+            variables['status'] = "CURRENT" # Set to "CURRENT" if it's on planning and it isn't the final episode.
 
         response = self.make_api_request(query, variables, self.access_token)
         if response and 'data' in response:
