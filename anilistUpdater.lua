@@ -2,9 +2,7 @@ local utils = require 'mp.utils'
 
 function callback(success, result, error)
     if result.status == 0 then
-        mp.osd_message("Updated anime correctly.", 1)
-    else
-        mp.osd_message("Did not update anime.", 3)
+        mp.osd_message("Updated anime correctly.", 2)
     end
 end
 
