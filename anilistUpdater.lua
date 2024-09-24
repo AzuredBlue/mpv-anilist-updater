@@ -64,3 +64,31 @@ end)
 mp.add_key_binding('ctrl+b', 'launch_anilist', function()
     update_anilist("launch")
 end)
+
+-- Open the folder that the video is
+function open_folder()
+    local path = mp.get_property("path")
+    if not path then
+        mp.msg.warn("No file is currently playing.")
+        return
+    end
+
+    local directory = mp.get_property("working-directory")
+    
+    -- Use the system command to open the folder in File Explorer
+    local args
+    if package.config:sub(1,1) == '\\' then
+        -- Windows
+        args = { 'explorer', directory }
+    elseif os.getenv("XDG_CURRENT_DESKTOP") or os.getenv("WAYLAND_DISPLAY") or os.getenv("DISPLAY") then
+        -- Linux (assume a desktop environment like GNOME, KDE, etc.)
+        args = { 'xdg-open', directory }
+    elseif package.config:sub(1,1) == '/' then
+        -- macOS
+        args = { 'open', directory }
+    end
+
+    mp.command_native({ name = "subprocess", args = args, detach = true })
+end
+
+mp.add_key_binding('ctrl+d', 'open_folder', open_folder)
