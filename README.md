@@ -23,9 +23,10 @@ You **WILL** need an AniList access token for it to work:
 After that, you can either create a `anilistToken.txt` file in the scripts folder, or modify the `.py` file (line 12).
 
 ## Usage
-This script has 2 keybinds:
+This script has 3 keybinds:
   - Ctrl + A: Manually updates your AniList with the current episode you are watching.
   - Ctrl + B: Opens the AniList page of the anime you are watching on your browser. Useful to see if it guessed the anime correctly.
+  - Ctrl + D: Opens the folder where the current video is playing. Useful if you have "your own" anime library, and navigating through folders is a pain.
 
 The script will automatically update your AniList when the video you are watching reaches 85% completion.
 
@@ -33,6 +34,7 @@ You can change the keybinds in your input.conf:
 ```bash
 A script-binding update_anilist
 B script-binding launch_anilist
+D script-binding open_folder
 ```
 
 Or in the `.lua` file:
@@ -44,6 +46,8 @@ end)
 mp.add_key_binding('ctrl+b', 'launch_anilist', function()
     update_anilist("launch")
 end)
+
+mp.add_key_binding('ctrl+d', 'open_folder', open_folder)
 ```
 
 ## How It Works
