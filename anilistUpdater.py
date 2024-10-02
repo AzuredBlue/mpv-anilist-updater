@@ -81,12 +81,14 @@ class AniListUpdater:
         query = '''
         query ($search: String, $page: Int) {
             Page(page: $page) {
-                media(search: $search, type: ANIME, format: TV, duration_greater: 21) {
+                media(search: $search, type: ANIME, format: TV) {
                     id
                     title { romaji }
                     season
                     seasonYear
                     episodes
+                    duration
+                    status
                 }
             }
         }
@@ -95,6 +97,15 @@ class AniListUpdater:
         response = self.make_api_request(query, variables)
         if response and 'data' in response:
             seasons = response['data']['Page']['media']
+
+            # Filter only to those whose duration > 21 OR those who have no duration and are releasing.
+            # This is due to newly added anime having duration as null
+            seasons = [
+                season for season in seasons
+            if (season['duration'] is None and season['status'] == 'RELEASING') or
+               (season['duration'] is not None and season['duration'] > 21)
+            ]
+
             return sorted(seasons, key=lambda x: (x['seasonYear'], self.season_order(x['season'])))
         return []
 
