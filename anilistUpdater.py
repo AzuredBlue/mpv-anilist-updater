@@ -202,6 +202,12 @@ class AniListUpdater:
             if not year and 'year' in folder_guess:
                 year = str(folder_guess['year'])
 
+        # Oshi No Ko for some reason gets detected as "language" : "ko" for some reason.
+        # Not sure of a good way to fix this, so this is just a fix meanwhile.
+        if 'language' in guess:
+            name += f" {guess['language']}" if guess['language'] != 'ja' else print("Language detected! It probably shouldnt have one?")
+        
+        
         # Add season and part if there are
         if season:
             # Don't add season 1 (redudant?) unless theres a part
