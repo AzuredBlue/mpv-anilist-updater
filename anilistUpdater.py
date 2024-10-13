@@ -149,6 +149,13 @@ class AniListUpdater:
 
         # First, try to guess from the filename
         guess = guessit(filename, {'type': 'episode'})
+
+        # Exceptions
+        if 'Ranma' in guess['title'] and guess['episode'] == [1,2]:
+            filename = filename.replace('1_2', '').replace('1/2', '')
+            guess = guessit(filename, {'type': 'episode'})
+
+
         print('File name guess: ' + str(guess))
         keys = list(guess.keys())
 
