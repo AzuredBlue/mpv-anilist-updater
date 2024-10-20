@@ -1,4 +1,3 @@
-# -*-coding:utf-8-*-
 import sys
 import os
 import webbrowser
@@ -162,19 +161,12 @@ class AniListUpdater:
         filename = self.fix_filename(path_parts[-1])
         folder_name = path_parts[-2] if len(path_parts) > 1 else ''
 
-        name = ''
-        season = ''
-        part = ''
-        year = ''
+        name, season, part, year = '', '', '', ''
         episode = 1
-        season_index = -1
-        episode_index = -1
 
         # First, try to guess from the filename
         guess = guessit(filename, {'type': 'episode'})
-
         print('File name guess: ' + str(guess))
-        keys = list(guess.keys())
 
         # Episode guess from the title.
         # Usually, releases are formated [Release Group] Title - S01EX
@@ -187,50 +179,34 @@ class AniListUpdater:
     
         # If its >2, theres probably a Release Group and Title / Season / Part, so its good
 
-        if 'episode' in guess:
-            episode = guess['episode']
-            episode_index = keys.index('episode')
-        else:
-            episode_index = 1  # Assume it's a movie if no episode
+        episode = guess.get('episode', 1)
+        season = str(guess.get('season', ''))
+        part = str(guess.get('part', ''))
+        year = str(guess.get('year', ''))
 
-        if 'season' in guess:
-            season_index = keys.index('season')
-            season = str(guess['season'])
-
-        if 'part' in guess:
-            part = str(guess['part'])
-
-        if 'year' in guess:
-            year = str(guess['year'])
+        keys = list(guess.keys())
+        episode_index = keys.index('episode') if 'episode' in guess else 1
+        season_index = keys.index('season') if 'season' in guess else -1
+        title_in_filename = 'title' in guess and (episode_index > 0 and (season_index > 0 or season_index == -1))
 
         # If the title is not in the filename or episode index is 0, try the folder name
         # If the episode index > 0 and season index > 0, its safe to assume that the title is in the file name
 
-        if 'title' in guess and (episode_index > 0 and (season_index > 0 or season_index == -1)):
+        if title_in_filename:
             name = guess['title']
         else:
             # If it isnt in the name of the file, try to guess using the name of the folder it is stored in
             folder_guess = guessit(folder_name, {'type': 'episode'})
             print('Folder guess: ' + str(folder_guess))
             
-            if 'title' in folder_guess:
-                name = str(folder_guess['title'])
-            
-            # Add if they werent in the original file
-            if not season and 'season' in folder_guess:
-                season = str(folder_guess['season'])
-            
-            if not part and 'part' in folder_guess:
-                part = str(folder_guess['part'])
-
-            if not year and 'year' in folder_guess:
-                year = str(folder_guess['year'])        
+            name = str(folder_guess.get('title', ''))
+            season = season or str(folder_guess.get('season', ''))
+            part = part or str(folder_guess.get('part', ''))
+            year = year or str(folder_guess.get('year', ''))   
         
         # Add season and part if there are
-        if season:
-            # Don't add season 1 (redudant?) unless theres a part
-            if season != "1" or part:
-                name += f" Season {season}"
+        if season and (season != "1" or part):
+            name += f" Season {season}"
 
         if part:
             name += f" Part {part}"
