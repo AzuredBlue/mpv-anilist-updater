@@ -1,3 +1,4 @@
+# -*-coding:utf-8-*-
 import sys
 import os
 import webbrowser
@@ -133,10 +134,32 @@ class AniListUpdater:
         anime_id, actual_name = self.get_anime_info(file_info['name'], file_info['year'])
         self.update_episode_count(anime_id, file_info['episode'], actual_name)
 
+    # Hardcoded exceptions to fix detection
+    # Easier than just renaming my files 1 by 1 on Qbit
+    # Every exception I find will be added here
+    def fix_filename(self, filename):
+        guess = guessit(filename, {'type': 'episode'}) # Simply easier for fixing the filename if we have what it is detecting.
+
+        # Ranma 1/2 1 detected as episodes [1,2]
+        if 'Ranma' in guess['title'] and guess['episode'] == [1,2]:
+            filename = filename.replace('1_2', '').replace('1/2', '')
+
+        # Chi - Chikyuu no Undou ni Tsuite detected as 'Chi'
+        if 'Chi' == guess['title']:
+            filename = filename.replace(' - ', ' ')
+
+        if 'language' in guess:
+            # Oshi No Ko for some reason gets detected as "language" : "ko" for some reason.
+            # You are allowed to judge the solution, but it works.
+            if guess['language'] == 'ko' and guess['title'] == 'Oshi no':
+                filename = filename.replace("Oshi no Ko", "Oshi noKo")
+
+        return filename
+
     # Parse the file name using guessit
     def parse_filename(self, filepath):
         path_parts = filepath.replace('\\', '/').split('/')
-        filename = path_parts[-1]
+        filename = self.fix_filename(path_parts[-1])
         folder_name = path_parts[-2] if len(path_parts) > 1 else ''
 
         name = ''
@@ -149,12 +172,6 @@ class AniListUpdater:
 
         # First, try to guess from the filename
         guess = guessit(filename, {'type': 'episode'})
-
-        # Exceptions
-        if 'Ranma' in guess['title'] and guess['episode'] == [1,2]:
-            filename = filename.replace('1_2', '').replace('1/2', '')
-            guess = guessit(filename, {'type': 'episode'})
-
 
         print('File name guess: ' + str(guess))
         keys = list(guess.keys())
@@ -207,13 +224,7 @@ class AniListUpdater:
                 part = str(folder_guess['part'])
 
             if not year and 'year' in folder_guess:
-                year = str(folder_guess['year'])
-
-        # Oshi No Ko for some reason gets detected as "language" : "ko" for some reason.
-        # Not sure of a good way to fix this, so this is just a fix meanwhile.
-        if 'language' in guess:
-            name += f" {guess['language']}" if guess['language'] != 'ja' else print("Language detected! It probably shouldnt have one?")
-        
+                year = str(folder_guess['year'])        
         
         # Add season and part if there are
         if season:
@@ -302,6 +313,7 @@ class AniListUpdater:
         current_progress, total_episodes, current_status = result
 
         # 'episode': [86, 13], lol.
+        # I don't know of a way to actually fix this in fix_filename, since it takes episode_title as title, and 86 as the episode.
         if isinstance(file_progress, list):
             file_progress = min(file_progress)
 
