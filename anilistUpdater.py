@@ -316,8 +316,10 @@ class AniListUpdater:
             raise Exception(f'Episode was not new. Not updating ({file_progress} <= {current_progress})')
         
         # If the file progress isnt the next episode, don't update. Was not sure whether to make it or not but I don't think there'd be any unintended effects
-        if file_progress != current_progress + 1:
-            raise Exception(f'Episode was not the next one. Not updating ({file_progress} != {current_progress + 1})')
+
+        # Decided against it. Useful for skipping filler. Also I don't think anyone watches the wrong episode by mistake.
+        # if file_progress != current_progress + 1:
+            # raise Exception(f'Episode was not the next one. Not updating ({file_progress} != {current_progress + 1})')
 
         # Handle changing "Planned to watch" animes to "Watching"
         query = '''
