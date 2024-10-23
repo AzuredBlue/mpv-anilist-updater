@@ -147,6 +147,12 @@ class AniListUpdater:
         if 'Chi' == guess['title']:
             filename = filename.replace(' - ', ' ')
 
+        # Bleach TYBW, TYBW gets detected as alternative_title.
+        # This doesn't fix some, you'd have to manually rename the files to Bleach Thousand Year Blood War E${i}
+        if 'Bleach' == guess['title'] and ('Thousand Year Blood War' in guess['alternative_title'] or 'Sennen Kessen-hen' in guess['alternative_title']):
+            filename = filename.replace('-', ' ')
+
+
         if 'language' in guess:
             # Oshi No Ko for some reason gets detected as "language" : "ko" for some reason.
             # You are allowed to judge the solution, but it works.
