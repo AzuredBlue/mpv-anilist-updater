@@ -68,13 +68,21 @@ end)
 -- Open the folder that the video is
 function open_folder()
     local path = mp.get_property("path")
+    local directory
+
     if not path then
         mp.msg.warn("No file is currently playing.")
         return
     end
-
-    local directory = mp.get_property("working-directory")
     
+    if path:find('\\') then
+        directory = path:match("(.*)\\")
+    elseif path:find('\\\\') then
+        directory = path:match("(.*)\\\\")
+    else
+        directory = mp.get_property("working-directory")
+    end
+
     -- Use the system command to open the folder in File Explorer
     local args
     if package.config:sub(1,1) == '\\' then
