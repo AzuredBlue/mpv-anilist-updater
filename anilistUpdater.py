@@ -149,9 +149,8 @@ class AniListUpdater:
 
         # Bleach TYBW, TYBW gets detected as alternative_title.
         # This doesn't fix some, you'd have to manually rename the files to Bleach Thousand Year Blood War E${i}
-        if 'Bleach' == guess['title'] and ('Thousand Year Blood War' in guess['alternative_title'] or 'Sennen Kessen-hen' in guess['alternative_title']):
+        if 'Bleach' == guess['title'] and 'alternative_title' in guess and('Thousand Year Blood War' in guess['alternative_title'] or 'Sennen Kessen-hen' in guess['alternative_title']):
             filename = filename.replace('-', ' ')
-
 
         if 'language' in guess:
             # Oshi No Ko for some reason gets detected as "language" : "ko" for some reason.
@@ -211,7 +210,7 @@ class AniListUpdater:
             year = year or str(folder_guess.get('year', ''))   
         
         # Add season and part if there are
-        if season and (season != "1" or part):
+        if season and (int(season) > 1 or part):
             name += f" Season {season}"
 
         if part:
