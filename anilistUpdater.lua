@@ -83,6 +83,7 @@ function open_folder()
         directory = mp.get_property("working-directory")
     end
 
+    
     -- Use the system command to open the folder in File Explorer
     local args
     if package.config:sub(1,1) == '\\' then
