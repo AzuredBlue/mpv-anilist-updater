@@ -282,15 +282,15 @@ class AniListUpdater:
         if sys.argv[2] == 'launch':
             webbrowser.open_new_tab(f'https://anilist.co/anime/{anime_id}')
             return
-        return None, None
+        return None
 
     # Update the anime based on file progress
     def update_episode_count(self, anime_id, file_progress, anime_name):
         result = self.get_episode_count(anime_id)
 
         if result is None:
-            return
-        
+            raise Exception('Failed to get current episode count. Is it on your watching/planning list?')
+
         current_progress, total_episodes, current_status = result
 
         # 'episode': [86, 13], lol.
