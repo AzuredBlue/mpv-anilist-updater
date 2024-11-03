@@ -1,10 +1,17 @@
 # mpv-anilist-updater
-A script for MPV that automatically updates your AniList based on the file you just watched. It will not update if the anime is not in your user's library or if the episode you are watching isnt newer than your current progress count.
+A script for MPV that automatically updates your AniList based on the file you just watched. 
 
-KEEP IN MIND, it all depends on how the file is named. Guessit, unfortunately, cannot do magic. 
-If the file does not have the anime name, make sure the folder containing that anime does have the name.
+> [!IMPORTANT]
+> The anime must be set to "watching" or "planning". AniList API can't update an anime if its not in the user's library.<br>
+> It will not update if you are rewatching an episode.
 
-This is a personal project, not sure how efficient it is.
+> [!TIP]
+> In order for the script to work properly, make sure your files are named correctly:<br>
+>   - Either the file or folder its in must have the anime title in it<br>
+>   - The file must have the episode number in it (absolute numbering should work)<br>
+>   - In case of remakes, specify the year of the remake to ensure it updates the proper one<br>
+
+For bug reports, simply open an issue with the name of the file that its failing to recognise, and I will probably add it to the growing list of hardcoded solutions.
 
 ## Requirements
 You will need Python 3 installed, as well as the libraries `guessit` and `requests`:
@@ -20,7 +27,9 @@ You **WILL** need an AniList access token for it to work:
   2. Then, authorize the app, and you will be redirected to a localhost url
   3. Copy the token from the url (`https://localhost/#access_token= {token} &token_type=Bearer&expires_in=31536000`)
 
-After that, you can either create a `anilistToken.txt` file in the scripts folder, or modify the `.py` file (line 12).
+After that, you can either create an `anilistToken.txt` file in the scripts folder, or modify the `.py` file (line 12).
+
+This token is what allows the script to update the anime episode count and make api requests, it is not used for anything else.
 
 ## Usage
 This script has 3 keybinds:
