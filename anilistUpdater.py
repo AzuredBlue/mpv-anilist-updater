@@ -87,12 +87,15 @@ class AniListUpdater:
                     episodes
                     duration
                     status
+                    mediaListEntry {
+                        progress
+                    }
                 }
             }
         }
         '''
         variables = {'search': anime_name, 'page': 1}
-        response = self.make_api_request(query, variables)
+        response = self.make_api_request(query, variables, self.access_token)
         if response and 'data' in response:
             seasons = response['data']['Page']['media']
 
@@ -116,11 +119,14 @@ class AniListUpdater:
         seasons = self.get_anime_seasons(anime_name)
         accumulated_episodes = 0
         for season in seasons:
+            print(season['mediaListEntry']['progress'])
             season_episodes = season['episodes']
             if accumulated_episodes + season_episodes >= absolute_episode:
                 return (
-                    season['title']['romaji'],
                     season['id'],
+                    season['title']['romaji'],
+                    season['mediaListEntry']['progress'],
+                    season['episodes'],
                     absolute_episode - accumulated_episodes
                 )
             accumulated_episodes += season_episodes
@@ -272,27 +278,6 @@ class AniListUpdater:
             media = response['data']['Media']
             return (media['id'], media['title']['romaji'], media['mediaListEntry']['progress'], media['mediaListEntry']['media']['episodes'])
         return (None, None, None)
-
-    def get_episode_count(self, anime_id):
-        query = '''
-        query ($mediaId: Int, $userId: Int) {
-            MediaList(mediaId: $mediaId, userId: $userId) {
-                progress
-                media {
-                    episodes
-                }
-            }
-        }
-        '''
-        variables = {'mediaId': anime_id, 'userId': self.user_id}
-
-        response = self.make_api_request(query, variables)
-
-        if response and 'data' in response and response['data']['MediaList']:
-            media_list = response['data']['MediaList']
-            return media_list['progress'], media_list['media']['episodes']
-        
-        return (None, None)
     
     # Update the anime based on file progress
     def update_episode_count(self, result, file_progress):
@@ -313,8 +298,7 @@ class AniListUpdater:
             print('Episode number is in absolute value. Converting to season and episode.')
             result = self.find_season_and_episode(anime_name, file_progress)
             if result:
-                title, new_anime_id, new_episode = result
-                current_progress, total_episodes = self.get_episode_count(new_anime_id)
+                new_anime_id, title, current_progress, total_episodes, new_episode = result
                 print(f'Absolute episode {file_progress} corresponds to Anime: {title}, Episode: {new_episode}')
                 # Call the function again with the updated anime id and episode.
                 self.update_episode_count((new_anime_id, title, current_progress, total_episodes), new_episode)
