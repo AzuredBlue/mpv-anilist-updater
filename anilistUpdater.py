@@ -6,7 +6,7 @@ from guessit import guessit
 
 class AniListUpdater:
     ANILIST_API_URL = 'https://graphql.anilist.co'
-    
+    TOKEN_PATH = os.path.join(os.path.dirname(__file__), 'anilistToken.txt')
     # Load token and user id
     def __init__(self):
         self.access_token = self.load_access_token() # Replace token here if you don't use the .txt
@@ -14,9 +14,8 @@ class AniListUpdater:
 
     # Load token from anilistToken.txt
     def load_access_token(self):
-        token_path = os.path.join(os.path.dirname(__file__), 'anilistToken.txt')
         try:
-            with open(token_path, 'r') as file:
+            with open(self.TOKEN_PATH, 'r') as file:
                 content = file.read().strip()
                 return content.split(':')[1] if ':' in content else content
         except Exception as e:
@@ -25,9 +24,8 @@ class AniListUpdater:
 
     # Load user id from file, if not then make api request and save it.
     def get_user_id(self):
-        token_path = os.path.join(os.path.dirname(__file__), 'anilistToken.txt')
         try:
-            with open(token_path, 'r') as file:
+            with open(self.TOKEN_PATH, 'r') as file:
                 content = file.read().strip()
                 if ':' in content:
                     return int(content.split(':')[0])
@@ -50,9 +48,8 @@ class AniListUpdater:
 
     # Cache user id
     def save_user_id(self, user_id):
-        token_path = os.path.join(os.path.dirname(__file__), 'anilistToken.txt')
         try:
-            with open(token_path, 'r+') as file:
+            with open(self.TOKEN_PATH, 'r+') as file:
                 content = file.read()
                 file.seek(0)
                 file.write(f'{user_id}:{content}')
@@ -130,8 +127,9 @@ class AniListUpdater:
 
     def handle_filename(self, filename):
         file_info = self.parse_filename(filename)
-        anime_id, actual_name = self.get_anime_info(file_info['name'], file_info['year'])
-        self.update_episode_count(anime_id, file_info['episode'], actual_name)
+        result = self.get_anime_info_and_progress(file_info['name'], file_info['year'])
+
+        self.update_episode_count(result, file_info['episode'])
 
     # Hardcoded exceptions to fix detection
     # Easier than just renaming my files 1 by 1 on Qbit
@@ -224,16 +222,22 @@ class AniListUpdater:
             'year': year,
         }
 
-    # Get the anime's id from the guessed name
-    def get_anime_info(self, name, year=None):
+    def get_anime_info_and_progress(self, name, year=None):
         if year:
             query = '''
-            query ($search: String, $year: Int) { 
+            query($search: String, $year: Int) {
                 Media (search: $search, type: ANIME, seasonYear: $year) {
                     id
                     siteUrl
                     title {
                         romaji
+                    }
+                    mediaListEntry {
+                        status
+                        progress
+                        media {
+                            episodes
+                        }
                     }
                 }
             }
@@ -241,57 +245,39 @@ class AniListUpdater:
             variables = {'search': name, 'year': year}
         else:
             query = '''
-            query ($search: String) { 
+            query($search: String) {
                 Media (search: $search, type: ANIME) {
                     id
                     siteUrl
                     title {
                         romaji
                     }
+                    mediaListEntry {
+                        status
+                        progress
+                        media {
+                            episodes
+                        }
+                    }
                 }
             }
             '''
+
             variables = {'search': name}
-        
-        response = self.make_api_request(query, variables)
+
+        response = self.make_api_request(query, variables, self.access_token)
         if response and 'data' in response:
-            return (response['data']['Media']['id'], response['data']['Media']['title']['romaji'])
-        return None
-    
-    # Gets episode count from id. Returns [progress, totalEpisodes]
-    def get_episode_count(self, anime_id):
-        query = '''
-        query ($mediaId: Int, $userId: Int) {
-            MediaList(mediaId: $mediaId, userId: $userId) {
-                status
-                progress
-                media {
-                    episodes
-                }
-            }
-        }
-        '''
-        variables = {'mediaId': anime_id, 'userId': self.user_id}
-
-        response = self.make_api_request(query, variables)
-
-        if response and 'data' in response and response['data']['MediaList']:
-            media_list = response['data']['MediaList']
-            return media_list['progress'], media_list['media']['episodes'], media_list['status']
-        
-        if sys.argv[2] == 'launch':
-            webbrowser.open_new_tab(f'https://anilist.co/anime/{anime_id}')
-            return
-        return None
+            print(response)
+            media = response['data']['Media']
+            return (media['id'], media['title']['romaji'], media['mediaListEntry']['progress'], media['mediaListEntry']['media']['episodes'])
+        return (None, None, None)
 
     # Update the anime based on file progress
-    def update_episode_count(self, anime_id, file_progress, anime_name):
-        result = self.get_episode_count(anime_id)
-
+    def update_episode_count(self, result, file_progress):
         if result is None:
             raise Exception('Failed to get current episode count. Is it on your watching/planning list?')
-
-        current_progress, total_episodes, current_status = result
+        
+        anime_id, anime_name, current_progress, total_episodes = result
 
         # 'episode': [86, 13], lol.
         # I don't know of a way to actually fix this in fix_filename, since it takes episode_title as title, and 86 as the episode.
@@ -339,8 +325,8 @@ class AniListUpdater:
 
         variables = {'mediaId': anime_id, 'progress': file_progress}
 
-        if current_status == "PLANNING" and file_progress != total_episodes:
-            variables['status'] = "CURRENT" # Set to "CURRENT" if it's on planning and it isn't the final episode.
+        if file_progress != total_episodes:
+            variables['status'] = "CURRENT" # Set to "CURRENT" if it isn't the final episode.
 
         response = self.make_api_request(query, variables, self.access_token)
         if response and 'data' in response:
