@@ -144,7 +144,7 @@ class AniListUpdater:
         guess = guessit(filename, {'type': 'episode'}) # Simply easier for fixing the filename if we have what it is detecting.
 
         # Ranma 1/2 1 detected as episodes [1,2]
-        if 'Ranma' in guess['title'] and len(guess['episode'] > 1):
+        if 'Ranma' in guess['title'] and len(guess['episode']) > 1:
             filename = filename.replace('1_2', '').replace('1/2', '')
 
         # Chi - Chikyuu no Undou ni Tsuite detected as 'Chi'
@@ -292,6 +292,7 @@ class AniListUpdater:
         # If the episode in the file name is larger than the total amount of episodes
         # Then they are using absolute numbering format for episodes (looking at you SubsPlease)
         # Try to guess season and episode.
+
         if total_episodes != None and file_progress > total_episodes:
             print('Episode number is in absolute value. Converting to season and episode.')
             result = self.find_season_and_episode(anime_name, file_progress)
