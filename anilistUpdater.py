@@ -74,49 +74,12 @@ class AniListUpdater:
             print(f'API request failed: {response.status_code} - {response.text}')
             return None
 
-    # Gets all seasons of an anime
-    def get_anime_seasons(self, anime_name):
-        query = '''
-        query ($search: String, $page: Int) {
-            Page(page: $page) {
-                media(search: $search, type: ANIME, format: TV) {
-                    id
-                    title { romaji }
-                    season
-                    seasonYear
-                    episodes
-                    duration
-                    status
-                    mediaListEntry {
-                        progress
-                    }
-                }
-            }
-        }
-        '''
-        variables = {'search': anime_name, 'page': 1}
-        response = self.make_api_request(query, variables, self.access_token)
-        if response and 'data' in response:
-            seasons = response['data']['Page']['media']
-
-            # Filter only to those whose duration > 21 OR those who have no duration and are releasing.
-            # This is due to newly added anime having duration as null
-            seasons = [
-                season for season in seasons
-            if (season['duration'] is None and season['status'] == 'RELEASING') or
-               (season['duration'] is not None and season['duration'] > 21)
-            ]
-
-            return sorted(seasons, key=lambda x: (x['seasonYear'], self.season_order(x['season'])))
-        return []
-
     @staticmethod
     def season_order(season):
         return {'WINTER': 1, 'SPRING': 2, 'SUMMER': 3, 'FALL': 4}.get(season, 5)
 
     # Finds the season and episode of an anime with absolute numbering
-    def find_season_and_episode(self, anime_name, absolute_episode):
-        seasons = self.get_anime_seasons(anime_name)
+    def find_season_and_episode(self, anime_name, absolute_episode, seasons):
         accumulated_episodes = 0
         for season in seasons:
             season_episodes = season['episodes']
@@ -133,7 +96,7 @@ class AniListUpdater:
 
     def handle_filename(self, filename):
         file_info = self.parse_filename(filename)
-        result = self.get_anime_info_and_progress(file_info['name'], file_info['year'])
+        result = self.get_anime_info_and_progress(file_info['name'], file_info['episode'], file_info['year'])
 
         self.update_episode_count(result, file_info['episode'])
 
@@ -227,55 +190,93 @@ class AniListUpdater:
             'year': year,
         }
 
-    def get_anime_info_and_progress(self, name, year=None):
+    def  get_anime_info_and_progress(self, name, file_progress, year=None, ):
+        # TODO: Use Page to get all the seasons at the same time and only return the first result 
         if year:
             query = '''
-            query($search: String, $year: Int) {
-                Media (search: $search, type: ANIME, seasonYear: $year) {
-                    id
-                    siteUrl
-                    title {
-                        romaji
-                    }
-                    mediaListEntry {
+            query($search: String, $year: Int, $page: Int) {
+                Page(page: $page) {
+                    media (search: $search, type: ANIME, seasonYear: $year) {
+                        id
+                        title { romaji }
+                        season
+                        seasonYear
+                        episodes
+                        duration
+                        format
                         status
-                        progress
-                        media {
-                            episodes
+                        mediaListEntry {
+                            status
+                            progress
+                            media {
+                                episodes
+                            }
                         }
                     }
                 }
             }
             '''
-            variables = {'search': name, 'year': year}
+            variables = {'search': name, 'year': year, 'page': 1}
         else:
             query = '''
-            query($search: String) {
-                Media (search: $search, type: ANIME) {
-                    id
-                    siteUrl
-                    title {
-                        romaji
-                    }
-                    mediaListEntry {
+            query($search: String, $page: Int) {
+                Page(page: $page) {
+                    media (search: $search, type: ANIME) {
+                        id
+                        title { romaji }
+                        season
+                        seasonYear
+                        episodes
+                        format
+                        duration
                         status
-                        progress
-                        media {
-                            episodes
+                        mediaListEntry {
+                            status
+                            progress
+                            media {
+                                episodes
+                            }
                         }
                     }
                 }
             }
             '''
-
-            variables = {'search': name}
+            variables = {'search': name, 'page': 1}
 
         response = self.make_api_request(query, variables, self.access_token)
         if response and 'data' in response:
-            print(response)
-            media = response['data']['Media']
-            return (media['id'], media['title']['romaji'], media['mediaListEntry']['progress'], media['mediaListEntry']['media']['episodes'])
-        return (None, None, None)
+            seasons = response['data']['Page']['media']
+            print(seasons[0])
+
+            # This is the first element, which is the same as Media(search: $search)
+            anime_data = (seasons[0]['id'], seasons[0]['title']['romaji'], seasons[0]['mediaListEntry']['progress'], seasons[0]['episodes'])
+
+            # If the episode in the file name is larger than the total amount of episodes
+            # Then they are using absolute numbering format for episodes (looking at you SubsPlease)
+            # Try to guess season and episode.
+            if seasons[0]['episodes'] is not None and file_progress > seasons[0]['episodes']:
+                
+                # Filter only to those whose format is TV and duration > 21 OR those who have no duration and are releasing.
+                # This is due to newly added anime having duration as null
+                seasons = [
+                    season for season in seasons
+                if ((season['duration'] is None and season['status'] == 'RELEASING') or
+                   (season['duration'] is not None and season['duration'] > 21)) and season['format'] == 'TV'
+                ]
+                # One of the problems with this filter is needing the format to be 'TV'
+                # But if accepted any format, it would also include many ONA's which arent included in absolute numbering.
+
+                # Sort them based on release date
+                seasons = sorted(seasons, key=lambda x: (x['seasonYear'] if x['seasonYear'] else float("inf"), self.season_order(x['season'] if x['season'] else float("inf"))))
+
+                anime_data = self.find_season_and_episode(seasons[0]['title']['romaji'], file_progress, seasons)
+                print(f'Absolute episode {file_progress} corresponds to Anime: {anime_data[1]}, Episode: {anime_data[-1]}')
+
+                file_progress = anime_data[-1] # Update file_progress
+                anime_data = anime_data[:-1] # Remove new_progress, not needed
+
+            return (anime_data)
+        return (None, None, None, None)
     
     # Update the anime based on file progress
     def update_episode_count(self, result, file_progress):
@@ -289,22 +290,9 @@ class AniListUpdater:
         if isinstance(file_progress, list):
             file_progress = min(file_progress)
 
-        # If the episode in the file name is larger than the total amount of episodes
-        # Then they are using absolute numbering format for episodes (looking at you SubsPlease)
-        # Try to guess season and episode.
-
-        if total_episodes != None and file_progress > total_episodes:
-            print('Episode number is in absolute value. Converting to season and episode.')
-            result = self.find_season_and_episode(anime_name, file_progress)
-            if result:
-                new_anime_id, title, current_progress, total_episodes, new_episode = result
-                print(f'Absolute episode {file_progress} corresponds to Anime: {title}, Episode: {new_episode}')
-                # Call the function again with the updated anime id and episode.
-                self.update_episode_count((new_anime_id, title, current_progress, total_episodes), new_episode)
-                return
-
         # Only launch anilist
         if sys.argv[2] == 'launch':
+            print(f'Opening AniList for "{anime_name}": https://anilist.co/anime/{anime_id}')
             webbrowser.open_new_tab(f'https://anilist.co/anime/{anime_id}')
             return
 
@@ -315,12 +303,6 @@ class AniListUpdater:
         if file_progress <= current_progress:
             raise Exception(f'Episode was not new. Not updating ({file_progress} <= {current_progress})')
         
-        # If the file progress isnt the next episode, don't update. Was not sure whether to make it or not but I don't think there'd be any unintended effects
-
-        # Decided against it. Useful for skipping filler. Also I don't think anyone watches the wrong episode by mistake.
-        # if file_progress != current_progress + 1:
-            # raise Exception(f'Episode was not the next one. Not updating ({file_progress} != {current_progress + 1})')
-
         # Handle changing "Planned to watch" animes to "Watching"
         query = '''
         mutation ($mediaId: Int, $progress: Int, $status: MediaListStatus) {
