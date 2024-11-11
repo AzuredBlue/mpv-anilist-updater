@@ -119,18 +119,17 @@ class AniListUpdater:
         seasons = self.get_anime_seasons(anime_name)
         accumulated_episodes = 0
         for season in seasons:
-            print(season['mediaListEntry']['progress'])
             season_episodes = season['episodes']
             if accumulated_episodes + season_episodes >= absolute_episode:
                 return (
                     season['id'],
                     season['title']['romaji'],
-                    season['mediaListEntry']['progress'],
+                    season['mediaListEntry']['progress'] if season['mediaListEntry'] is not None else None,
                     season['episodes'],
                     absolute_episode - accumulated_episodes
                 )
             accumulated_episodes += season_episodes
-        return None
+        return (None, None, None, None, None)
 
     def handle_filename(self, filename):
         file_info = self.parse_filename(filename)
@@ -282,7 +281,7 @@ class AniListUpdater:
     # Update the anime based on file progress
     def update_episode_count(self, result, file_progress):
         if result is None:
-            raise Exception('Failed to get current episode count. Is it on your watching/planning list?')
+            raise Exception('Parameter in update_episode_count is null.')
         
         anime_id, anime_name, current_progress, total_episodes = result
 
@@ -309,6 +308,9 @@ class AniListUpdater:
             webbrowser.open_new_tab(f'https://anilist.co/anime/{anime_id}')
             return
 
+        if current_progress is None:
+            raise Exception('Failed to get current episode count. Is it on your watching/planning list?')
+        
         # If its lower than the current progress, dont update.
         if file_progress <= current_progress:
             raise Exception(f'Episode was not new. Not updating ({file_progress} <= {current_progress})')
