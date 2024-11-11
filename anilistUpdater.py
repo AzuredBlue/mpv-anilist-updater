@@ -144,7 +144,7 @@ class AniListUpdater:
         guess = guessit(filename, {'type': 'episode'}) # Simply easier for fixing the filename if we have what it is detecting.
 
         # Ranma 1/2 1 detected as episodes [1,2]
-        if 'Ranma' in guess['title'] and guess['episode'][0] == 1 and guess['episode'][1] == 2:
+        if 'Ranma' in guess['title'] and len(guess['episode'] > 1):
             filename = filename.replace('1_2', '').replace('1/2', '')
 
         # Chi - Chikyuu no Undou ni Tsuite detected as 'Chi'
@@ -169,7 +169,7 @@ class AniListUpdater:
         path_parts = filepath.replace('\\', '/').split('/')
         filename = self.fix_filename(path_parts[-1])
         folder_name = path_parts[-2] if len(path_parts) > 1 else ''
-        print(filename)
+
         name, season, part, year = '', '', '', ''
         episode = 1
 
