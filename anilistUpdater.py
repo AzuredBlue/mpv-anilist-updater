@@ -97,8 +97,7 @@ class AniListUpdater:
     def handle_filename(self, filename):
         file_info = self.parse_filename(filename)
         result = self.get_anime_info_and_progress(file_info['name'], file_info['episode'], file_info['year'])
-
-        self.update_episode_count(result, file_info['episode'])
+        self.update_episode_count(result)
 
     # Hardcoded exceptions to fix detection
     # Easier than just renaming my files 1 by 1 on Qbit
@@ -190,8 +189,7 @@ class AniListUpdater:
             'year': year,
         }
 
-    def  get_anime_info_and_progress(self, name, file_progress, year=None, ):
-        # TODO: Use Page to get all the seasons at the same time and only return the first result 
+    def get_anime_info_and_progress(self, name, file_progress, year=None, ):
         if year:
             query = '''
             query($search: String, $year: Int, $page: Int) {
@@ -249,7 +247,7 @@ class AniListUpdater:
             print(seasons[0])
 
             # This is the first element, which is the same as Media(search: $search)
-            anime_data = (seasons[0]['id'], seasons[0]['title']['romaji'], seasons[0]['mediaListEntry']['progress'], seasons[0]['episodes'])
+            anime_data = (seasons[0]['id'], seasons[0]['title']['romaji'], seasons[0]['mediaListEntry']['progress'], seasons[0]['episodes'], file_progress)
 
             # If the episode in the file name is larger than the total amount of episodes
             # Then they are using absolute numbering format for episodes (looking at you SubsPlease)
@@ -269,21 +267,21 @@ class AniListUpdater:
                 # Sort them based on release date
                 seasons = sorted(seasons, key=lambda x: (x['seasonYear'] if x['seasonYear'] else float("inf"), self.season_order(x['season'] if x['season'] else float("inf"))))
 
+                print('Related shows:')
+                for season in seasons:
+                    print(season['title']['romaji'])
                 anime_data = self.find_season_and_episode(seasons[0]['title']['romaji'], file_progress, seasons)
                 print(f'Absolute episode {file_progress} corresponds to Anime: {anime_data[1]}, Episode: {anime_data[-1]}')
-
-                file_progress = anime_data[-1] # Update file_progress
-                anime_data = anime_data[:-1] # Remove new_progress, not needed
 
             return (anime_data)
         return (None, None, None, None)
     
     # Update the anime based on file progress
-    def update_episode_count(self, result, file_progress):
+    def update_episode_count(self, result):
         if result is None:
             raise Exception('Parameter in update_episode_count is null.')
         
-        anime_id, anime_name, current_progress, total_episodes = result
+        anime_id, anime_name, current_progress, total_episodes, file_progress = result
 
         # 'episode': [86, 13], lol.
         # I don't know of a way to actually fix this in fix_filename, since it takes episode_title as title, and 86 as the episode.
