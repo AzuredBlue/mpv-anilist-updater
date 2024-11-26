@@ -102,36 +102,47 @@ class AniListUpdater:
     # Hardcoded exceptions to fix detection
     # Easier than just renaming my files 1 by 1 on Qbit
     # Every exception I find will be added here
-    def fix_filename(self, filename):
+    def fix_filename(self, filename, folder_name):
         guess = guessit(filename, {'type': 'episode'}) # Simply easier for fixing the filename if we have what it is detecting.
 
-        # Ranma 1/2 1 detected as episodes [1,2]
-        if 'Ranma' in guess['title'] and len(guess['episode']) > 1:
-            filename = filename.replace('1_2', '').replace('1/2', '')
+        # Fix from title as well
+        if 'title' not in guess:
+            folder_guess = guessit(folder_name, {'type' : 'episode'})
+            # We only need title from the folder guess
+            guess['title'] = folder_guess['title']
 
-        # Chi - Chikyuu no Undou ni Tsuite detected as 'Chi'
-        if 'Chi' == guess['title']:
-            filename = filename.replace(' - ', ' ')
+        if 'title' in guess:
 
-        # Bleach TYBW, TYBW gets detected as alternative_title.
-        # This doesn't fix some, you'd have to manually rename the files to Bleach Thousand Year Blood War E${i}
-        if 'Bleach' == guess['title'] and 'alternative_title' in guess and('Thousand Year Blood War' in guess['alternative_title'] or 'Sennen Kessen-hen' in guess['alternative_title']):
-            filename = filename.replace('-', ' ')
+            # Ranma 1/2 1 detected as episodes [1,2]
+            if 'Ranma' in guess['title'] and len(guess['episode']) > 1:
+                filename = filename.replace('1_2', '').replace('1/2', '')
 
-        if 'language' in guess:
-            # Oshi No Ko for some reason gets detected as "language" : "ko" for some reason.
-            # You are allowed to judge the solution, but it works.
-            if guess['language'] == 'ko' and guess['title'] == 'Oshi no':
-                filename = filename.replace("Oshi no Ko", "Oshi noKo")
+            # Chi - Chikyuu no Undou ni Tsuite detected as 'Chi'
+            if 'Chi' == guess['title']:
+                filename = filename.replace(' - ', ' ')
 
-        return filename
+            # Bleach TYBW, TYBW gets detected as alternative_title.
+            # This doesn't fix some, you'd have to manually rename the files to Bleach Thousand Year Blood War E${i}
+            if 'Bleach' == guess['title'] and 'alternative_title' in guess and('Thousand Year Blood War' in guess['alternative_title'] or 'Sennen Kessen-hen' in guess['alternative_title']):
+                filename = filename.replace('-', ' ')
+
+            if 'language' in guess:
+                # Oshi No Ko for some reason gets detected as "language" : "ko" for some reason.
+                # You are allowed to judge the solution, but it works.
+                if guess['language'] == 'ko' and guess['title'] == 'Oshi no':
+                    filename = filename.replace("Oshi no Ko", "Oshi noKo")
+        else:
+            print("Couldn't find title! Didn't clean title")
+
+        return filename, folder_name
 
     # Parse the file name using guessit
     def parse_filename(self, filepath):
         path_parts = filepath.replace('\\', '/').split('/')
-        filename = self.fix_filename(path_parts[-1])
+        filename = path_parts[-1]
         folder_name = path_parts[-2] if len(path_parts) > 1 else ''
 
+        filename, folder_name = self.fix_filename(filename, folder_name)
         name, season, part, year = '', '', '', ''
         episode = 1
 
@@ -189,7 +200,7 @@ class AniListUpdater:
             'year': year,
         }
 
-    def get_anime_info_and_progress(self, name, file_progress, year=None, ):
+    def get_anime_info_and_progress(self, name, file_progress, year=None):
         if year:
             query = '''
             query($search: String, $year: Int, $page: Int) {
