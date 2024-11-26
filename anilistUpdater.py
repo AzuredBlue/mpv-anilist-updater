@@ -102,47 +102,48 @@ class AniListUpdater:
     # Hardcoded exceptions to fix detection
     # Easier than just renaming my files 1 by 1 on Qbit
     # Every exception I find will be added here
-    def fix_filename(self, filename, folder_name):
+    def fix_filename(self, path_parts):
+        filename = path_parts[-1]
         guess = guessit(filename, {'type': 'episode'}) # Simply easier for fixing the filename if we have what it is detecting.
 
         # Fix from title as well
         if 'title' not in guess:
-            folder_guess = guessit(folder_name, {'type' : 'episode'})
-            # We only need title from the folder guess
-            guess['title'] = folder_guess['title']
+            # Depth=2
+            for depth in range(2, min(4, len(path_parts))):
+                folder_guess = guessit(path_parts[-depth], {'type': 'episode'})
+                if 'title' in folder_guess:
+                    guess['title'] = folder_guess['title']
+                    break
 
-        if 'title' in guess:
-
-            # Ranma 1/2 1 detected as episodes [1,2]
-            if 'Ranma' in guess['title'] and len(guess['episode']) > 1:
-                filename = filename.replace('1_2', '').replace('1/2', '')
-
-            # Chi - Chikyuu no Undou ni Tsuite detected as 'Chi'
-            if 'Chi' == guess['title']:
-                filename = filename.replace(' - ', ' ')
-
-            # Bleach TYBW, TYBW gets detected as alternative_title.
-            # This doesn't fix some, you'd have to manually rename the files to Bleach Thousand Year Blood War E${i}
-            if 'Bleach' == guess['title'] and 'alternative_title' in guess and('Thousand Year Blood War' in guess['alternative_title'] or 'Sennen Kessen-hen' in guess['alternative_title']):
-                filename = filename.replace('-', ' ')
-
-            if 'language' in guess:
-                # Oshi No Ko for some reason gets detected as "language" : "ko" for some reason.
-                # You are allowed to judge the solution, but it works.
-                if guess['language'] == 'ko' and guess['title'] == 'Oshi no':
-                    filename = filename.replace("Oshi no Ko", "Oshi noKo")
-        else:
+        if 'title' not in guess:
             print("Couldn't find title! Didn't clean title")
+            return path_parts
 
-        return filename, folder_name
+        # Ranma 1/2 1 detected as episodes [1,2]
+        if 'Ranma' in guess['title'] and len(guess['episode']) > 1:
+            filename = filename.replace('1_2', '').replace('1/2', '')
+
+        # Chi - Chikyuu no Undou ni Tsuite detected as 'Chi'
+        if 'Chi' == guess['title']:
+            filename = filename.replace(' - ', ' ')
+
+        # Bleach TYBW, TYBW gets detected as alternative_title.
+        # This doesn't fix some, you'd have to manually rename the files to Bleach Thousand Year Blood War E${i}
+        if 'Bleach' == guess['title'] and ('Thousand Year Blood War' in guess.get('alternative_title', '') or 'Sennen Kessen-hen' in guess.get('alternative_title', '')):
+            filename = filename.replace('-', ' ')
+
+        # Oshi No Ko for some reason gets detected as "language" : "ko" for some reason.
+        # You are allowed to judge the solution, but it works.
+        if guess.get('language', '') == 'ko' and guess['title'] == 'Oshi no':
+            filename = filename.replace("Oshi no Ko", "Oshi noKo")
+
+        return path_parts
 
     # Parse the file name using guessit
     def parse_filename(self, filepath):
-        path_parts = filepath.replace('\\', '/').split('/')
+        path_parts = self.fix_filename(filepath.replace('\\', '/').split('/'))
         filename = path_parts[-1]
-        folder_name = path_parts[-2] if len(path_parts) > 1 else ''
 
-        filename, folder_name = self.fix_filename(filename, folder_name)
         name, season, part, year = '', '', '', ''
         episode = 1
 
@@ -178,13 +179,18 @@ class AniListUpdater:
             name = guess['title']
         else:
             # If it isnt in the name of the file, try to guess using the name of the folder it is stored in
-            folder_guess = guessit(folder_name, {'type': 'episode'})
-            print('Folder guess: ' + str(folder_guess))
-            
-            name = str(folder_guess.get('title', ''))
-            season = season or str(folder_guess.get('season', ''))
-            part = part or str(folder_guess.get('part', ''))
-            year = year or str(folder_guess.get('year', ''))   
+
+            # Depth=2 folders
+            for depth in [2, 3]:
+                folder_guess = guessit(path_parts[-depth], {'type' : 'episode'}) if len(path_parts) > depth-1 else ''
+                print(f'{depth}. Folder guess: {str(folder_guess)}')
+
+                name = str(folder_guess.get('title', ''))
+                season = season or str(folder_guess.get('season', ''))
+                part = part or str(folder_guess.get('part', ''))
+                year = year or str(folder_guess.get('year', ''))
+                
+                if name != '': break # If we got the name, its probable we already got season and part from the way folders are usually structured
         
         # Add season and part if there are
         if season and (int(season) > 1 or part):
