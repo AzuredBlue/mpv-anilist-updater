@@ -183,7 +183,7 @@ class AniListUpdater:
             # Depth=2 folders
             for depth in [2, 3]:
                 folder_guess = guessit(path_parts[-depth], {'type' : 'episode'}) if len(path_parts) > depth-1 else ''
-                print(f'{depth}. Folder guess: {str(folder_guess)}')
+                print(f'{depth-1}{"st" if depth-1==1 else "nd"} Folder guess: {str(folder_guess)}')
 
                 name = str(folder_guess.get('title', ''))
                 season = season or str(folder_guess.get('season', ''))
@@ -211,7 +211,7 @@ class AniListUpdater:
             query = '''
             query($search: String, $year: Int, $page: Int) {
                 Page(page: $page) {
-                    media (search: $search, type: ANIME, seasonYear: $year) {
+                    media (search: $search, type: ANIME, startDate_greater: $year) {
                         id
                         title { romaji }
                         season
