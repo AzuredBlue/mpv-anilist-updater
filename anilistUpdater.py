@@ -149,7 +149,7 @@ class AniListUpdater:
 
         # First, try to guess from the filename
         guess = guessit(filename, {'type': 'episode'})
-        print('File name guess: ' + str(guess))
+        print(f'File name guess:\n{filename} -> {str(guess)}')
 
         # Episode guess from the title.
         # Usually, releases are formated [Release Group] Title - S01EX
@@ -183,14 +183,15 @@ class AniListUpdater:
             # Depth=2 folders
             for depth in [2, 3]:
                 folder_guess = guessit(path_parts[-depth], {'type' : 'episode'}) if len(path_parts) > depth-1 else ''
-                print(f'{depth-1}{"st" if depth-1==1 else "nd"} Folder guess: {str(folder_guess)}')
+                if folder_guess != '':
+                    print(f'{depth-1}{"st" if depth-1==1 else "nd"} Folder guess:\n{path_parts[-depth]} -> {str(folder_guess)}')
 
-                name = str(folder_guess.get('title', ''))
-                season = season or str(folder_guess.get('season', ''))
-                part = part or str(folder_guess.get('part', ''))
-                year = year or str(folder_guess.get('year', ''))
-                
-                if name != '': break # If we got the name, its probable we already got season and part from the way folders are usually structured
+                    name = str(folder_guess.get('title', ''))
+                    season = season or str(folder_guess.get('season', ''))
+                    part = part or str(folder_guess.get('part', ''))
+                    year = year or str(folder_guess.get('year', ''))
+
+                    if name != '': break # If we got the name, its probable we already got season and part from the way folders are usually structured
         
         # Add season and part if there are
         if season and (int(season) > 1 or part):
