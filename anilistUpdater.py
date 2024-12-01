@@ -103,8 +103,7 @@ class AniListUpdater:
     # Easier than just renaming my files 1 by 1 on Qbit
     # Every exception I find will be added here
     def fix_filename(self, path_parts):
-        filename = path_parts[-1]
-        guess = guessit(filename, {'type': 'episode'}) # Simply easier for fixing the filename if we have what it is detecting.
+        guess = guessit(path_parts[-1], {'type': 'episode'}) # Simply easier for fixing the filename if we have what it is detecting.
 
         # Fix from title as well
         if 'title' not in guess:
@@ -121,21 +120,21 @@ class AniListUpdater:
 
         # Ranma 1/2 1 detected as episodes [1,2]
         if 'Ranma' in guess['title'] and len(guess['episode']) > 1:
-            filename = filename.replace('1_2', '').replace('1/2', '')
+            path_parts[-1] = path_parts[-1].replace('1_2', '').replace('1/2', '')
 
         # Chi - Chikyuu no Undou ni Tsuite detected as 'Chi'
         if 'Chi' == guess['title']:
-            filename = filename.replace(' - ', ' ')
+            path_parts[-1] = path_parts[-1].replace(' - ', ' ')
 
         # Bleach TYBW, TYBW gets detected as alternative_title.
         # This doesn't fix some, you'd have to manually rename the files to Bleach Thousand Year Blood War E${i}
         if 'Bleach' == guess['title'] and ('Thousand Year Blood War' in guess.get('alternative_title', '') or 'Sennen Kessen-hen' in guess.get('alternative_title', '')):
-            filename = filename.replace('-', ' ')
+            path_parts[-1] = path_parts[-1].replace('-', ' ')
 
         # Oshi No Ko for some reason gets detected as "language" : "ko" for some reason.
         # You are allowed to judge the solution, but it works.
         if guess.get('language', '') == 'ko' and guess['title'] == 'Oshi no':
-            filename = filename.replace("Oshi no Ko", "Oshi noKo")
+            path_parts[-1] = path_parts[-1].replace("Oshi no Ko", "Oshi noKo")
 
         return path_parts
 
@@ -143,13 +142,12 @@ class AniListUpdater:
     def parse_filename(self, filepath):
         path_parts = self.fix_filename(filepath.replace('\\', '/').split('/'))
         filename = path_parts[-1]
-
         name, season, part, year = '', '', '', ''
         episode = 1
 
         # First, try to guess from the filename
         guess = guessit(filename, {'type': 'episode'})
-        print(f'File name guess:\n{filename} -> {str(guess)}')
+        print(f'File name guess: {filename} -> {str(guess)}')
 
         # Episode guess from the title.
         # Usually, releases are formated [Release Group] Title - S01EX
@@ -210,7 +208,7 @@ class AniListUpdater:
     def get_anime_info_and_progress(self, name, file_progress, year=None):
         if year:
             query = '''
-            query($search: String, $year: Int, $page: Int) {
+            query($search: String, $year: FuzzyDateInt, $page: Int) {
                 Page(page: $page) {
                     media (search: $search, type: ANIME, startDate_greater: $year) {
                         id
@@ -262,16 +260,16 @@ class AniListUpdater:
         response = self.make_api_request(query, variables, self.access_token)
         if response and 'data' in response:
             seasons = response['data']['Page']['media']
-            print(seasons[0])
-
             # This is the first element, which is the same as Media(search: $search)
-            anime_data = (seasons[0]['id'], seasons[0]['title']['romaji'], seasons[0]['mediaListEntry']['progress'], seasons[0]['episodes'], file_progress)
+            
+            if seasons[0]['mediaListEntry'] is None:
+                raise Exception(f"Couldn\'t find the anime in your anime list! ({seasons[0]['title']['romaji']})")
 
+            anime_data = (seasons[0]['id'], seasons[0]['title']['romaji'], seasons[0]['mediaListEntry']['progress'], seasons[0]['episodes'], file_progress)
             # If the episode in the file name is larger than the total amount of episodes
             # Then they are using absolute numbering format for episodes (looking at you SubsPlease)
             # Try to guess season and episode.
             if seasons[0]['episodes'] is not None and file_progress > seasons[0]['episodes']:
-                
                 # Filter only to those whose format is TV and duration > 21 OR those who have no duration and are releasing.
                 # This is due to newly added anime having duration as null
                 seasons = [
@@ -285,12 +283,13 @@ class AniListUpdater:
                 # Sort them based on release date
                 seasons = sorted(seasons, key=lambda x: (x['seasonYear'] if x['seasonYear'] else float("inf"), self.season_order(x['season'] if x['season'] else float("inf"))))
 
-                print('Related shows:')
-                for season in seasons:
-                    print(season['title']['romaji'])
-                anime_data = self.find_season_and_episode(seasons[0]['title']['romaji'], file_progress, seasons)
-                print(f'Absolute episode {file_progress} corresponds to Anime: {anime_data[1]}, Episode: {anime_data[-1]}')
+                print('Related shows:', ', '.join(season['title']['romaji'] for season in seasons))
 
+                anime_data = self.find_season_and_episode(seasons[0]['title']['romaji'], file_progress, seasons)
+                print(f"Final guessed anime: {next(season for season in seasons if season['id'] == anime_data[0])}") # Print data of the show
+                print(f'Absolute episode {file_progress} corresponds to Anime: {anime_data[1]}, Episode: {anime_data[-1]}')
+            else: 
+                print(f"Final guessed anime: {seasons[0]}") # Print data of the show
             return (anime_data)
         return (None, None, None, None)
     
