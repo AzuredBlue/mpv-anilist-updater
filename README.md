@@ -24,10 +24,9 @@ Copy the `.lua` and `.py` files into your mpv scripts folder.
 
 You **WILL** need an AniList access token for it to work:
   1. Visit `https://anilist.co/api/v2/oauth/authorize?client_id=20740&response_type=token`
-  2. Then, authorize the app, and you will be redirected to a localhost url
-  3. Copy the token from the url (`https://localhost/#access_token= {token} &token_type=Bearer&expires_in=31536000`)
-
-After that, you can either create an `anilistToken.txt` file in the scripts folder, or modify the `.py` file (line 12).
+  2. Authorize the app
+  3. Copy the token
+  4. Create an `anilistToken.txt` file in the scripts folder, or modify the `.py` script.
 
 This token is what allows the script to update the anime episode count and make api requests, it is not used for anything else.
 
