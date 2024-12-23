@@ -74,7 +74,7 @@ class AniListUpdater:
         if response.status_code == 200:
             return response.json()
         else:
-            print(f'API request failed: {response.status_code} - {response.text}')
+            print(f'API request failed: {response.status_code} - {response.text}\nQuery: {query}\nVariables: {variables}')
             return None
 
     @staticmethod
@@ -133,7 +133,7 @@ class AniListUpdater:
                     break
 
         if 'title' not in guess:
-            print("Couldn't find title! Didn't clean title")
+            print(f"Couldn't find title in filename '{path_parts[-1]}'! Guess result: {guess}")
             return path_parts
 
         # Ranma 1/2 1 detected as episodes [1,2]
@@ -282,20 +282,24 @@ class AniListUpdater:
     def update_episode_count(self, result):
         if result is None:
             raise Exception('Parameter in update_episode_count is null.')
+       
+        # If its empty, cache the data.
+        if sys.argv[-1] == '':
+            print(f'Data to cache: {result}')
         
         anime_id, anime_name, current_progress, total_episodes, file_progress = result
-
+       
         # 'episode': [86, 13], lol.
         # I don't know of a way to actually fix this in fix_filename, since it takes episode_title as title, and 86 as the episode.
         if isinstance(file_progress, list):
-            print(f'Detected multiple episodes: {file_progress}. Picking lowest.')
+            print(f'Detected multiple episodes: {file_progress}. Picking lowest to avoid misupdating.')
             file_progress = min(file_progress)
 
         # Only launch anilist
         if sys.argv[2] == 'launch':
             print(f'Opening AniList for "{anime_name}": https://anilist.co/anime/{anime_id}')
             webbrowser.open_new_tab(f'https://anilist.co/anime/{anime_id}')
-            return
+            return True
 
         if current_progress is None:
             raise Exception('Failed to get current episode count. Is it on your watching/planning list?')
@@ -324,13 +328,28 @@ class AniListUpdater:
         if response and 'data' in response:
             updated_progress = response['data']['SaveMediaListEntry']['progress']
             print(f'Episode count updated successfully! New progress: {updated_progress}')
+            print(f'Data to cache: {(anime_id, anime_name, updated_progress, total_episodes, file_progress)}')
+            return True
         else:
             print('Failed to update episode count.')
+            return False
 
 def main():
     try:
         updater = AniListUpdater()
-        updater.handle_filename(sys.argv[1])
+
+        result = tuple(int(x.strip()) if x.strip().isdigit() else x.strip()[1:-1] for x in sys.argv[-1].split(',') if sys.argv[-1] != '')
+        cached_update = None
+
+        # Attempt to update using cached_data
+        if len(result) != 0:
+            print(f'Using cached data! {result}')
+            cached_update = updater.update_episode_count(result)
+        
+        # If it fails or was not cached, update using the filename
+        if cached_update is None or not cached_update:
+            updater.handle_filename(sys.argv[1])
+
     except Exception as e:
         print(f'ERROR: {e}')
         sys.exit(1)
