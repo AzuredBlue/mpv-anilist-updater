@@ -1,27 +1,9 @@
 local utils = require 'mp.utils'
 
-local cached_data = nil
 function callback(success, result, error)
     if result.status == 0 then
         mp.osd_message("Updated anime correctly.", 2)
     end
-
-    if result.stdout and result.stdout ~= "" then
-            
-        for line in result.stdout:gmatch("[^\r\n]+") do
-            -- Printing the line, since capture stdout fully captures the output
-            print(line)
-            
-            if line:match("^Data to cache:") and result.status == 0 then
-
-                -- Remove parentheses and "Anime data: " part
-                local data_str = line:match("^Data to cache:%s*%((.+)%)")
-                cached_data = data_str
-
-            end
-        end
-    end
-
 end
 
 local function get_python_command()
@@ -63,8 +45,7 @@ function update_anilist(action)
     local path = ((directory:sub(-1) == '/' or directory:sub(-1) == '\\') and directory or directory..'/') .. mp.get_property("path") -- Absolute path of the file we are playing
     local table = {}
     table.name = "subprocess"
-    table.args = {python_command, script_dir.."anilistUpdater.py", path, action, cached_data or ""}
-    table.capture_stdout = true
+    table.args = {python_command, script_dir.."anilistUpdater.py", path, action}
     local cmd = mp.command_native_async(table, callback)
 end
 
@@ -72,7 +53,6 @@ mp.observe_property("percent-pos", "number", check_progress)
 
 -- Reset triggered
 mp.register_event("file-loaded", function()
-    cached_data = nil
     triggered = false
 end)
 
