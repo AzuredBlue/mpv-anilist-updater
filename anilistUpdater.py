@@ -208,7 +208,7 @@ class AniListUpdater:
         #   Tries to update and current episode is not the next one.
         # This means that for shows with absolute numbering, if it updates, it will always call the API
         # Since it needs to convert from absolute to relative.
-        if cached_result is None or (cached_result and (file_info.get('episode') != cached_result[4] + 1) and sys.argv[2] != 'launch'):
+        if cached_result is None or (cached_result and (file_info.get('episode') != cached_result[2] + 1) and sys.argv[2] != 'launch'):
             result = self.get_anime_info_and_progress(file_info.get('name'), file_info.get('episode'), file_info.get('year'))
             result = self.update_episode_count(result) # Returns either the same, or the updated result
 
@@ -226,7 +226,9 @@ class AniListUpdater:
         else:
             print(f'Found in cache! {cached_result}')
             # Change to the episode that needs to be updated
+            print(cached_result)
             cached_result = cached_result[:4] + (file_info.get('episode'),) + cached_result[5:]
+            print(f"After updating episode: {cached_result}")
             result = self.update_episode_count(cached_result)
 
             # If it's different, update in cache as well.
