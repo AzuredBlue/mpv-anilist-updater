@@ -42,7 +42,18 @@ function update_anilist(action)
     local script_dir = debug.getinfo(1).source:match("@?(.*/)")
     local directory = mp.get_property("working-directory")
     -- It seems like in Linux working-directory sometimes returns it without a "/" at the end
-    local path = ((directory:sub(-1) == '/' or directory:sub(-1) == '\\') and directory or directory..'/') .. mp.get_property("path") -- Absolute path of the file we are playing
+    directory = (directory:sub(-1) == '/' or directory:sub(-1) == '\\') and directory or directory .. '/'
+    -- For some reason, "path" sometimes returns the absolute path, sometimes it doesn't.
+    local file_path = mp.get_property("path")
+    local path
+    
+    -- If it starts with a '/' (linux) or a letter followed by '/' or '\', then it is already the absolute path
+    if file_path:sub(1, 1) == '/' or file_path:match("^%a:[/\\]") then
+        path = file_path
+    else
+        path = directory .. file_path
+    end
+
     local table = {}
     table.name = "subprocess"
     table.args = {python_command, script_dir.."anilistUpdater.py", path, action}
