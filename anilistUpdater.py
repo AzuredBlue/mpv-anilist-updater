@@ -72,56 +72,39 @@ class AniListUpdater:
                 file.write(f'\n{time.time()};;{self.hash_path(os.path.dirname(path))};;{guessed_name};;{result}')
         except Exception as e:
             print(f'Error trying to cache {result}: {e}')
-
-    def clean_cache(self):
-        try:
-            with open(self.TOKEN_PATH, 'r+') as file:
-                orig_lines = file.readlines()
-
-            # Filter out invalid lines
-            # Only allow non-empty, unique, and recent series
-            unique = set()
-            lines = []
-            for line in orig_lines:
-                if line.strip():
-                    if ';;' in line:
-                        epoch, path, guessed, _ = line.split(';;')
-
-                        if time.time() - float(epoch) < self.CACHE_REFRESH_RATE and (path, guessed) not in unique:
-                            unique.add((path, guessed))
-                            lines.append(line)
-                    else:
-                        lines.append(line)
-            
-            # lines = [line for line in orig_lines if line.strip() and
-            #         (';;' not in line or (time.time() - float(line.split(';;')[0])) < self.CACHE_REFRESH_RATE)]
-            
-            if lines != orig_lines:
-                with open(self.TOKEN_PATH, 'w') as file:
-                    file.writelines(lines)
-
-            return lines
-        except Exception as e:
-            print(f'Error while trying to clean cache file: {e}')
     
     def hash_path(self, path):
         return hashlib.sha256(path.encode('utf-8')).hexdigest()
 
-    def is_cached(self, path, guessed_name):
+    def check_and_clean_cache(self, path, guessed_name):
         try:
-
-            # Cleans the cache, only leaving valid lines and returning them
-            lines = self.clean_cache()
+            valid_lines = []
+            unique = set()
             path = self.hash_path(os.path.dirname(path))
+            cached_result = (None, None)
 
-            for index, line in enumerate(lines):
-                if ';;' in line:
-                    _, dir_path, guess, result = line.strip().split(';;')
+            with open(self.TOKEN_PATH, 'r+') as file:
+                orig_lines = file.readlines()
 
-                    if dir_path == path and guess == guessed_name:
-                        return result, index
+            for line in orig_lines:
+                if line.strip():
+                    if ';;' in line:
+                        epoch, dir_path, guess, result = line.strip().split(';;')
+
+                        if time.time() - float(epoch) < self.CACHE_REFRESH_RATE and (dir_path, guess) not in unique:
+                            unique.add((dir_path, guess))
+                            valid_lines.append(line)
+
+                            if dir_path == path and guess == guessed_name:
+                                cached_result = (result, len(valid_lines) - 1)
+                    else:
+                        valid_lines.append(line)
+
+            if valid_lines != orig_lines:
+                with open(self.TOKEN_PATH, 'w') as file:
+                    file.writelines(valid_lines)
             
-            return None, None
+            return cached_result
         except Exception as e:
             print(f'Error trying to read cache file: {e}')
 
@@ -199,7 +182,7 @@ class AniListUpdater:
 
     def handle_filename(self, filename):
         file_info = self.parse_filename(filename)
-        cached_result, line_index = self.is_cached(filename, file_info.get('name'))
+        cached_result, line_index = self.check_and_clean_cache(filename, file_info.get('name'))
         # str -> tuple
         cached_result = ast.literal_eval(cached_result) if cached_result else None
         
@@ -226,9 +209,7 @@ class AniListUpdater:
         else:
             print(f'Found in cache! {cached_result}')
             # Change to the episode that needs to be updated
-            print(cached_result)
-            cached_result = cached_result[:4] + (file_info.get('episode'),) + cached_result[5:]
-            print(f"After updating episode: {cached_result}")
+            cached_result = cached_result[:4] + (file_info.get('episode'),)
             result = self.update_episode_count(cached_result)
 
             # If it's different, update in cache as well.
