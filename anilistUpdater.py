@@ -2,11 +2,15 @@ import sys
 import os
 import webbrowser
 import requests
+import time
+import ast
+import hashlib
 from guessit import guessit
 
 class AniListUpdater:
     ANILIST_API_URL = 'https://graphql.anilist.co'
     TOKEN_PATH = os.path.join(os.path.dirname(__file__), 'anilistToken.txt')
+    CACHE_REFRESH_RATE = 60*60
 
     # Load token and user id
     def __init__(self):
@@ -19,7 +23,8 @@ class AniListUpdater:
             with open(self.TOKEN_PATH, 'r') as file:
                 content = file.read().strip()
                 if ':' in content:
-                    return content.split(':')[1]
+                    token = content.split(':', 1)[1].splitlines()[0]
+                    return token
                 
                 return content
         except Exception as e:
@@ -60,6 +65,85 @@ class AniListUpdater:
         except Exception as e:
             print(f'Error saving user ID: {e}')
 
+    def cache_to_file(self, path, guessed_name, result):
+        try:
+            with open(self.TOKEN_PATH, 'a') as file:
+                # Epoch Time, hash of the path, guessed name, result
+                file.write(f'\n{time.time()};;{self.hash_path(os.path.dirname(path))};;{guessed_name};;{result}')
+        except Exception as e:
+            print(f'Error trying to cache {result}: {e}')
+
+    def clean_cache(self):
+        try:
+            with open(self.TOKEN_PATH, 'r+') as file:
+                orig_lines = file.readlines()
+
+            # Filter out invalid lines
+            # Only allow non-empty, unique, and recent series
+            unique = set()
+            lines = []
+            for line in orig_lines:
+                if line.strip():
+                    if ';;' in line:
+                        epoch, path, guessed, _ = line.split(';;')
+
+                        if time.time() - float(epoch) < self.CACHE_REFRESH_RATE and (path, guessed) not in unique:
+                            unique.add((path, guessed))
+                            lines.append(line)
+                    else:
+                        lines.append(line)
+            
+            # lines = [line for line in orig_lines if line.strip() and
+            #         (';;' not in line or (time.time() - float(line.split(';;')[0])) < self.CACHE_REFRESH_RATE)]
+            
+            if lines != orig_lines:
+                with open(self.TOKEN_PATH, 'w') as file:
+                    file.writelines(lines)
+
+            return lines
+        except Exception as e:
+            print(f'Error while trying to clean cache file: {e}')
+    
+    def hash_path(self, path):
+        return hashlib.sha256(path.encode('utf-8')).hexdigest()
+
+    def is_cached(self, path, guessed_name):
+        try:
+
+            # Cleans the cache, only leaving valid lines and returning them
+            lines = self.clean_cache()
+            path = self.hash_path(os.path.dirname(path))
+
+            for index, line in enumerate(lines):
+                if ';;' in line:
+                    _, dir_path, guess, result = line.strip().split(';;')
+
+                    if dir_path == path and guess == guessed_name:
+                        return result, index
+            
+            return None, None
+        except Exception as e:
+            print(f'Error trying to read cache file: {e}')
+
+    def update_cache(self, path, guessed_name, result, index):
+        try:
+            with open(self.TOKEN_PATH, 'r') as file:
+                lines = file.readlines()
+
+            if 0 <= index < len(lines):
+                # Update the line at the given index with the new cache data    
+                updated_line = f'{time.time()};;{self.hash_path(os.path.dirname(path))};;{guessed_name};;{result}\n' if result is not None else ''
+                lines[index] = updated_line
+
+                # Write the updated lines back to the file
+                with open(self.TOKEN_PATH, 'w') as file:
+                    file.writelines(lines)
+
+            else:
+                print(f"Invalid index {index} for updating cache.")
+        except Exception as e:
+            print(f'Error trying to update cache file: {e}')
+
     # Function to make an api request to AniList's api
     def make_api_request(self, query, variables=None, access_token=None):
         headers = {
@@ -71,6 +155,7 @@ class AniListUpdater:
             headers['Authorization'] = f'Bearer {access_token}'
         
         response = requests.post(self.ANILIST_API_URL, json={'query': query, 'variables': variables}, headers=headers)
+        # print(f"Made an API Query with: Query: {query}\nVariables: {variables} ")
         if response.status_code == 200:
             return response.json()
         else:
@@ -114,9 +199,51 @@ class AniListUpdater:
 
     def handle_filename(self, filename):
         file_info = self.parse_filename(filename)
-        result = self.get_anime_info_and_progress(file_info.get('name'), file_info.get('episode'), file_info.get('year'))
-        self.update_episode_count(result)
+        cached_result, line_index = self.is_cached(filename, file_info.get('name'))
+        # str -> tuple
+        cached_result = ast.literal_eval(cached_result) if cached_result else None
+        
+        # True if:
+        #   Is not cached
+        #   Tries to update and current episode is not the next one.
+        # This means that for shows with absolute numbering, if it updates, it will always call the API
+        # Since it needs to convert from absolute to relative.
+        if cached_result is None or (cached_result and (file_info.get('episode') != cached_result[4] + 1) and sys.argv[2] != 'launch'):
+            result = self.get_anime_info_and_progress(file_info.get('name'), file_info.get('episode'), file_info.get('year'))
+            result = self.update_episode_count(result) # Returns either the same, or the updated result
 
+            # If it returned a result, then put it in cache, since it wasn't.
+            if result:
+                
+                if line_index is not None:
+                    print(f'Updating cache to: {result}')
+                    self.update_cache(filename, file_info.get('name'), result, line_index)
+                else:
+                    print(f'Not found in cache! Adding to file... {result}')
+                    self.cache_to_file(filename, file_info.get('name'), result)
+        
+        # True for opening AniList and updating next episode.
+        else:
+            print(f'Found in cache! {cached_result}')
+            # Change to the episode that needs to be updated
+            cached_result = cached_result[:4] + (file_info.get('episode'),) + cached_result[5:]
+            result = self.update_episode_count(cached_result)
+
+            # If it's different, update in cache as well.
+            if cached_result != result and result:                
+                print(f'Updating cache to: {result}')
+                self.update_cache(filename, file_info.get('name'), result, line_index)
+
+            # If it either errored or couldn't update, retry without cache.
+            if not result:
+                print(f'Failed to update through cache, retrying without.')
+                # Deleting from the cache
+                self.update_cache(filename, file_info.get('name'), None, line_index)
+                # Retrying
+                self.handle_filename(filename)
+        
+        return
+        
     # Hardcoded exceptions to fix detection
     # Easier than just renaming my files 1 by 1 on Qbit
     # Every exception I find will be added here
@@ -148,6 +275,11 @@ class AniListUpdater:
         # This doesn't fix some, you'd have to manually rename the files to Bleach Thousand Year Blood War E${i}
         if 'Bleach' == guess['title'] and ('Thousand Year Blood War' in guess.get('alternative_title', '') or 'Sennen Kessen-hen' in guess.get('alternative_title', '')):
             path_parts[-1] = path_parts[-1].replace('-', ' ')
+
+        if 'Centimeters per Second' == guess['title'] and 5 == guess.get('episode', 0):
+            path_parts[-1] = path_parts[-1].replace(' 5 ', ' Five ')
+            # For some reason AniList has this film in 3 parts.
+            path_parts[-1] = path_parts[-1].replace('per Second', 'per Second 3')
 
         # Oshi No Ko for some reason gets detected as "language" : "ko" for some reason.
         # You are allowed to judge the solution, but it works.
@@ -266,7 +398,6 @@ class AniListUpdater:
             # Try to guess season and episode.
             if seasons[0]['episodes'] is not None and file_progress > seasons[0]['episodes']:
                 seasons = self.filter_valid_seasons(seasons)
-
                 print('Related shows:', ', '.join(season['title']['romaji'] for season in seasons))
 
                 anime_data = self.find_season_and_episode(seasons, file_progress)
@@ -282,10 +413,6 @@ class AniListUpdater:
     def update_episode_count(self, result):
         if result is None:
             raise Exception('Parameter in update_episode_count is null.')
-       
-        # If its empty, cache the data.
-        if sys.argv[-1] == '':
-            print(f'Data to cache: {result}')
         
         anime_id, anime_name, current_progress, total_episodes, file_progress = result
        
@@ -299,7 +426,7 @@ class AniListUpdater:
         if sys.argv[2] == 'launch':
             print(f'Opening AniList for "{anime_name}": https://anilist.co/anime/{anime_id}')
             webbrowser.open_new_tab(f'https://anilist.co/anime/{anime_id}')
-            return True
+            return result
 
         if current_progress is None:
             raise Exception('Failed to get current episode count. Is it on your watching/planning list?')
@@ -328,8 +455,8 @@ class AniListUpdater:
         if response and 'data' in response:
             updated_progress = response['data']['SaveMediaListEntry']['progress']
             print(f'Episode count updated successfully! New progress: {updated_progress}')
-            print(f'Data to cache: {(anime_id, anime_name, updated_progress, total_episodes, file_progress)}')
-            return True
+
+            return (anime_id, anime_name, updated_progress, total_episodes, file_progress)
         else:
             print('Failed to update episode count.')
             return False
@@ -337,18 +464,7 @@ class AniListUpdater:
 def main():
     try:
         updater = AniListUpdater()
-
-        result = tuple(int(x.strip()) if x.strip().isdigit() else x.strip()[1:-1] for x in sys.argv[-1].split(',') if sys.argv[-1] != '')
-        cached_update = None
-
-        # Attempt to update using cached_data
-        if len(result) != 0:
-            print(f'Using cached data! {result}')
-            cached_update = updater.update_episode_count(result)
-        
-        # If it fails or was not cached, update using the filename
-        if cached_update is None or not cached_update:
-            updater.handle_filename(sys.argv[1])
+        updater.handle_filename(sys.argv[1])
 
     except Exception as e:
         print(f'ERROR: {e}')
