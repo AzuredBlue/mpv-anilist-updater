@@ -45,14 +45,7 @@ function update_anilist(action)
     directory = (directory:sub(-1) == '/' or directory:sub(-1) == '\\') and directory or directory .. '/'
     -- For some reason, "path" sometimes returns the absolute path, sometimes it doesn't.
     local file_path = mp.get_property("path")
-    local path
-    
-    -- If it starts with a '/' (linux) or a letter followed by '/' or '\', then it is already the absolute path
-    if file_path:sub(1, 1) == '/' or file_path:match("^%a:[/\\]") then
-        path = file_path
-    else
-        path = directory .. file_path
-    end
+    local path = utils.join_path(directory, file_path)
 
     local table = {}
     table.name = "subprocess"
