@@ -5,12 +5,13 @@ import requests
 import time
 import ast
 import hashlib
+import re
 from guessit import guessit
 
 class AniListUpdater:
     ANILIST_API_URL = 'https://graphql.anilist.co'
     TOKEN_PATH = os.path.join(os.path.dirname(__file__), 'anilistToken.txt')
-    CACHE_REFRESH_RATE = 60*60
+    CACHE_REFRESH_RATE = 24*60*60
 
     # Load token and user id
     def __init__(self):
@@ -233,42 +234,39 @@ class AniListUpdater:
     def fix_filename(self, path_parts):
         guess = guessit(path_parts[-1], {'type': 'episode'}) # Simply easier for fixing the filename if we have what it is detecting.
 
-        # Fix from title as well
+        title_depth = -1
+
+        # Replace special characters
+        path_parts[-1] = re.sub(r'[\\\/:\*\?"<>\|\._-]', ' ', path_parts[-1])
+        # Remove multiple spaces
+        path_parts[-1] = " ".join(path_parts[-1].split())
+
+        # Fix from folders if the everything is not in the filename
         if 'title' not in guess:
             # Depth=2
             for depth in range(2, min(4, len(path_parts))):
                 folder_guess = guessit(path_parts[-depth], {'type': 'episode'})
                 if 'title' in folder_guess:
+                    path_parts[-depth] = re.sub(r'[\\\/:\*\?"<>\|\._-]', ' ', path_parts[-depth])
+                    path_parts[-depth] = " ".join(path_parts[-depth].split())
                     guess['title'] = folder_guess['title']
+                    title_depth = -depth
                     break
 
         if 'title' not in guess:
             print(f"Couldn't find title in filename '{path_parts[-1]}'! Guess result: {guess}")
             return path_parts
 
-        # Ranma 1/2 1 detected as episodes [1,2]
-        if 'Ranma' in guess['title'] and len(guess['episode']) > 1:
-            path_parts[-1] = path_parts[-1].replace('1_2', '').replace('1/2', '')
-
-        # Chi - Chikyuu no Undou ni Tsuite detected as 'Chi'
-        if 'Chi' == guess['title']:
-            path_parts[-1] = path_parts[-1].replace(' - ', ' ')
-
-        # Bleach TYBW, TYBW gets detected as alternative_title.
-        # This doesn't fix some, you'd have to manually rename the files to Bleach Thousand Year Blood War E${i}
-        if 'Bleach' == guess['title'] and ('Thousand Year Blood War' in guess.get('alternative_title', '') or 'Sennen Kessen-hen' in guess.get('alternative_title', '')):
-            path_parts[-1] = path_parts[-1].replace('-', ' ')
-
         if 'Centimeters per Second' == guess['title'] and 5 == guess.get('episode', 0):
-            path_parts[-1] = path_parts[-1].replace(' 5 ', ' Five ')
+            path_parts[title_depth] = path_parts[title_depth].replace(' 5 ', ' Five ')
             # For some reason AniList has this film in 3 parts.
-            path_parts[-1] = path_parts[-1].replace('per Second', 'per Second 3')
+            path_parts[title_depth] = path_parts[title_depth].replace('per Second', 'per Second 3')
 
         # Oshi No Ko for some reason gets detected as "language" : "ko" for some reason.
         # You are allowed to judge the solution, but it works.
         if guess.get('language', '') == 'ko' and guess['title'] == 'Oshi no':
-            path_parts[-1] = path_parts[-1].replace("Oshi no Ko", "Oshi noKo")
-
+            path_parts[title_depth] = path_parts[title_depth].replace("Oshi no Ko", "Oshi noKo")
+        
         return path_parts
 
     # Parse the file name using guessit
@@ -280,7 +278,7 @@ class AniListUpdater:
 
         # First, try to guess from the filename
         guess = guessit(filename, {'type': 'episode'})
-        print(f'File name guess: {filename} -> {str(guess)}')
+        print(f'File name guess: {filename} -> {dict(guess)}')
 
         # Episode guess from the title.
         # Usually, releases are formated [Release Group] Title - S01EX
@@ -294,6 +292,12 @@ class AniListUpdater:
         # If its >2, theres probably a Release Group and Title / Season / Part, so its good
 
         episode = guess.get('episode', 1)
+        
+        # 'episode': [86, 13] (EIGHTY-SIX), [1, 2, 3] (RANMA) lol.
+        if isinstance(episode, list):
+            print(f'Detected multiple episodes: {episode}. Picking last one.')
+            episode = episode[-1]
+
         season = str(guess.get('season', ''))
         part = str(guess.get('part', ''))
         year = str(guess.get('year', ''))
@@ -315,7 +319,7 @@ class AniListUpdater:
             for depth in [2, 3]:
                 folder_guess = guessit(path_parts[-depth], {'type' : 'episode'}) if len(path_parts) > depth-1 else ''
                 if folder_guess != '':
-                    print(f'{depth-1}{"st" if depth-1==1 else "nd"} Folder guess:\n{path_parts[-depth]} -> {str(folder_guess)}')
+                    print(f'{depth-1}{"st" if depth-1==1 else "nd"} Folder guess:\n{path_parts[-depth]} -> {dict(folder_guess)}')
 
                     name = str(folder_guess.get('title', ''))
                     season = season or str(folder_guess.get('season', ''))
@@ -398,12 +402,6 @@ class AniListUpdater:
             raise Exception('Parameter in update_episode_count is null.')
         
         anime_id, anime_name, current_progress, total_episodes, file_progress = result
-       
-        # 'episode': [86, 13], lol.
-        # I don't know of a way to actually fix this in fix_filename, since it takes episode_title as title, and 86 as the episode.
-        if isinstance(file_progress, list):
-            print(f'Detected multiple episodes: {file_progress}. Picking lowest to avoid misupdating.')
-            file_progress = min(file_progress)
 
         # Only launch anilist
         if sys.argv[2] == 'launch':
