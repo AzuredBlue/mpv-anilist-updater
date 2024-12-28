@@ -190,6 +190,7 @@ class AniListUpdater:
         # True if:
         #   Is not cached
         #   Tries to update and current episode is not the next one.
+        #   It is not in your watching/planning list.
         # This means that for shows with absolute numbering, if it updates, it will always call the API
         # Since it needs to convert from absolute to relative.
         if cached_result is None or (cached_result and (file_info.get('episode') != cached_result[2] + 1) and sys.argv[2] != 'launch'):
@@ -234,10 +235,13 @@ class AniListUpdater:
     def fix_filename(self, path_parts):
         guess = guessit(path_parts[-1], {'type': 'episode'}) # Simply easier for fixing the filename if we have what it is detecting.
 
+        path_parts[-1] = os.path.splitext(path_parts[-1])[0]
+
+        pattern = r'[\\\/:!\*\?"<>\|\._-]'
         title_depth = -1
 
         # Replace special characters
-        path_parts[-1] = re.sub(r'[\\\/:\*\?"<>\|\._-]', ' ', path_parts[-1])
+        path_parts[-1] = re.sub(pattern, ' ', path_parts[-1])
         # Remove multiple spaces
         path_parts[-1] = " ".join(path_parts[-1].split())
 
@@ -247,7 +251,7 @@ class AniListUpdater:
             for depth in range(2, min(4, len(path_parts))):
                 folder_guess = guessit(path_parts[-depth], {'type': 'episode'})
                 if 'title' in folder_guess:
-                    path_parts[-depth] = re.sub(r'[\\\/:\*\?"<>\|\._-]', ' ', path_parts[-depth])
+                    path_parts[-depth] = re.sub(pattern, ' ', path_parts[-depth])
                     path_parts[-depth] = " ".join(path_parts[-depth].split())
                     guess['title'] = folder_guess['title']
                     title_depth = -depth
@@ -376,10 +380,7 @@ class AniListUpdater:
             if len(seasons) == 0:
                 raise Exception(f"Couldn\'t find an anime from this title! ({name})")
 
-            if seasons[0]['mediaListEntry'] is None:
-                raise Exception(f"Couldn\'t find the anime in your anime list! ({seasons[0]['title']['romaji']})")
-
-            anime_data = (seasons[0]['id'], seasons[0]['title']['romaji'], seasons[0]['mediaListEntry']['progress'], seasons[0]['episodes'], file_progress)
+            anime_data = (seasons[0]['id'], seasons[0]['title']['romaji'], seasons[0]['mediaListEntry']['progress'] if seasons[0]['mediaListEntry'] is not None else -1, seasons[0]['episodes'], file_progress)
             # If the episode in the file name is larger than the total amount of episodes
             # Then they are using absolute numbering format for episodes (looking at you SubsPlease)
             # Try to guess season and episode.
@@ -402,7 +403,7 @@ class AniListUpdater:
             raise Exception('Parameter in update_episode_count is null.')
         
         anime_id, anime_name, current_progress, total_episodes, file_progress = result
-
+        
         # Only launch anilist
         if sys.argv[2] == 'launch':
             print(f'Opening AniList for "{anime_name}": https://anilist.co/anime/{anime_id}')
