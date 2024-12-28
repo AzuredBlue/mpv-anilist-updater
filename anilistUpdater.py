@@ -242,6 +242,11 @@ class AniListUpdater:
 
         # Replace special characters
         path_parts[-1] = re.sub(pattern, ' ', path_parts[-1])
+
+        # Weird bug where episode is detected as the episode title "S2 02" -> episode_title: '02'
+        # Hopefully this wont break anything else.
+        path_parts[-1] = re.sub(r'(^|\s)S(\d+)', r'\1Season \2', path_parts[-1])
+
         # Remove multiple spaces
         path_parts[-1] = " ".join(path_parts[-1].split())
 
