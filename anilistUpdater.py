@@ -243,10 +243,6 @@ class AniListUpdater:
         # Replace special characters
         path_parts[-1] = re.sub(pattern, ' ', path_parts[-1])
 
-        # Weird bug where episode is detected as the episode title "S2 02" -> episode_title: '02'
-        # Hopefully this wont break anything else.
-        path_parts[-1] = re.sub(r'(^|\s)S(\d+)', r'\1Season \2', path_parts[-1])
-
         # Remove multiple spaces
         path_parts[-1] = " ".join(path_parts[-1].split())
 
@@ -300,16 +296,33 @@ class AniListUpdater:
     
         # If its >2, theres probably a Release Group and Title / Season / Part, so its good
 
-        episode = guess.get('episode', 1)
-        
+        episode = guess.get('episode', None)
+        season = guess.get('season', '')
+        part = str(guess.get('part', ''))
+        year = str(guess.get('year', ''))
+
+        # Quick fixes assuming season before episode
+        # 'episode_title': '02' in 'S2 02'
+        if guess.get('episode_title', '').isdigit() and episode is None:
+            print(f'Detected episode in episode_title. Episode: {int(guess.get('episode_title'))}')
+            episode = int(guess.get('episode_title'))
+
         # 'episode': [86, 13] (EIGHTY-SIX), [1, 2, 3] (RANMA) lol.
         if isinstance(episode, list):
             print(f'Detected multiple episodes: {episode}. Picking last one.')
             episode = episode[-1]
 
-        season = str(guess.get('season', ''))
-        part = str(guess.get('part', ''))
-        year = str(guess.get('year', ''))
+        # 'season': [2, 3] in "S2 03"
+        if isinstance(season, list):
+            print(f'Detected multiple seasons: {season}. Picking first one as season.')
+            if episode is None:
+                print('Episode still not detected. Picking last position of the season list.')
+                episode = season[-1]
+
+            season = season[0]
+
+        episode = episode or 1
+        season = str(season)
 
         keys = list(guess.keys())
         episode_index = keys.index('episode') if 'episode' in guess else 1
