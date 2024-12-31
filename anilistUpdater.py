@@ -11,6 +11,7 @@ from guessit import guessit
 class AniListUpdater:
     ANILIST_API_URL = 'https://graphql.anilist.co'
     TOKEN_PATH = os.path.join(os.path.dirname(__file__), 'anilistToken.txt')
+    OPTIONS = "--excludes country --excludes language --type episode"
     CACHE_REFRESH_RATE = 24*60*60
 
     # Load token and user id
@@ -233,7 +234,7 @@ class AniListUpdater:
     # Easier than just renaming my files 1 by 1 on Qbit
     # Every exception I find will be added here
     def fix_filename(self, path_parts):
-        guess = guessit(path_parts[-1], {'type': 'episode'}) # Simply easier for fixing the filename if we have what it is detecting.
+        guess = guessit(path_parts[-1], self.OPTIONS) # Simply easier for fixing the filename if we have what it is detecting.
 
         path_parts[-1] = os.path.splitext(path_parts[-1])[0]
 
@@ -250,7 +251,7 @@ class AniListUpdater:
         if 'title' not in guess:
             # Depth=2
             for depth in range(2, min(4, len(path_parts))):
-                folder_guess = guessit(path_parts[-depth], {'type': 'episode'})
+                folder_guess = guessit(path_parts[-depth], self.OPTIONS)
                 if 'title' in folder_guess:
                     path_parts[-depth] = re.sub(pattern, ' ', path_parts[-depth])
                     path_parts[-depth] = " ".join(path_parts[-depth].split())
@@ -266,11 +267,6 @@ class AniListUpdater:
             path_parts[title_depth] = path_parts[title_depth].replace(' 5 ', ' Five ')
             # For some reason AniList has this film in 3 parts.
             path_parts[title_depth] = path_parts[title_depth].replace('per Second', 'per Second 3')
-
-        # Oshi No Ko for some reason gets detected as "language" : "ko" for some reason.
-        # You are allowed to judge the solution, but it works.
-        if guess.get('language', '') == 'ko' and guess['title'] == 'Oshi no':
-            path_parts[title_depth] = path_parts[title_depth].replace("Oshi no Ko", "Oshi noKo")
         
         return path_parts
 
@@ -280,9 +276,8 @@ class AniListUpdater:
         filename = path_parts[-1]
         name, season, part, year = '', '', '', ''
         episode = 1
-
         # First, try to guess from the filename
-        guess = guessit(filename, {'type': 'episode'})
+        guess = guessit(filename, self.OPTIONS)
         print(f'File name guess: {filename} -> {dict(guess)}')
 
         # Episode guess from the title.
@@ -339,7 +334,7 @@ class AniListUpdater:
 
             # Depth=2 folders
             for depth in [2, 3]:
-                folder_guess = guessit(path_parts[-depth], {'type' : 'episode'}) if len(path_parts) > depth-1 else ''
+                folder_guess = guessit(path_parts[-depth], self.OPTIONS) if len(path_parts) > depth-1 else ''
                 if folder_guess != '':
                     print(f'{depth-1}{"st" if depth-1==1 else "nd"} Folder guess:\n{path_parts[-depth]} -> {dict(folder_guess)}')
 
@@ -428,7 +423,7 @@ class AniListUpdater:
             webbrowser.open_new_tab(f'https://anilist.co/anime/{anime_id}')
             return result
 
-        if current_progress is None:
+        if current_progress is None or current_progress == -1:
             raise Exception('Failed to get current episode count. Is it on your watching/planning list?')
         
         # If its lower than the current progress, dont update.
