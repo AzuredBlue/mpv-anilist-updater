@@ -198,9 +198,8 @@ class AniListUpdater:
             result = self.get_anime_info_and_progress(file_info.get('name'), file_info.get('episode'), file_info.get('year'))
             result = self.update_episode_count(result) # Returns either the same, or the updated result
 
-            # If it returned a result, then put it in cache, since it wasn't.
-            if result:
-                
+            # If it returned a result and the progress isnt None, then put it in cache, since it wasn't.
+            if result and result[2] is not None:
                 if line_index is not None:
                     print(f'Updating cache to: {result}')
                     self.update_cache(filename, file_info.get('name'), result, line_index)
@@ -237,15 +236,9 @@ class AniListUpdater:
         guess = guessit(path_parts[-1], self.OPTIONS) # Simply easier for fixing the filename if we have what it is detecting.
 
         path_parts[-1] = os.path.splitext(path_parts[-1])[0]
-
         pattern = r'[\\\/:!\*\?"<>\|\._-]'
+
         title_depth = -1
-
-        # Replace special characters
-        path_parts[-1] = re.sub(pattern, ' ', path_parts[-1])
-
-        # Remove multiple spaces
-        path_parts[-1] = " ".join(path_parts[-1].split())
 
         # Fix from folders if the everything is not in the filename
         if 'title' not in guess:
@@ -253,8 +246,6 @@ class AniListUpdater:
             for depth in range(2, min(4, len(path_parts))):
                 folder_guess = guessit(path_parts[-depth], self.OPTIONS)
                 if 'title' in folder_guess:
-                    path_parts[-depth] = re.sub(pattern, ' ', path_parts[-depth])
-                    path_parts[-depth] = " ".join(path_parts[-depth].split())
                     guess['title'] = folder_guess['title']
                     title_depth = -depth
                     break
@@ -262,6 +253,12 @@ class AniListUpdater:
         if 'title' not in guess:
             print(f"Couldn't find title in filename '{path_parts[-1]}'! Guess result: {guess}")
             return path_parts
+
+        # Only clean up titles for some series
+        cleanup_titles = ['Ranma', 'Chi', 'Bleach']
+        if any(title in guess['title'] for title in cleanup_titles):
+            path_parts[title_depth] = re.sub(pattern, ' ', path_parts[title_depth])
+            path_parts[title_depth] = " ".join(path_parts[title_depth].split())
 
         if 'Centimeters per Second' == guess['title'] and 5 == guess.get('episode', 0):
             path_parts[title_depth] = path_parts[title_depth].replace(' 5 ', ' Five ')
@@ -393,7 +390,7 @@ class AniListUpdater:
             if len(seasons) == 0:
                 raise Exception(f"Couldn\'t find an anime from this title! ({name})")
 
-            anime_data = (seasons[0]['id'], seasons[0]['title']['romaji'], seasons[0]['mediaListEntry']['progress'] if seasons[0]['mediaListEntry'] is not None else -1, seasons[0]['episodes'], file_progress)
+            anime_data = (seasons[0]['id'], seasons[0]['title']['romaji'], seasons[0]['mediaListEntry']['progress'] if seasons[0]['mediaListEntry'] is not None else None, seasons[0]['episodes'], file_progress)
             # If the episode in the file name is larger than the total amount of episodes
             # Then they are using absolute numbering format for episodes (looking at you SubsPlease)
             # Try to guess season and episode.
@@ -423,7 +420,7 @@ class AniListUpdater:
             webbrowser.open_new_tab(f'https://anilist.co/anime/{anime_id}')
             return result
 
-        if current_progress is None or current_progress == -1:
+        if current_progress is None:
             raise Exception('Failed to get current episode count. Is it on your watching/planning list?')
         
         # If its lower than the current progress, dont update.
