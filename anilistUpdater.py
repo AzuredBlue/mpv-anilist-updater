@@ -170,7 +170,8 @@ class AniListUpdater:
     def find_season_and_episode(self, seasons, absolute_episode):
         accumulated_episodes = 0
         for season in seasons:
-            season_episodes = season.get('episodes', 0)
+            season_episodes = season.get('episodes', 12) if season.get('episodes') else 12
+
             if accumulated_episodes + season_episodes >= absolute_episode:
                 return (
                     season.get('id'),
