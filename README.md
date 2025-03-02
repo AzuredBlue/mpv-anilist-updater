@@ -3,7 +3,7 @@
 A script for MPV that automatically updates your AniList based on the file you just watched.
 
 > [!IMPORTANT]
-> The anime must be set to "watching" or "planning". AniList API can't update an anime if its not in the user's library.<br>
+> The anime must be set to "watching" or "planning". This is done in order to prevent updating the wrong show.<br>
 > It will not update if you are rewatching an episode.
 
 > [!TIP]
