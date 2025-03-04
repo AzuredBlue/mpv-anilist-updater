@@ -13,7 +13,7 @@ A script for MPV that automatically updates your AniList based on the file you j
 > - The file must have the episode number in it (absolute numbering should work)<br>
 > - In case of remakes, specify the year of the remake to ensure it updates the proper one<br>
 
-For bug reports, simply open an issue with the name of the file that its failing to recognise, and I will probably add it to the growing list of hardcoded solutions.
+For any issues, you can either open an issue on here, or message me on discord (azuredblue)
 
 ## Requirements
 
@@ -109,7 +109,7 @@ simply error.
 **Q: It does not work with X format. What do I do?**
 
 A: You can try launching the file through the command line with `mpv file.mkv` or opening the console through the keybind \` and see `Guessed name: X`. Try changing the file's name or folder so it has
-a better chance at guessing the anime. If it still doesn't work, try opening a GitHub issue.
+a better chance at guessing the anime. If it still doesn't work, try opening a GitHub issue or messaging me on discord (azuredblue).
 
 ## Credits
 
