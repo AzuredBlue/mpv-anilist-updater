@@ -297,7 +297,7 @@ class AniListUpdater:
         # Quick fixes assuming season before episode
         # 'episode_title': '02' in 'S2 02'
         if guess.get('episode_title', '').isdigit() and episode is None:
-            print(f'Detected episode in episode_title. Episode: {int(guess.get('episode_title'))}')
+            print(f'Detected episode in episode_title. Episode: {int(guess.get("episode_title"))}')
             episode = int(guess.get('episode_title'))
 
         # 'episode': [86, 13] (EIGHTY-SIX), [1, 2, 3] (RANMA) lol.
@@ -397,7 +397,7 @@ class AniListUpdater:
             # Try to guess season and episode.
             if seasons[0]['episodes'] is not None and file_progress > seasons[0]['episodes']:
                 seasons = self.filter_valid_seasons(seasons)
-                print('Related shows:', ', '.join(season['title']['romaji'] for season in seasons))
+                print('Related shows:', ", ".join(season["title"]["romaji"] for season in seasons))
 
                 anime_data = self.find_season_and_episode(seasons, file_progress)
 
