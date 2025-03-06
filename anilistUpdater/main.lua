@@ -1,5 +1,13 @@
 local utils = require 'mp.utils'
 
+-- The directory the script will work on
+-- Leaving it blank will make it work on every video you watch with mpv
+-- You can still update manually via Ctrl+A
+-- Setting a directory will only work if the path of the video contains this directory
+DIRECTORY = ""
+
+-- Example: DIRECTORY = "D:/Torrents" or "D:/Anime"
+
 function callback(success, result, error)
     if result.status == 0 then
         mp.osd_message("Updated anime correctly.", 2)
@@ -58,6 +66,18 @@ mp.observe_property("percent-pos", "number", check_progress)
 -- Reset triggered
 mp.register_event("file-loaded", function()
     triggered = false
+    if DIRECTORY ~= "" then
+        local directory = mp.get_property("working-directory")
+        directory = (directory:sub(-1) == '/' or directory:sub(-1) == '\\') and directory or directory .. '/'
+        local file_path = mp.get_property("path")
+        local path = utils.join_path(directory, file_path)
+        path = path:gsub("\\", "/")
+        
+        if string.find(path, DIRECTORY) ~= 1 then
+            mp.unobserve_property(check_progress)
+        end
+    end
+    
 end)
 
 -- Keybinds, modify as you please

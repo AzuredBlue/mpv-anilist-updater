@@ -12,6 +12,8 @@ A script for MPV that automatically updates your AniList based on the file you j
 > - Either the file or folder its in must have the anime title in it<br>
 > - The file must have the episode number in it (absolute numbering should work)<br>
 > - In case of remakes, specify the year of the remake to ensure it updates the proper one<br>
+>
+> To avoid the script running and making useless API calls, you can set a directory in `main.lua`, where it will work
 
 For any issues, you can either open an issue on here, or message me on discord (azuredblue)
 
