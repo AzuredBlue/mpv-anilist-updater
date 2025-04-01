@@ -22,7 +22,7 @@ class AniListUpdater:
     # Load token from anilistToken.txt
     def load_access_token(self):
         try:
-            with open(self.TOKEN_PATH, 'r') as file:
+            with open(self.TOKEN_PATH, 'r', encoding='utf-8') as file:
                 content = file.read().strip()
                 if ':' in content:
                     token = content.split(':', 1)[1].splitlines()[0]
@@ -36,7 +36,7 @@ class AniListUpdater:
     # Load user id from file, if not then make api request and save it.
     def get_user_id(self):
         try:
-            with open(self.TOKEN_PATH, 'r') as file:
+            with open(self.TOKEN_PATH, 'r', encoding='utf-8') as file:
                 content = file.read().strip()
                 if ':' in content:
                     return int(content.split(':')[0])
@@ -60,7 +60,7 @@ class AniListUpdater:
     # Cache user id
     def save_user_id(self, user_id):
         try:
-            with open(self.TOKEN_PATH, 'r+') as file:
+            with open(self.TOKEN_PATH, 'r+', encoding='utf-8') as file:
                 content = file.read()
                 file.seek(0)
                 file.write(f'{user_id}:{content}')
@@ -69,7 +69,7 @@ class AniListUpdater:
 
     def cache_to_file(self, path, guessed_name, result):
         try:
-            with open(self.TOKEN_PATH, 'a') as file:
+            with open(self.TOKEN_PATH, 'a', encoding='utf-8') as file:
                 # Epoch Time, hash of the path, guessed name, result
                 file.write(f'\n{time.time()};;{self.hash_path(os.path.dirname(path))};;{guessed_name};;{result}')
         except Exception as e:
@@ -85,7 +85,7 @@ class AniListUpdater:
             path = self.hash_path(os.path.dirname(path))
             cached_result = (None, None)
 
-            with open(self.TOKEN_PATH, 'r+') as file:
+            with open(self.TOKEN_PATH, 'r+', encoding='utf-8') as file:
                 orig_lines = file.readlines()
 
             for line in orig_lines:
@@ -103,7 +103,7 @@ class AniListUpdater:
                         valid_lines.append(line)
 
             if valid_lines != orig_lines:
-                with open(self.TOKEN_PATH, 'w') as file:
+                with open(self.TOKEN_PATH, 'w', encoding='utf-8') as file:
                     file.writelines(valid_lines)
             
             return cached_result
@@ -112,7 +112,7 @@ class AniListUpdater:
 
     def update_cache(self, path, guessed_name, result, index):
         try:
-            with open(self.TOKEN_PATH, 'r') as file:
+            with open(self.TOKEN_PATH, 'r', encoding='utf-8') as file:
                 lines = file.readlines()
 
             if 0 <= index < len(lines):
@@ -121,7 +121,7 @@ class AniListUpdater:
                 lines[index] = updated_line
 
                 # Write the updated lines back to the file
-                with open(self.TOKEN_PATH, 'w') as file:
+                with open(self.TOKEN_PATH, 'w', encoding='utf-8') as file:
                     file.writelines(lines)
 
             else:
@@ -256,7 +256,7 @@ class AniListUpdater:
             return path_parts
 
         # Only clean up titles for some series
-        cleanup_titles = ['Ranma', 'Chi', 'Bleach']
+        cleanup_titles = ['Ranma', 'Chi', 'Bleach', 'Link Click']
         if any(title in guess['title'] for title in cleanup_titles):
             path_parts[title_depth] = re.sub(pattern, ' ', path_parts[title_depth])
             path_parts[title_depth] = " ".join(path_parts[title_depth].split())
@@ -456,6 +456,13 @@ class AniListUpdater:
 
 def main():
     try:
+        # Reconfigure to utf-8
+        if sys.stdout.encoding != 'utf-8':
+            try:
+                sys.stdout.reconfigure(encoding='utf-8')
+                sys.stderr.reconfigure(encoding='utf-8')
+            except Exception as e_reconfigure:
+                print(f"Advertencia: No se pudo reconfigurar stdout/stderr a UTF-8: {e_reconfigure}", file=sys.stderr)
         updater = AniListUpdater()
         updater.handle_filename(sys.argv[1])
 
