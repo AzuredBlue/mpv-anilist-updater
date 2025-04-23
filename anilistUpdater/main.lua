@@ -1,12 +1,19 @@
 local utils = require 'mp.utils'
 
--- The directory the script will work on
--- Leaving it blank will make it work on every video you watch with mpv
+-- The directories the script will work on
+-- Specify as a table of strings. Leaving it empty will make it work on every video you watch with mpv
 -- You can still update manually via Ctrl+A
--- Setting a directory will only work if the path of the video contains this directory
-DIRECTORY = ""
+-- Example: DIRECTORIES = {"D:/Torrents", "D:/Anime"}
+DIRECTORIES = {}
 
--- Example: DIRECTORY = "D:/Torrents" or "D:/Anime"
+local function path_starts_with_any(path, directories)
+    for _, dir in ipairs(directories) do
+        if path:sub(1, #dir) == dir then
+            return true
+        end
+    end
+    return false
+end
 
 function callback(success, result, error)
     if result.status == 0 then
@@ -66,18 +73,17 @@ mp.observe_property("percent-pos", "number", check_progress)
 -- Reset triggered
 mp.register_event("file-loaded", function()
     triggered = false
-    if DIRECTORY ~= "" then
+    if #DIRECTORIES > 0 then
         local directory = mp.get_property("working-directory")
         directory = (directory:sub(-1) == '/' or directory:sub(-1) == '\\') and directory or directory .. '/'
         local file_path = mp.get_property("path")
         local path = utils.join_path(directory, file_path)
         path = path:gsub("\\", "/")
-        
-        if string.find(path, DIRECTORY) ~= 1 then
+
+        if not path_starts_with_any(path, DIRECTORIES) then
             mp.unobserve_property(check_progress)
         end
     end
-    
 end)
 
 -- Keybinds, modify as you please
