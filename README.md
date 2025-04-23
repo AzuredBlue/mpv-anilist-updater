@@ -13,7 +13,7 @@ A script for MPV that automatically updates your AniList based on the file you j
 > - The file must have the episode number in it (absolute numbering should work)<br>
 > - In case of remakes, specify the year of the remake to ensure it updates the proper one<br>
 >
-> To avoid the script running and making useless API calls, you can set a directory in `main.lua`, where it will work
+> To avoid the script running and making useless API calls, you can set one or more directories in `main.lua`, where it will work
 
 For any issues, you can either open an issue on here, or message me on discord (azuredblue)
 
@@ -70,6 +70,18 @@ end)
 
 mp.add_key_binding('ctrl+d', 'open_folder', open_folder)
 ```
+
+### Specifying Directories
+
+To limit the script to only work on files in certain directories, open `main.lua` and set the `DIRECTORIES` table near the top of the file. For example:
+
+```lua
+DIRECTORIES = {"D:/Torrents", "D:/Anime"}
+```
+
+- If you leave the table empty (`DIRECTORIES = {}`), the script will work for every video you watch with mpv.
+- If you specify one or more directories, the script will only trigger for files whose path starts with any of those directories.
+- **Note:** Restricting directories only prevents the script from automatically updating AniList for files outside the specified directories. Manual actions using the keybinds (Ctrl+A, Ctrl+B, Ctrl+D) will still work for any file, regardless of its location.
 
 ## How It Works
 
