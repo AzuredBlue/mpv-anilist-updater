@@ -81,7 +81,8 @@ DIRECTORIES = {"D:/Torrents", "D:/Anime"}
 
 - If you leave the table empty (`DIRECTORIES = {}`), the script will work for every video you watch with mpv.
 - If you specify one or more directories, the script will only trigger for files whose path starts with any of those directories.
-- **Note:** Restricting directories only prevents the script from automatically updating AniList for files outside the specified directories. Manual actions using the keybinds (Ctrl+A, Ctrl+B, Ctrl+D) will still work for any file, regardless of its location.
+> [!NOTE]
+> Restricting directories only prevents the script from automatically updating AniList for files outside the specified directories. Manual actions using the keybinds (Ctrl+A, Ctrl+B, Ctrl+D) will still work for any file, regardless of its location.
 
 ## How It Works
 
