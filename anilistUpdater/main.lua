@@ -1,10 +1,12 @@
 local utils = require 'mp.utils'
 
--- The directories the script will work on
--- Specify as a table of strings. Leaving it empty will make it work on every video you watch with mpv
--- You can still update manually via Ctrl+A
+-- === USER CONFIGURABLE OPTIONS ===
+-- The directories the script will work on.
+-- Specify as a table of strings. Leaving it empty will make it work on every video you watch with mpv.
+-- You can still update manually via Ctrl+A.
 -- Example: DIRECTORIES = {"D:/Torrents", "D:/Anime"}
 DIRECTORIES = {}
+-- ================================
 
 local function path_starts_with_any(path, directories)
     for _, dir in ipairs(directories) do

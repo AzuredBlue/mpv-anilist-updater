@@ -8,6 +8,17 @@ import hashlib
 import re
 from guessit import guessit
 
+# === USER CONFIGURABLE OPTIONS ===
+# Default is False to maintain previous functionality
+# If True, when watching episode 1 of a completed anime, set it to rewatching and update progress.
+SET_COMPLETED_TO_REWATCHING_ON_FIRST_EPISODE = False
+
+# Default is False to maintain previous functionality
+# If True, allow updating progress for anime set to rewatching.
+# This is for if you want to set anime to rewatching manually, but still update progress automatically.
+UPDATE_PROGRESS_WHEN_REWATCHING = False
+# ================================
+
 class AniListUpdater:
     ANILIST_API_URL = 'https://graphql.anilist.co'
     TOKEN_PATH = os.path.join(os.path.dirname(__file__), 'anilistToken.txt')
@@ -212,7 +223,10 @@ class AniListUpdater:
         else:
             print(f'Found in cache! {cached_result}')
             # Change to the episode that needs to be updated
-            cached_result = cached_result[:4] + (file_info.get('episode'),)
+            cached_result = cached_result[:4] + (file_info.get('episode'),) + cached_result[5:] if len(cached_result) > 5 else cached_result[:4] + (file_info.get('episode'),)
+            # Ensure tuple is 6 elements (pad with None if needed)
+            if len(cached_result) == 5:
+                cached_result = cached_result + (None,)
             result = self.update_episode_count(cached_result)
 
             # If it's different, update in cache as well.
@@ -391,7 +405,15 @@ class AniListUpdater:
             if len(seasons) == 0:
                 raise Exception(f"Couldn\'t find an anime from this title! ({name})")
 
-            anime_data = (seasons[0]['id'], seasons[0]['title']['romaji'], seasons[0]['mediaListEntry']['progress'] if seasons[0]['mediaListEntry'] is not None else None, seasons[0]['episodes'], file_progress)
+            entry = seasons[0]['mediaListEntry']
+            anime_data = (
+                seasons[0]['id'],
+                seasons[0]['title']['romaji'],
+                entry['progress'] if entry is not None else None,
+                seasons[0]['episodes'],
+                file_progress,
+                entry['status'] if entry is not None else None
+            )
             # If the episode in the file name is larger than the total amount of episodes
             # Then they are using absolute numbering format for episodes (looking at you SubsPlease)
             # Try to guess season and episode.
@@ -401,19 +423,29 @@ class AniListUpdater:
 
                 anime_data = self.find_season_and_episode(seasons, file_progress)
 
-                print(f"Final guessed anime: {next(season for season in seasons if season['id'] == anime_data[0])}") # Print data of the show
-                print(f'Absolute episode {file_progress} corresponds to Anime: {anime_data[1]}, Episode: {anime_data[-1]}')
-            else: 
-                print(f"Final guessed anime: {seasons[0]}") # Print data of the show
-            return (anime_data)
-        return (None, None, None, None)
+                found_season = next((season for season in seasons if season['id'] == anime_data[0]), None)
+                found_entry = found_season['mediaListEntry'] if found_season and found_season['mediaListEntry'] else None
+                anime_data = (
+                    anime_data[0],
+                    anime_data[1],
+                    anime_data[2],
+                    anime_data[3],
+                    anime_data[4],
+                    found_entry['status'] if found_entry else None
+                )
+                print(f"Final guessed anime: {found_season}")
+                print(f'Absolute episode {file_progress} corresponds to Anime: {anime_data[1]}, Episode: {anime_data[-2]}')
+            else:
+                print(f"Final guessed anime: {seasons[0]}")
+            return anime_data
+        return (None, None, None, None, None, None)
     
     # Update the anime based on file progress
     def update_episode_count(self, result):
         if result is None:
             raise Exception('Parameter in update_episode_count is null.')
         
-        anime_id, anime_name, current_progress, total_episodes, file_progress = result
+        anime_id, anime_name, current_progress, total_episodes, file_progress, current_status = result
         
         # Only launch anilist
         if sys.argv[2] == 'launch':
@@ -422,12 +454,46 @@ class AniListUpdater:
             return result
 
         if current_progress is None:
-            raise Exception('Failed to get current episode count. Is it on your watching/planning list?')
-        
-        # If its lower than the current progress, dont update.
-        if file_progress <= current_progress:
-            raise Exception(f'Episode was not new. Not updating ({file_progress} <= {current_progress})')
-        
+            raise Exception('Failed to get current episode count. Is it on your list?')
+
+        # Handle completed -> rewatching on first episode
+        if (current_status == 'COMPLETED' and file_progress == 1 and SET_COMPLETED_TO_REWATCHING_ON_FIRST_EPISODE):
+            # Needs to update in 2 steps, since AniList doesn't allow setting progress while changing the status from completed to rewatching. If you try, it will just reset the progress to 0.
+            print('Setting status to REPEATING (rewatching) and updating progress for first episode of completed anime.')
+            # Step 1: Set to REPEATING, progress=0
+            query = '''
+            mutation ($mediaId: Int, $progress: Int, $status: MediaListStatus) {
+                SaveMediaListEntry (mediaId: $mediaId, progress: $progress, status: $status) {
+                    status
+                    id
+                    progress
+                }
+            }
+            '''
+            variables = {'mediaId': anime_id, 'progress': 0, 'status': 'REPEATING'}
+            response = self.make_api_request(query, variables, self.access_token)
+            # Step 2: Set progress to 1
+            variables = {'mediaId': anime_id, 'progress': 1}
+            response = self.make_api_request(query, variables, self.access_token)
+            if response and 'data' in response:
+                updated_progress = response['data']['SaveMediaListEntry']['progress']
+                print(f'Episode count updated successfully! New progress: {updated_progress}')
+                return (anime_id, anime_name, updated_progress, total_episodes, 1, 'REPEATING')
+            print('Failed to update episode count.')
+            return False
+        # Handle updating progress for rewatching
+        if (current_status == 'REPEATING' and UPDATE_PROGRESS_WHEN_REWATCHING):
+            print('Updating progress for anime set to REPEATING (rewatching).')
+            status_to_set = 'REPEATING'
+        # Only update if status is CURRENT or PLANNING
+        elif current_status in ['CURRENT', 'PLANNING']:
+            # If its lower than the current progress, dont update.
+            if file_progress <= current_progress:
+                raise Exception(f'Episode was not new. Not updating ({file_progress} <= {current_progress})')
+            status_to_set = 'CURRENT' if file_progress != total_episodes else None
+        else:
+            raise Exception(f'Anime is not in a modifiable state (status: {current_status}). Not updating.')
+
         query = '''
         mutation ($mediaId: Int, $progress: Int, $status: MediaListStatus) {
             SaveMediaListEntry (mediaId: $mediaId, progress: $progress, status: $status) {
@@ -439,17 +505,15 @@ class AniListUpdater:
         '''
 
         variables = {'mediaId': anime_id, 'progress': file_progress}
-
-        # Handle changing "Planned to watch" animes to "Watching"
-        if file_progress != total_episodes:
-            variables['status'] = "CURRENT" # Set to "CURRENT" if it isn't the final episode.
+        if status_to_set:
+            variables['status'] = status_to_set
 
         response = self.make_api_request(query, variables, self.access_token)
         if response and 'data' in response:
             updated_progress = response['data']['SaveMediaListEntry']['progress']
             print(f'Episode count updated successfully! New progress: {updated_progress}')
 
-            return (anime_id, anime_name, updated_progress, total_episodes, file_progress)
+            return (anime_id, anime_name, updated_progress, total_episodes, file_progress, current_status)
         else:
             print('Failed to update episode count.')
             return False
