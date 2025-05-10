@@ -17,7 +17,17 @@ SET_COMPLETED_TO_REWATCHING_ON_FIRST_EPISODE = False
 # If True, allow updating progress for anime set to rewatching.
 # This is for if you want to set anime to rewatching manually, but still update progress automatically.
 UPDATE_PROGRESS_WHEN_REWATCHING = True
-# ================================
+
+# If True, always set to COMPLETED after the last episode, regardless of status.
+# Overrides the other two.
+SET_TO_COMPLETED_AFTER_LAST_EPISODE_BOTH = False
+
+# If True, set to COMPLETED after last episode if status was CURRENT.
+SET_TO_COMPLETED_AFTER_LAST_EPISODE_CURRENT = False
+
+# If True, set to COMPLETED after last episode if status was REPEATING (rewatching).
+SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING = True
+# ==========================================================
 
 class AniListUpdater:
     ANILIST_API_URL = 'https://graphql.anilist.co'
@@ -154,9 +164,8 @@ class AniListUpdater:
         # print(f"Made an API Query with: Query: {query}\nVariables: {variables} ")
         if response.status_code == 200:
             return response.json()
-        else:
-            print(f'API request failed: {response.status_code} - {response.text}\nQuery: {query}\nVariables: {variables}')
-            return None
+        print(f'API request failed: {response.status_code} - {response.text}\nQuery: {query}\nVariables: {variables}')
+        return None
 
     @staticmethod
     def season_order(season):
@@ -236,7 +245,7 @@ class AniListUpdater:
 
             # If it either errored or couldn't update, retry without cache.
             if not result:
-                print(f'Failed to update through cache, retrying without.')
+                print('Failed to update through cache, retrying without.')
                 # Deleting from the cache
                 self.update_cache(filename, file_info.get('name'), None, line_index)
                 # Retrying
@@ -355,7 +364,9 @@ class AniListUpdater:
                     part = part or str(folder_guess.get('part', ''))
                     year = year or str(folder_guess.get('year', ''))
 
-                    if name != '': break # If we got the name, its probable we already got season and part from the way folders are usually structured
+                    # If we got the name, its probable we already got season and part from the way folders are usually structured
+                    if name != '':
+                        break
         
         # Add season and part if there are
         if season and (int(season) > 1 or part):
@@ -494,6 +505,18 @@ class AniListUpdater:
         else:
             raise Exception(f'Anime is not in a modifiable state (status: {current_status}). Not updating.')
 
+        set_to_completed = False
+        if file_progress == total_episodes:
+            if SET_TO_COMPLETED_AFTER_LAST_EPISODE_BOTH:
+                set_to_completed = True
+            elif current_status == 'CURRENT' and SET_TO_COMPLETED_AFTER_LAST_EPISODE_CURRENT:
+                set_to_completed = True
+            elif current_status == 'REPEATING' and SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING:
+                set_to_completed = True
+        if set_to_completed:
+            print('Setting status to COMPLETED after last episode.')
+            status_to_set = 'COMPLETED'
+
         query = '''
         mutation ($mediaId: Int, $progress: Int, $status: MediaListStatus) {
             SaveMediaListEntry (mediaId: $mediaId, progress: $progress, status: $status) {
@@ -514,9 +537,8 @@ class AniListUpdater:
             print(f'Episode count updated successfully! New progress: {updated_progress}')
 
             return (anime_id, anime_name, updated_progress, total_episodes, file_progress, current_status)
-        else:
-            print('Failed to update episode count.')
-            return False
+        print('Failed to update episode count.')
+        return False
 
 def main():
     try:
