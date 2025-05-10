@@ -3,8 +3,8 @@
 A script for MPV that automatically updates your AniList based on the file you just watched.
 
 > [!IMPORTANT]
-> The anime must be set to "watching" or "planning". This is done in order to prevent updating the wrong show.<br>
-> It will not update if you are rewatching an episode.
+> By default, the anime must be set to "watching", "planning" or "rewatching" to update progress. This is done in order to prevent updating the wrong show.<br>
+> It will not update if you are rewatching an episode that is set to completed **unless you enable the rewatching options**. See [Rewatching Options](#rewatching-options) below for how to override this behavior.
 
 > [!TIP]
 > In order for the script to work properly, make sure your files are named correctly:<br>
@@ -81,8 +81,28 @@ DIRECTORIES = {"D:/Torrents", "D:/Anime"}
 
 - If you leave the table empty (`DIRECTORIES = {}`), the script will work for every video you watch with mpv.
 - If you specify one or more directories, the script will only trigger for files whose path starts with any of those directories.
+
 > [!NOTE]
 > Restricting directories only prevents the script from automatically updating AniList for files outside the specified directories. Manual actions using the keybinds (Ctrl+A, Ctrl+B, Ctrl+D) will still work for any file, regardless of its location.
+
+### Rewatching Options
+
+You can control how the script handles rewatching anime by editing two options at the top of `anilistUpdater.py`:
+
+- `SET_COMPLETED_TO_REWATCHING_ON_FIRST_EPISODE` (default: `False`): If set to `True`, when you watch episode 1 of an anime that is marked as completed, the script will automatically set its status to "rewatching" and update your progress. **Default is False to maintain previous functionality, since enabling this may update the wrong anime in rare cases.**
+- `UPDATE_PROGRESS_WHEN_REWATCHING` (default: `True`): If set to `True`, the script will update your episode progress for anime that are already set to "rewatching" (status "REPEATING"). **Default is True since the user specifically sets the anime to rewatching and there is no risk of updating the wrong anime.**
+
+These options make it easy to automate rewatch tracking or to keep rewatching progress up to date. You can find and change them at the top of `anilistUpdater.py`:
+
+```python
+# === USER CONFIGURABLE OPTIONS ===
+# Default is False to maintain previous functionality since it is possible that it may update the wrong anime.
+SET_COMPLETED_TO_REWATCHING_ON_FIRST_EPISODE = False
+
+# Default is True since the user specificially sets the anime to rewatching and does not have a risk of updating the wrong anime.
+UPDATE_PROGRESS_WHEN_REWATCHING = True
+# ================================
+```
 
 ## How It Works
 
