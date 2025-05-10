@@ -9,14 +9,14 @@ import re
 from guessit import guessit
 
 # === USER CONFIGURABLE OPTIONS ===
-# Default is False to maintain previous functionality
+# Default is False to maintain previous functionality since it is possible that it may update the wrong anime.
 # If True, when watching episode 1 of a completed anime, set it to rewatching and update progress.
 SET_COMPLETED_TO_REWATCHING_ON_FIRST_EPISODE = False
 
-# Default is False to maintain previous functionality
+# Default is True since the user specificially sets the anime to rewatching and does not have a risk of updating the wrong anime.
 # If True, allow updating progress for anime set to rewatching.
 # This is for if you want to set anime to rewatching manually, but still update progress automatically.
-UPDATE_PROGRESS_WHEN_REWATCHING = False
+UPDATE_PROGRESS_WHEN_REWATCHING = True
 # ================================
 
 class AniListUpdater:
