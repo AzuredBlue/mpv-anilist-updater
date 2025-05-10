@@ -104,6 +104,26 @@ UPDATE_PROGRESS_WHEN_REWATCHING = True
 # ================================
 ```
 
+### Auto-Complete After Last Episode
+
+By default, the script will automatically set an anime entry to "completed" after you finish the last episode while rewatching (status "REPEATING"). AniList will automatically increment the repeat count, and most people would not need to change other data (like score) for rewatches. This behavior can be customized with the following settings at the top of `anilistUpdater.py`:
+
+- `SET_TO_COMPLETED_AFTER_LAST_EPISODE_BOTH` (default: `False`): If set to `True`, always set the anime to "completed" after the last episode, regardless of status. This overrides the other two options.
+- `SET_TO_COMPLETED_AFTER_LAST_EPISODE_CURRENT` (default: `False`): If set to `True`, set the anime to "completed" after the last episode if the status was "CURRENT".
+- `SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING` (default: `True`): If set to `True`, set the anime to "completed" after the last episode if the status was "REPEATING" (rewatching).
+
+**Default behavior:** Only rewatches (status "REPEATING") are set to completed automatically after the last episode. If you want to change this, edit the options at the top of `anilistUpdater.py`:
+
+```python
+# If True, always set to COMPLETED after the last episode, regardless of status.
+# Overrides the other two.
+SET_TO_COMPLETED_AFTER_LAST_EPISODE_BOTH = False
+# If True, set to COMPLETED after last episode if status was CURRENT.
+SET_TO_COMPLETED_AFTER_LAST_EPISODE_CURRENT = False
+# If True, set to COMPLETED after last episode if status was REPEATING (rewatching).
+SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING = True
+```
+
 ## How It Works
 
 The script uses Guessit to try to get as much information as possible from the file name.
