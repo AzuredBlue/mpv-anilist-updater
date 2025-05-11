@@ -1,3 +1,10 @@
+"""
+mpv-anilist-updater: Automatically updates your AniList based on the file you just watched in MPV.
+
+This script parses anime filenames, determines the correct AniList entry, and updates your progress or status accordingly.
+It supports advanced options for rewatching, auto-completing, and directory filtering.
+"""
+
 import sys
 import os
 import webbrowser
@@ -30,6 +37,9 @@ SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING = True
 # ==========================================================
 
 class AniListUpdater:
+    """
+    Handles AniList authentication, file parsing, API requests, and updating anime progress/status.
+    """
     ANILIST_API_URL = 'https://graphql.anilist.co'
     TOKEN_PATH = os.path.join(os.path.dirname(__file__), 'anilistToken.txt')
     OPTIONS = "--excludes country --excludes language --type episode"
@@ -37,11 +47,19 @@ class AniListUpdater:
 
     # Load token and user id
     def __init__(self):
+        """
+        Initializes the AniListUpdater, loading the access token and user ID.
+        """
         self.access_token = self.load_access_token() # Replace token here if you don't use the .txt
         self.user_id = self.get_user_id()
 
     # Load token from anilistToken.txt
     def load_access_token(self):
+        """
+        Loads the AniList access token from the token file.
+        Returns:
+            str or None: The access token, or None if not found.
+        """
         try:
             with open(self.TOKEN_PATH, 'r', encoding='utf-8') as file:
                 content = file.read().strip()
@@ -56,6 +74,11 @@ class AniListUpdater:
 
     # Load user id from file, if not then make api request and save it.
     def get_user_id(self):
+        """
+        Loads the AniList user ID from the token file, or fetches and caches it if not present.
+        Returns:
+            int or None: The user ID, or None if not found.
+        """
         try:
             with open(self.TOKEN_PATH, 'r', encoding='utf-8') as file:
                 content = file.read().strip()
@@ -80,6 +103,11 @@ class AniListUpdater:
 
     # Cache user id
     def save_user_id(self, user_id):
+        """
+        Saves the user ID to the token file, prepending it to the existing content.
+        Args:
+            user_id (int): The AniList user ID.
+        """
         try:
             with open(self.TOKEN_PATH, 'r+', encoding='utf-8') as file:
                 content = file.read()
@@ -89,17 +117,39 @@ class AniListUpdater:
             print(f'Error saving user ID: {e}')
 
     def cache_to_file(self, path, guessed_name, result):
+        """
+        Appends a cache entry to the token file for a given file path and guessed anime name.
+        Args:
+            path (str): The file path.
+            guessed_name (str): The guessed anime name.
+            result (tuple): The result to cache.
+        """
         try:
             with open(self.TOKEN_PATH, 'a', encoding='utf-8') as file:
                 # Epoch Time, hash of the path, guessed name, result
                 file.write(f'\n{time.time()};;{self.hash_path(os.path.dirname(path))};;{guessed_name};;{result}')
         except Exception as e:
             print(f'Error trying to cache {result}: {e}')
-    
+
     def hash_path(self, path):
+        """
+        Returns a SHA256 hash of the given path.
+        Args:
+            path (str): The path to hash.
+        Returns:
+            str: The hashed path.
+        """
         return hashlib.sha256(path.encode('utf-8')).hexdigest()
 
     def check_and_clean_cache(self, path, guessed_name):
+        """
+        Checks the cache for a matching entry and cleans out expired entries.
+        Args:
+            path (str): The file path.
+            guessed_name (str): The guessed anime name.
+        Returns:
+            tuple: (cached_result, line_index) or (None, None) if not found.
+        """
         try:
             valid_lines = []
             unique = set()
@@ -126,12 +176,20 @@ class AniListUpdater:
             if valid_lines != orig_lines:
                 with open(self.TOKEN_PATH, 'w', encoding='utf-8') as file:
                     file.writelines(valid_lines)
-            
+
             return cached_result
         except Exception as e:
             print(f'Error trying to read cache file: {e}')
 
     def update_cache(self, path, guessed_name, result, index):
+        """
+        Updates a cache entry at the given index with new data.
+        Args:
+            path (str): The file path.
+            guessed_name (str): The guessed anime name.
+            result (tuple): The result to cache.
+            index (int): The line index in the cache file.
+        """
         try:
             with open(self.TOKEN_PATH, 'r', encoding='utf-8') as file:
                 lines = file.readlines()
@@ -152,6 +210,15 @@ class AniListUpdater:
 
     # Function to make an api request to AniList's api
     def make_api_request(self, query, variables=None, access_token=None):
+        """
+        Makes a POST request to the AniList GraphQL API.
+        Args:
+            query (str): The GraphQL query string.
+            variables (dict, optional): Variables for the query.
+            access_token (str, optional): AniList access token.
+        Returns:
+            dict or None: The API response as a dict, or None on error.
+        """
         headers = {
             'Content-Type': 'application/json',
             'Accept': 'application/json'
@@ -169,9 +236,23 @@ class AniListUpdater:
 
     @staticmethod
     def season_order(season):
+        """
+        Returns a numeric order for seasons for sorting.
+        Args:
+            season (str): The season name (WINTER, SPRING, SUMMER, FALL).
+        Returns:
+            int: The order value.
+        """
         return {'WINTER': 1, 'SPRING': 2, 'SUMMER': 3, 'FALL': 4}.get(season, 5)
 
     def filter_valid_seasons(self, seasons):
+        """
+        Filters and sorts valid TV seasons for absolute numbering logic.
+        Args:
+            seasons (list): List of season dicts from AniList API.
+        Returns:
+            list: Filtered and sorted list of seasons.
+        """
         # Filter only to those whose format is TV and duration > 21 OR those who have no duration and are releasing.
         # This is due to newly added anime having duration as null
         seasons = [
@@ -185,9 +266,17 @@ class AniListUpdater:
                 # Sort them based on release date
         seasons = sorted(seasons, key=lambda x: (x['seasonYear'] if x['seasonYear'] else float("inf"), self.season_order(x['season'] if x['season'] else float("inf"))))
         return seasons
-    
+
     # Finds the season and episode of an anime with absolute numbering
     def find_season_and_episode(self, seasons, absolute_episode):
+        """
+        Finds the correct season and relative episode for an absolute episode number.
+        Args:
+            seasons (list): List of season dicts.
+            absolute_episode (int): The absolute episode number.
+        Returns:
+            tuple: (season_id, season_title, progress, episodes, relative_episode)
+        """
         accumulated_episodes = 0
         for season in seasons:
             season_episodes = season.get('episodes', 12) if season.get('episodes') else 12
@@ -204,11 +293,16 @@ class AniListUpdater:
         return (None, None, None, None, None)
 
     def handle_filename(self, filename):
+        """
+        Main entry point for handling a file: parses, checks cache, updates AniList, and manages cache.
+        Args:
+            filename (str): The path to the video file.
+        """
         file_info = self.parse_filename(filename)
         cached_result, line_index = self.check_and_clean_cache(filename, file_info.get('name'))
         # str -> tuple
         cached_result = ast.literal_eval(cached_result) if cached_result else None
-        
+
         # True if:
         #   Is not cached
         #   Tries to update and current episode is not the next one.
@@ -227,7 +321,7 @@ class AniListUpdater:
                 else:
                     print(f'Not found in cache! Adding to file... {result}')
                     self.cache_to_file(filename, file_info.get('name'), result)
-        
+
         # True for opening AniList and updating next episode.
         else:
             print(f'Found in cache! {cached_result}')
@@ -250,13 +344,20 @@ class AniListUpdater:
                 self.update_cache(filename, file_info.get('name'), None, line_index)
                 # Retrying
                 self.handle_filename(filename)
-        
+
         return
-        
+
     # Hardcoded exceptions to fix detection
     # Easier than just renaming my files 1 by 1 on Qbit
     # Every exception I find will be added here
     def fix_filename(self, path_parts):
+        """
+        Applies hardcoded exceptions and fixes to the filename and folder structure for better title detection.
+        Args:
+            path_parts (list): List of path components.
+        Returns:
+            list: Modified path components.
+        """
         guess = guessit(path_parts[-1], self.OPTIONS) # Simply easier for fixing the filename if we have what it is detecting.
 
         path_parts[-1] = os.path.splitext(path_parts[-1])[0]
@@ -293,6 +394,13 @@ class AniListUpdater:
 
     # Parse the file name using guessit
     def parse_filename(self, filepath):
+        """
+        Parses the filename and folder structure to extract anime title, episode, season, and year.
+        Args:
+            filepath (str): The path to the video file.
+        Returns:
+            dict: Parsed info with keys 'name', 'episode', 'year'.
+        """
         path_parts = self.fix_filename(filepath.replace('\\', '/').split('/'))
         filename = path_parts[-1]
         name, season, part, year = '', '', '', ''
@@ -383,6 +491,15 @@ class AniListUpdater:
         }
 
     def get_anime_info_and_progress(self, name, file_progress, year):
+        """
+        Queries AniList for anime info and user progress for a given title and year.
+        Args:
+            name (str): Anime title.
+            file_progress (int): Episode number from the file.
+            year (str): Year string (may be empty).
+        Returns:
+            tuple: (anime_id, anime_name, current_progress, total_episodes, file_progress, current_status)
+        """
         query = '''
             query($search: String, $year: FuzzyDateInt, $page: Int) {
                 Page(page: $page) {
@@ -412,7 +529,7 @@ class AniListUpdater:
         if response and 'data' in response:
             seasons = response['data']['Page']['media']
             # This is the first element, which is the same as Media(search: $search)
-            
+
             if len(seasons) == 0:
                 raise Exception(f"Couldn\'t find an anime from this title! ({name})")
 
@@ -450,14 +567,21 @@ class AniListUpdater:
                 print(f"Final guessed anime: {seasons[0]}")
             return anime_data
         return (None, None, None, None, None, None)
-    
+
     # Update the anime based on file progress
     def update_episode_count(self, result):
+        """
+        Updates the episode count and/or status for an anime entry on AniList, according to user settings.
+        Args:
+            result (tuple): (anime_id, anime_name, current_progress, total_episodes, file_progress, current_status)
+        Returns:
+            tuple or bool: Updated result tuple, or False on failure.
+        """
         if result is None:
             raise Exception('Parameter in update_episode_count is null.')
-        
+
         anime_id, anime_name, current_progress, total_episodes, file_progress, current_status = result
-        
+
         # Only launch anilist
         if sys.argv[2] == 'launch':
             print(f'Opening AniList for "{anime_name}": https://anilist.co/anime/{anime_id}')
@@ -556,6 +680,9 @@ class AniListUpdater:
         return False
 
 def main():
+    """
+    Main entry point for the script. Handles encoding and runs the updater.
+    """
     try:
         # Reconfigure to utf-8
         if sys.stdout.encoding != 'utf-8':
