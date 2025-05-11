@@ -513,9 +513,6 @@ class AniListUpdater:
                 set_to_completed = True
             elif current_status == 'REPEATING' and SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING:
                 set_to_completed = True
-        if set_to_completed:
-            print('Setting status to COMPLETED after last episode.')
-            status_to_set = 'COMPLETED'
 
         query = '''
         mutation ($mediaId: Int, $progress: Int, $status: MediaListStatus) {
@@ -535,6 +532,24 @@ class AniListUpdater:
         if response and 'data' in response:
             updated_progress = response['data']['SaveMediaListEntry']['progress']
             print(f'Episode count updated successfully! New progress: {updated_progress}')
+
+            if set_to_completed:
+                print('Setting status to COMPLETED after last episode.')
+                complete_query = '''
+                mutation ($mediaId: Int, $status: MediaListStatus) {
+                    SaveMediaListEntry (mediaId: $mediaId, status: $status) {
+                        status
+                        id
+                        progress
+                    }
+                }
+                '''
+                complete_variables = {'mediaId': anime_id, 'status': 'COMPLETED'}
+                complete_response = self.make_api_request(complete_query, complete_variables, self.access_token)
+                if complete_response and 'data' in complete_response:
+                    print('Status set to COMPLETED successfully.')
+                else:
+                    print('Failed to set status to COMPLETED.')
 
             return (anime_id, anime_name, updated_progress, total_episodes, file_progress, current_status)
         print('Failed to update episode count.')
