@@ -227,7 +227,7 @@ class AniListUpdater:
         if access_token:
             headers['Authorization'] = f'Bearer {access_token}'
         
-        response = requests.post(self.ANILIST_API_URL, json={'query': query, 'variables': variables}, headers=headers)
+        response = requests.post(self.ANILIST_API_URL, json={'query': query, 'variables': variables}, headers=headers, timeout=10)
         # print(f"Made an API Query with: Query: {query}\nVariables: {variables} ")
         if response.status_code == 200:
             return response.json()
