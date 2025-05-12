@@ -1,18 +1,18 @@
 """
 mpv-anilist-updater: Automatically updates your AniList based on the file you just watched in MPV.
 
-This script parses anime filenames, determines the correct AniList entry, and updates your progress or status accordingly.
-It supports advanced options for rewatching, auto-completing, and directory filtering.
+This script parses anime filenames, determines the correct AniList entry, and updates your progress
+or status accordingly.
 """
 
 import sys
 import os
 import webbrowser
-import requests
 import time
 import ast
 import hashlib
 import re
+import requests
 from guessit import guessit
 
 # === USER CONFIGURABLE OPTIONS ===
@@ -66,7 +66,7 @@ class AniListUpdater:
                 if ':' in content:
                     token = content.split(':', 1)[1].splitlines()[0]
                     return token
-                
+
                 return content
         except Exception as e:
             print(f'Error reading access token: {e}')
@@ -195,7 +195,7 @@ class AniListUpdater:
                 lines = file.readlines()
 
             if 0 <= index < len(lines):
-                # Update the line at the given index with the new cache data    
+                # Update the line at the given index with the new cache data
                 updated_line = f'{time.time()};;{self.hash_path(os.path.dirname(path))};;{guessed_name};;{result}\n' if result is not None else ''
                 lines[index] = updated_line
 
@@ -226,7 +226,7 @@ class AniListUpdater:
 
         if access_token:
             headers['Authorization'] = f'Bearer {access_token}'
-        
+
         response = requests.post(self.ANILIST_API_URL, json={'query': query, 'variables': variables}, headers=headers, timeout=10)
         # print(f"Made an API Query with: Query: {query}\nVariables: {variables} ")
         if response.status_code == 200:
@@ -301,7 +301,15 @@ class AniListUpdater:
         file_info = self.parse_filename(filename)
         cached_result, line_index = self.check_and_clean_cache(filename, file_info.get('name'))
         # str -> tuple
-        cached_result = ast.literal_eval(cached_result) if cached_result else None
+        if cached_result:
+            try:
+                cached_result = ast.literal_eval(cached_result)
+                if not isinstance(cached_result, (tuple, list)):
+                    cached_result = None
+            except Exception:
+                cached_result = None
+        else:
+            cached_result = None
 
         # True if:
         #   Is not cached
@@ -325,24 +333,36 @@ class AniListUpdater:
         # True for opening AniList and updating next episode.
         else:
             print(f'Found in cache! {cached_result}')
-            # Change to the episode that needs to be updated
-            cached_result = cached_result[:4] + (file_info.get('episode'),) + cached_result[5:] if len(cached_result) > 5 else cached_result[:4] + (file_info.get('episode'),)
-            # Ensure tuple is 6 elements (pad with None if needed)
-            if len(cached_result) == 5:
-                cached_result = cached_result + (None,)
-            result = self.update_episode_count(cached_result)
+            # Only proceed if cached_result is a tuple/list and has enough elements
+            if isinstance(cached_result, (tuple, list)) and len(cached_result) >= 4:
+                # Change to the episode that needs to be updated
+                if len(cached_result) > 5:
+                    cached_result = tuple(cached_result[:4]) + (file_info.get('episode'),) + tuple(cached_result[5:])
+                else:
+                    cached_result = tuple(cached_result[:4]) + (file_info.get('episode'),)
+                # Ensure tuple is 6 elements (pad with None if needed)
+                if len(cached_result) == 5:
+                    cached_result = cached_result + (None,)
+                result = self.update_episode_count(cached_result)
 
-            # If it's different, update in cache as well.
-            if cached_result != result and result:                
-                print(f'Updating cache to: {result}')
-                self.update_cache(filename, file_info.get('name'), result, line_index)
+                # If it's different, update in cache as well.
+                if cached_result != result and result:
+                    print(f'Updating cache to: {result}')
+                    self.update_cache(filename, file_info.get('name'), result, line_index)
 
-            # If it either errored or couldn't update, retry without cache.
-            if not result:
-                print('Failed to update through cache, retrying without.')
-                # Deleting from the cache
-                self.update_cache(filename, file_info.get('name'), None, line_index)
-                # Retrying
+                # If it either errored or couldn't update, retry without cache.
+                if not result:
+                    print('Failed to update through cache, retrying without.')
+                    # Deleting from the cache
+                    self.update_cache(filename, file_info.get('name'), None, line_index)
+                    # Retrying
+                    self.handle_filename(filename)
+            else:
+                print('Cached result is invalid, ignoring cache.')
+                # Remove invalid cache entry
+                if line_index is not None:
+                    self.update_cache(filename, file_info.get('name'), None, line_index)
+                # Retry without cache
                 self.handle_filename(filename)
 
         return
@@ -389,7 +409,7 @@ class AniListUpdater:
             path_parts[title_depth] = path_parts[title_depth].replace(' 5 ', ' Five ')
             # For some reason AniList has this film in 3 parts.
             path_parts[title_depth] = path_parts[title_depth].replace('per Second', 'per Second 3')
-        
+
         return path_parts
 
     # Parse the file name using guessit
@@ -411,13 +431,13 @@ class AniListUpdater:
 
         # Episode guess from the title.
         # Usually, releases are formated [Release Group] Title - S01EX
-    
+
         # If the episode index is 0, that would mean that the episode is before the title in the filename
         # Which is a horrible way of formatting it, so assume its wrong
-    
+
         # If its 1, then the title is probably 0, so its okay. (Unless season is 0)
         # Really? What is the format "S1E1 - {title}"? That's almost psycopathic.
-    
+
         # If its >2, theres probably a Release Group and Title / Season / Part, so its good
 
         episode = guess.get('episode', None)
@@ -475,7 +495,7 @@ class AniListUpdater:
                     # If we got the name, its probable we already got season and part from the way folders are usually structured
                     if name != '':
                         break
-        
+
         # Add season and part if there are
         if season and (int(season) > 1 or part):
             name += f" Season {season}"

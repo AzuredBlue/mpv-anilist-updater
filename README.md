@@ -124,6 +124,18 @@ SET_TO_COMPLETED_AFTER_LAST_EPISODE_CURRENT = False
 SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING = True
 ```
 
+### Changing the Update Percentage
+
+You can change the percentage threshold for automatic updating by editing the `UPDATE_PERCENTAGE` variable near the top of `main.lua`:
+
+```lua
+-- The percentage of the video you need to watch before it updates AniList automatically.
+-- Set to a value between 0 and 100.
+UPDATE_PERCENTAGE = 85
+```
+
+For example, setting `UPDATE_PERCENTAGE = 90` will make the script update AniList when you reach 90% of the video.
+
 ## How It Works
 
 The script uses Guessit to try to get as much information as possible from the file name.

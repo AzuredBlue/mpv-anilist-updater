@@ -6,6 +6,10 @@ local utils = require 'mp.utils'
 -- You can still update manually via Ctrl+A.
 -- Example: DIRECTORIES = {"D:/Torrents", "D:/Anime"}
 DIRECTORIES = {}
+
+-- The percentage of the video you need to watch before it updates AniList automatically.
+-- Set to a value between 0 and 100.
+UPDATE_PERCENTAGE = 85
 -- ================================
 
 local function path_starts_with_any(path, directories)
@@ -24,7 +28,7 @@ function callback(success, result, error)
 end
 
 local function get_python_command()
-    local os_name = package.config:sub(1,1)
+    local os_name = package.config:sub(1, 1)
     if os_name == '\\' then
         -- Windows
         return "python"
@@ -39,14 +43,16 @@ local python_command = get_python_command()
 -- Make sure it doesnt trigger twice in 1 video
 local triggered = false
 
--- Function to check if we've reached 85% of the video
+-- Function to check if we've reached the user-defined percentage of the video
 function check_progress()
-    if triggered then return end
+    if triggered then
+        return
+    end
 
     local percent_pos = mp.get_property_number("percent-pos")
-    
+
     if percent_pos then
-        if percent_pos >= 85 then
+        if percent_pos >= UPDATE_PERCENTAGE then
             update_anilist("update")
             triggered = true
         end
@@ -55,7 +61,9 @@ end
 
 -- Function to launch the .py script
 function update_anilist(action)
-    if action == "launch" then mp.osd_message("Launching AniList", 2) end
+    if action == "launch" then
+        mp.osd_message("Launching AniList", 2)
+    end
     local script_dir = debug.getinfo(1).source:match("@?(.*/)")
     local directory = mp.get_property("working-directory")
     -- It seems like in Linux working-directory sometimes returns it without a "/" at the end
@@ -66,7 +74,7 @@ function update_anilist(action)
 
     local table = {}
     table.name = "subprocess"
-    table.args = {python_command, script_dir.."anilistUpdater.py", path, action}
+    table.args = {python_command, script_dir .. "anilistUpdater.py", path, action}
     local cmd = mp.command_native_async(table, callback)
 end
 
@@ -106,7 +114,7 @@ function open_folder()
         mp.msg.warn("No file is currently playing.")
         return
     end
-    
+
     if path:find('\\') then
         directory = path:match("(.*)\\")
     elseif path:find('\\\\') then
@@ -115,21 +123,24 @@ function open_folder()
         directory = mp.get_property("working-directory")
     end
 
-    
     -- Use the system command to open the folder in File Explorer
     local args
-    if package.config:sub(1,1) == '\\' then
+    if package.config:sub(1, 1) == '\\' then
         -- Windows
-        args = { 'explorer', directory }
+        args = {'explorer', directory}
     elseif os.getenv("XDG_CURRENT_DESKTOP") or os.getenv("WAYLAND_DISPLAY") or os.getenv("DISPLAY") then
         -- Linux (assume a desktop environment like GNOME, KDE, etc.)
-        args = { 'xdg-open', directory }
-    elseif package.config:sub(1,1) == '/' then
+        args = {'xdg-open', directory}
+    elseif package.config:sub(1, 1) == '/' then
         -- macOS
-        args = { 'open', directory }
+        args = {'open', directory}
     end
 
-    mp.command_native({ name = "subprocess", args = args, detach = true })
+    mp.command_native({
+        name = "subprocess",
+        args = args,
+        detach = true
+    })
 end
 
 mp.add_key_binding('ctrl+d', 'open_folder', open_folder)
