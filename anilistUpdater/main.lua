@@ -8,6 +8,7 @@ local utils = require 'mp.utils'
 DIRECTORIES = {}
 
 -- The percentage of the video you need to watch before it updates AniList automatically.
+-- The default 85% works well as this is usually before the ED of a usual episode duration.
 -- Set to a value between 0 and 100.
 UPDATE_PERCENTAGE = 85
 -- ================================

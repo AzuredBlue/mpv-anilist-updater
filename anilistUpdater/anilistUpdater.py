@@ -25,10 +25,6 @@ SET_COMPLETED_TO_REWATCHING_ON_FIRST_EPISODE = False
 # This is for if you want to set anime to rewatching manually, but still update progress automatically.
 UPDATE_PROGRESS_WHEN_REWATCHING = True
 
-# If True, always set to COMPLETED after the last episode, regardless of status.
-# Overrides the other two.
-SET_TO_COMPLETED_AFTER_LAST_EPISODE_BOTH = False
-
 # If True, set to COMPLETED after last episode if status was CURRENT.
 SET_TO_COMPLETED_AFTER_LAST_EPISODE_CURRENT = False
 
@@ -651,9 +647,7 @@ class AniListUpdater:
 
         set_to_completed = False
         if file_progress == total_episodes:
-            if SET_TO_COMPLETED_AFTER_LAST_EPISODE_BOTH:
-                set_to_completed = True
-            elif current_status == 'CURRENT' and SET_TO_COMPLETED_AFTER_LAST_EPISODE_CURRENT:
+            if current_status == 'CURRENT' and SET_TO_COMPLETED_AFTER_LAST_EPISODE_CURRENT:
                 set_to_completed = True
             elif current_status == 'REPEATING' and SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING:
                 set_to_completed = True
