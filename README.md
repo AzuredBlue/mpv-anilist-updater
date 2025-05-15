@@ -4,7 +4,7 @@ A script for MPV that automatically updates your AniList based on the file you j
 
 > [!IMPORTANT]
 > By default, the anime must be set to "watching", "planning" or "rewatching" to update progress. This is done in order to prevent updating the wrong show.<br>
-> It will not update if you are rewatching an episode that is set to completed **unless you enable the rewatching options**. See [Rewatching Options](#rewatching-options) below for how to override this behavior.
+> **Recommendation:** Check out the configuration options in your `anilistUpdater.conf` file to customize the script to your needs. See the [Configuration](#configuration-anilistupdaterconf) section for details.<br>
 
 > [!TIP]
 > In order for the script to work properly, make sure your files are named correctly:<br>
@@ -13,7 +13,7 @@ A script for MPV that automatically updates your AniList based on the file you j
 > - The file must have the episode number in it (absolute numbering should work)<br>
 > - In case of remakes, specify the year of the remake to ensure it updates the proper one<br>
 >
-> To avoid the script running and making useless API calls, you can set one or more directories in `main.lua`, where it will work
+> To avoid the script running and making useless API calls, you can set one or more directories in the config file. See the [Configuration](#configuration-anilistupdaterconf) section below.
 
 For any issues, you can either open an issue on here, or message me on discord (azuredblue)
 
@@ -39,6 +39,55 @@ You **WILL** need an AniList access token for it to work:
 This .txt file is also used to cache your AniList user id and to cache recently seen shows, avoiding extra API Calls.
 This token is what allows the script to update the anime episode count and make api requests, it is not used for anything else.
 
+## Configuration (`anilistUpdater.conf`)
+
+> [!IMPORTANT]
+> The config file is only generated after you run mpv at least once with the script installed. If the file is not created due to lack of write permissions, you can either run mpv as administrator once to generate it, or create the file manually in the appropriate directory. It is recommended to be in the `script-opts` directory.
+
+When you first run the script, it will automatically create a configuration file called `anilistUpdater.conf` if it does not already exist. This file is typically created in your mpv `script-opts` directory where you have mpv installed. If it cannot be created there, it will try the `scripts` directory or your mpv config directory (e.g. `~/.config/mpv/` on Linux, `%APPDATA%/mpv/` on Windows).
+
+**Config file search order:**
+
+The script checks for the config file in the following order:
+
+1. `script-opts` directory (recommended)
+2. `scripts` directory (where the script itself is located)
+3. mpv config directory (e.g. `~/.config/mpv/` or `%APPDATA%/mpv/`)
+
+If the config file exists in more than one location, the one in the highest-priority directory (script-opts) will be used. For example, if you have a config in both `script-opts` and `scripts`, the one in `script-opts` will take precedence.
+
+**You should edit this file to change any options.**
+
+### Example `anilistUpdater.conf`
+
+```ini
+# Use 'yes' or 'no' for boolean options below
+# Example for multiple directories (comma or semicolon separated):
+# DIRECTORIES=D:/Torrents,D:/Anime
+# or
+# DIRECTORIES=D:/Torrents;D:/Anime
+DIRECTORIES=
+UPDATE_PERCENTAGE=85
+SET_COMPLETED_TO_REWATCHING_ON_FIRST_EPISODE=no
+UPDATE_PROGRESS_WHEN_REWATCHING=yes
+SET_TO_COMPLETED_AFTER_LAST_EPISODE_CURRENT=yes
+SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING=yes
+```
+
+#### Option Descriptions
+
+- **DIRECTORIES**: Comma or semicolon separated list of directories. If empty, the script works for every video. Example: `DIRECTORIES=D:/Torrents,D:/Anime`
+  - > [!NOTE]
+    > Restricting directories only prevents the script from automatically updating AniList for files outside the specified directories. Manual actions using the keybinds (Ctrl+A, Ctrl+B, Ctrl+D) will still work for any file, regardless of its location.
+- **UPDATE_PERCENTAGE**: Number (0-100). The percentage of the video you need to watch before it updates AniList automatically. Default is `85`.
+- **SET_COMPLETED_TO_REWATCHING_ON_FIRST_EPISODE**: `yes`/`no`. If `yes`, when watching episode 1 of a completed anime, set it to rewatching and update progress. Default is `no`.
+- **UPDATE_PROGRESS_WHEN_REWATCHING**: `yes`/`no`. If `yes`, allow updating progress for anime set to rewatching. Default is `yes`.
+- **SET_TO_COMPLETED_AFTER_LAST_EPISODE_CURRENT**: `yes`/`no`. If `yes`, set to COMPLETED after last episode if status was CURRENT. **Default is `yes`.**
+- **SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING**: `yes`/`no`. If `yes`, set to COMPLETED after last episode if status was REPEATING (rewatching). Default is `yes`.
+
+> [!NOTE]
+> All boolean options must be `yes` or `no` (not `true`/`false`).
+
 ## Usage
 
 This script has 3 keybinds:
@@ -47,7 +96,7 @@ This script has 3 keybinds:
 - Ctrl + B: Opens the AniList page of the anime you are watching on your browser. Useful to see if it guessed the anime correctly.
 - Ctrl + D: Opens the folder where the current video is playing. Useful if you have "your own" anime library, and navigating through folders is a pain.
 
-The script will automatically update your AniList when the video you are watching reaches 85% completion.
+The script will automatically update your AniList when the video you are watching reaches 85% completion (or the percentage you set in the config file).
 
 You can change the keybinds in your input.conf:
 
@@ -70,68 +119,6 @@ end)
 
 mp.add_key_binding('ctrl+d', 'open_folder', open_folder)
 ```
-
-### Specifying Directories
-
-To limit the script to only work on files in certain directories, open `main.lua` and set the `DIRECTORIES` table near the top of the file. For example:
-
-```lua
-DIRECTORIES = {"D:/Torrents", "D:/Anime"}
-```
-
-- If you leave the table empty (`DIRECTORIES = {}`), the script will work for every video you watch with mpv.
-- If you specify one or more directories, the script will only trigger for files whose path starts with any of those directories.
-
-> [!NOTE]
-> Restricting directories only prevents the script from automatically updating AniList for files outside the specified directories. Manual actions using the keybinds (Ctrl+A, Ctrl+B, Ctrl+D) will still work for any file, regardless of its location.
-
-### Rewatching Options
-
-You can control how the script handles rewatching anime by editing two options at the top of `anilistUpdater.py`:
-
-- `SET_COMPLETED_TO_REWATCHING_ON_FIRST_EPISODE` (default: `False`): If set to `True`, when you watch episode 1 of an anime that is marked as completed, the script will automatically set its status to "rewatching" and update your progress. **Default is False to maintain previous functionality, since enabling this may update the wrong anime in rare cases.**
-- `UPDATE_PROGRESS_WHEN_REWATCHING` (default: `True`): If set to `True`, the script will update your episode progress for anime that are already set to "rewatching" (status "REPEATING"). **Default is True since the user specifically sets the anime to rewatching and there is no risk of updating the wrong anime.**
-
-These options make it easy to automate rewatch tracking or to keep rewatching progress up to date. You can find and change them at the top of `anilistUpdater.py`:
-
-```python
-# === USER CONFIGURABLE OPTIONS ===
-# Default is False to maintain previous functionality since it is possible that it may update the wrong anime.
-SET_COMPLETED_TO_REWATCHING_ON_FIRST_EPISODE = False
-
-# Default is True since the user specificially sets the anime to rewatching and does not have a risk of updating the wrong anime.
-UPDATE_PROGRESS_WHEN_REWATCHING = True
-# ================================
-```
-
-### Auto-Complete After Last Episode
-
-By default, the script will automatically set an anime entry to "completed" after you finish the last episode while rewatching (status "REPEATING"). AniList will automatically increment the repeat count, and most people would not need to change other data (like score) for rewatches. This behavior can be customized with the following settings at the top of `anilistUpdater.py`:
-
-- `SET_TO_COMPLETED_AFTER_LAST_EPISODE_CURRENT` (default: `False`): If set to `True`, set the anime to "completed" after the last episode if the status was "CURRENT".
-- `SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING` (default: `True`): If set to `True`, set the anime to "completed" after the last episode if the status was "REPEATING" (rewatching).
-
-**Default behavior:** Only rewatches (status "REPEATING") are set to completed automatically after the last episode. If you want to change this, edit the options at the top of `anilistUpdater.py`:
-
-```python
-# If True, set to COMPLETED after last episode if status was CURRENT.
-SET_TO_COMPLETED_AFTER_LAST_EPISODE_CURRENT = False
-# If True, set to COMPLETED after last episode if status was REPEATING (rewatching).
-SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING = True
-```
-
-### Changing the Update Percentage
-
-You can change the percentage threshold for automatic updating by editing the `UPDATE_PERCENTAGE` variable near the top of `main.lua`:
-
-```lua
--- The percentage of the video you need to watch before it updates AniList automatically.
--- The default 85% works well as this is usually before the ED of a usual episode duration.
--- Set to a value between 0 and 100.
-UPDATE_PERCENTAGE = 85
-```
-
-For example, setting `UPDATE_PERCENTAGE = 90` will make the script update AniList when you reach 90% of the video.
 
 ## How It Works
 
@@ -163,7 +150,7 @@ If it does not, try changing the name of the file / folder, so the search has a 
 
 **Q: Can I see which anime got detected before it updates?**
 
-A: Ctrl + B will launch the AniList page of the anime it detects. To see more debug info launch via command line with `mpv file.mkv` or press the `\`` keybind to open the console.
+A: Ctrl + B will launch the AniList page of the anime it detects. To see more debug info launch via command line with `mpv file.mkv` or press the `` keybind to open the console.
 
 **Q: Can it wrongfully update my anime?**
 
@@ -172,7 +159,7 @@ simply error.
 
 **Q: It does not work with X format. What do I do?**
 
-A: You can try launching the file through the command line with `mpv file.mkv` or opening the console through the keybind \` and see `Guessed name: X`. Try changing the file's name or folder so it has
+A: You can try launching the file through the command line with `mpv file.mkv` or opening the console through the keybind ` and see `Guessed name: X`. Try changing the file's name or folder so it has
 a better chance at guessing the anime. If it still doesn't work, try opening a GitHub issue or messaging me on discord (azuredblue).
 
 ## Credits
