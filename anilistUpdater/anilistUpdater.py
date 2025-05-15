@@ -336,9 +336,9 @@ class AniListUpdater:
                     cached_result = tuple(cached_result[:4]) + (file_info.get('episode'),) + tuple(cached_result[5:])
                 else:
                     cached_result = tuple(cached_result[:4]) + (file_info.get('episode'),)
-                # Ensure tuple is 6 elements (pad with None if needed)
+                # Ensure tuple is 6 elements (pad with "CURRENT" if needed)
                 if len(cached_result) == 5:
-                    cached_result = cached_result + (None,)
+                    cached_result = cached_result + ("CURRENT",)
                 result = self.update_episode_count(cached_result)
 
                 # If it's different, update in cache as well.
