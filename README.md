@@ -149,7 +149,7 @@ If it does not, try changing the name of the file / folder, so the search has a 
 
 **Q: Can I see which anime got detected before it updates?**
 
-A: Ctrl + B will launch the AniList page of the anime it detects. To see more debug info launch via command line with `mpv file.mkv` or press the `` keybind to open the console.
+A: Ctrl + B will launch the AniList page of the anime it detects. To see more debug info launch via command line with `mpv file.mkv` or press the `` ` `` keybind to open the console.
 
 **Q: Can it wrongfully update my anime?**
 
@@ -158,7 +158,7 @@ simply error.
 
 **Q: It does not work with X format. What do I do?**
 
-A: You can try launching the file through the command line with `mpv file.mkv` or opening the console through the keybind ` and see `Guessed name: X`. Try changing the file's name or folder so it has
+A: You can try launching the file through the command line with `mpv file.mkv` or opening the console through the keybind \` and see `Guessed name: X`. Try changing the file's name or folder so it has
 a better chance at guessing the anime. If it still doesn't work, try opening a GitHub issue or messaging me on discord (azuredblue).
 
 ## Credits
