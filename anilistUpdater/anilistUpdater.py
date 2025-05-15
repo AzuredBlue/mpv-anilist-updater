@@ -5,6 +5,20 @@ This script parses anime filenames, determines the correct AniList entry, and up
 or status accordingly.
 """
 
+# Configuration options for anilistUpdater (set in anilistUpdater.conf):
+#
+# DIRECTORIES: List or comma/semicolon-separated string. The directories the script will work on. Leaving it empty will make it work on every video you watch with mpv. Example: DIRECTORIES = ["D:/Torrents", "D:/Anime"]
+#
+# UPDATE_PERCENTAGE: Integer (0-100). The percentage of the video you need to watch before it updates AniList automatically. Default is 85 (usually before the ED of a usual episode duration).
+#
+# SET_COMPLETED_TO_REWATCHING_ON_FIRST_EPISODE: Boolean. If true, when watching episode 1 of a completed anime, set it to rewatching and update progress.
+#
+# UPDATE_PROGRESS_WHEN_REWATCHING: Boolean. If true, allow updating progress for anime set to rewatching. This is for if you want to set anime to rewatching manually, but still update progress automatically.
+#
+# SET_TO_COMPLETED_AFTER_LAST_EPISODE_CURRENT: Boolean. If true, set to COMPLETED after last episode if status was CURRENT.
+#
+# SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING: Boolean. If true, set to COMPLETED after last episode if status was REPEATING (rewatching).
+
 import sys
 import os
 import webbrowser
@@ -12,25 +26,9 @@ import time
 import ast
 import hashlib
 import re
+import json
 import requests
 from guessit import guessit
-
-# === USER CONFIGURABLE OPTIONS ===
-# Default is False to maintain previous functionality since it is possible that it may update the wrong anime.
-# If True, when watching episode 1 of a completed anime, set it to rewatching and update progress.
-SET_COMPLETED_TO_REWATCHING_ON_FIRST_EPISODE = False
-
-# Default is True since the user specificially sets the anime to rewatching and does not have a risk of updating the wrong anime.
-# If True, allow updating progress for anime set to rewatching.
-# This is for if you want to set anime to rewatching manually, but still update progress automatically.
-UPDATE_PROGRESS_WHEN_REWATCHING = True
-
-# If True, set to COMPLETED after last episode if status was CURRENT.
-SET_TO_COMPLETED_AFTER_LAST_EPISODE_CURRENT = False
-
-# If True, set to COMPLETED after last episode if status was REPEATING (rewatching).
-SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING = True
-# ==========================================================
 
 class AniListUpdater:
     """
@@ -39,15 +37,16 @@ class AniListUpdater:
     ANILIST_API_URL = 'https://graphql.anilist.co'
     TOKEN_PATH = os.path.join(os.path.dirname(__file__), 'anilistToken.txt')
     OPTIONS = "--excludes country --excludes language --type episode"
-    CACHE_REFRESH_RATE = 24*60*60
+    CACHE_REFRESH_RATE = 24 * 60 * 60
 
     # Load token and user id
-    def __init__(self):
+    def __init__(self, options):
         """
         Initializes the AniListUpdater, loading the access token and user ID.
         """
         self.access_token = self.load_access_token() # Replace token here if you don't use the .txt
         self.user_id = self.get_user_id()
+        self.options = options
 
     # Load token from anilistToken.txt
     def load_access_token(self):
@@ -608,7 +607,7 @@ class AniListUpdater:
             raise Exception('Failed to get current episode count. Is it on your list?')
 
         # Handle completed -> rewatching on first episode
-        if (current_status == 'COMPLETED' and file_progress == 1 and SET_COMPLETED_TO_REWATCHING_ON_FIRST_EPISODE):
+        if (current_status == 'COMPLETED' and file_progress == 1 and self.options['SET_COMPLETED_TO_REWATCHING_ON_FIRST_EPISODE']):
             # Needs to update in 2 steps, since AniList doesn't allow setting progress while changing the status from completed to rewatching. If you try, it will just reset the progress to 0.
             print('Setting status to REPEATING (rewatching) and updating progress for first episode of completed anime.')
             # Step 1: Set to REPEATING, progress=0
@@ -633,7 +632,7 @@ class AniListUpdater:
             print('Failed to update episode count.')
             return False
         # Handle updating progress for rewatching
-        if (current_status == 'REPEATING' and UPDATE_PROGRESS_WHEN_REWATCHING):
+        if (current_status == 'REPEATING' and self.options['UPDATE_PROGRESS_WHEN_REWATCHING']):
             print('Updating progress for anime set to REPEATING (rewatching).')
             status_to_set = 'REPEATING'
         # Only update if status is CURRENT or PLANNING
@@ -647,9 +646,9 @@ class AniListUpdater:
 
         set_to_completed = False
         if file_progress == total_episodes:
-            if current_status == 'CURRENT' and SET_TO_COMPLETED_AFTER_LAST_EPISODE_CURRENT:
+            if current_status == 'CURRENT' and self.options['SET_TO_COMPLETED_AFTER_LAST_EPISODE_CURRENT']:
                 set_to_completed = True
-            elif current_status == 'REPEATING' and SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING:
+            elif current_status == 'REPEATING' and self.options['SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING']:
                 set_to_completed = True
 
         query = '''
@@ -705,7 +704,19 @@ def main():
                 sys.stderr.reconfigure(encoding='utf-8')
             except Exception as e_reconfigure:
                 print(f"Advertencia: No se pudo reconfigurar stdout/stderr a UTF-8: {e_reconfigure}", file=sys.stderr)
-        updater = AniListUpdater()
+        # Parse options from argv[4] if present
+        options = {
+            "SET_COMPLETED_TO_REWATCHING_ON_FIRST_EPISODE": False,
+            "UPDATE_PROGRESS_WHEN_REWATCHING": True,
+            "SET_TO_COMPLETED_AFTER_LAST_EPISODE_CURRENT": False,
+            "SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING": True
+        }
+        if len(sys.argv) > 4:
+            user_options = json.loads(sys.argv[4])
+            options.update(user_options)
+
+        # Pass options to AniListUpdater
+        updater = AniListUpdater(options)
         updater.handle_filename(sys.argv[1])
 
     except Exception as e:
