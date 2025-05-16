@@ -703,7 +703,7 @@ def main():
                 sys.stdout.reconfigure(encoding='utf-8')
                 sys.stderr.reconfigure(encoding='utf-8')
             except Exception as e_reconfigure:
-                print(f"Advertencia: No se pudo reconfigurar stdout/stderr a UTF-8: {e_reconfigure}", file=sys.stderr)
+                print(f"Couldn\'t reconfigure stdout/stderr to UTF-8: {e_reconfigure}", file=sys.stderr)
         # Parse options from argv[4] if present
         options = {
             "SET_COMPLETED_TO_REWATCHING_ON_FIRST_EPISODE": False,

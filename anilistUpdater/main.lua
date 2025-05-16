@@ -20,15 +20,17 @@ local conf_name = "anilistUpdater.conf"
 local script_dir = (debug.getinfo(1).source:match("@?(.*/)") or "./")
 
 -- Try script-opts directory (sibling to scripts)
-local script_opts_dir = script_dir:match("(.-)[/\\]scripts[/\\]$")
+local script_opts_dir = script_dir:match("^(.-)[/\\]scripts[/\\]")
+
 if script_opts_dir then
     script_opts_dir = utils.join_path(script_opts_dir, "script-opts")
 else
     -- Fallback: try to find mpv config dir
-    script_opts_dir = os.getenv("APPDATA") and utils.join_path(os.getenv("APPDATA"), "mpv", "script-opts") or
-                          os.getenv("HOME") and utils.join_path(os.getenv("HOME"), ".config", "mpv", "script-opts") or
+    script_opts_dir = os.getenv("APPDATA") and utils.join_path(utils.join_path(os.getenv("APPDATA"), "mpv"), "script-opts") or
+                          os.getenv("HOME") and utils.join_path(utils.join_path(utils.join_path(os.getenv("HOME"), ".config"), "mpv"), "script-opts") or
                           nil
 end
+
 local script_opts_path = script_opts_dir and utils.join_path(script_opts_dir, conf_name) or nil
 
 -- Try script directory
@@ -36,7 +38,7 @@ local script_path = utils.join_path(script_dir, conf_name)
 
 -- Try mpv config directory
 local mpv_conf_dir = os.getenv("APPDATA") and utils.join_path(os.getenv("APPDATA"), "mpv") or os.getenv("HOME") and
-                         utils.join_path(os.getenv("HOME"), ".config", "mpv") or nil
+                         utils.join_path(utils.join_path(os.getenv("HOME"), ".config"), "mpv") or nil
 local mpv_conf_path = mpv_conf_dir and utils.join_path(mpv_conf_dir, conf_name) or nil
 
 local conf_paths = {script_opts_path, script_path, mpv_conf_path}
@@ -73,11 +75,6 @@ end
 if not conf_path then
     for _, path in ipairs(conf_paths) do
         if path then
-            local dir = path:match("(.*)[/\\]")
-            if dir then
-                os.execute((package.config:sub(1, 1) == '\\' and 'mkdir \"%s\" >nul 2>nul' or 'mkdir -p \"%s\"'):format(
-                    dir))
-            end
             local f = io.open(path, "w")
             if f then
                 f:write(default_conf)
