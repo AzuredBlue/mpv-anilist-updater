@@ -704,15 +704,15 @@ def main():
                 sys.stderr.reconfigure(encoding='utf-8')
             except Exception as e_reconfigure:
                 print(f"Couldn\'t reconfigure stdout/stderr to UTF-8: {e_reconfigure}", file=sys.stderr)
-        # Parse options from argv[4] if present
+        # Parse options from argv[3] if present
         options = {
             "SET_COMPLETED_TO_REWATCHING_ON_FIRST_EPISODE": False,
             "UPDATE_PROGRESS_WHEN_REWATCHING": True,
             "SET_TO_COMPLETED_AFTER_LAST_EPISODE_CURRENT": False,
             "SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING": True
         }
-        if len(sys.argv) > 4:
-            user_options = json.loads(sys.argv[4])
+        if len(sys.argv) > 3:
+            user_options = json.loads(sys.argv[3])
             options.update(user_options)
 
         # Pass options to AniListUpdater
