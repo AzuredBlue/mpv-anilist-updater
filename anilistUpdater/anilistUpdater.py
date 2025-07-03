@@ -252,13 +252,8 @@ class AniListUpdater:
         # This is due to newly added anime having duration as null
         seasons = [
                     season for season in seasons
-                if (
-                    ((season['duration'] is None and season['status'] == 'RELEASING') or
+                if ((season['duration'] is None and season['status'] == 'RELEASING') or
                    (season['duration'] is not None and season['duration'] > 21)) and season['format'] == 'TV'
-                   
-                   # Only those that are in the user's list (includes completed for absolute numbering)
-                   # Not exactly sure yet if this works properly, but it should.
-                ) and season.get('mediaListEntry') is not None
                 ]
                 # One of the problems with this filter is needing the format to be 'TV'
                 # But if accepted any format, it would also include many ONA's which arent included in absolute numbering.
@@ -520,10 +515,13 @@ class AniListUpdater:
         Returns:
             tuple: (anime_id, anime_name, current_progress, total_episodes, file_progress, current_status)
         """
+
+        # Only those that are in the user's list
+
         query = '''
             query($search: String, $year: FuzzyDateInt, $page: Int) {
                 Page(page: $page) {
-                    media (search: $search, type: ANIME, startDate_greater: $year) {
+                    media (search: $search, type: ANIME, startDate_greater: $year, onList: true) {
                         id
                         title { romaji }
                         season
@@ -551,7 +549,7 @@ class AniListUpdater:
             # This is the first element, which is the same as Media(search: $search)
 
             if len(seasons) == 0:
-                raise Exception(f"Couldn\'t find an anime from this title! ({name})")
+                raise Exception(f"Couldn\'t find an anime from this title! ({name}). Is it on your list?")
 
             entry = seasons[0]['mediaListEntry']
             anime_data = (
