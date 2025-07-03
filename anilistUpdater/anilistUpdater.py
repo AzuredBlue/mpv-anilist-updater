@@ -252,8 +252,13 @@ class AniListUpdater:
         # This is due to newly added anime having duration as null
         seasons = [
                     season for season in seasons
-                if ((season['duration'] is None and season['status'] == 'RELEASING') or
+                if (
+                    ((season['duration'] is None and season['status'] == 'RELEASING') or
                    (season['duration'] is not None and season['duration'] > 21)) and season['format'] == 'TV'
+                   
+                   # Only those that are in the user's list (includes completed for absolute numbering)
+                   # Not exactly sure yet if this works properly, but it should.
+                ) and season.get('mediaListEntry') is not None
                 ]
                 # One of the problems with this filter is needing the format to be 'TV'
                 # But if accepted any format, it would also include many ONA's which arent included in absolute numbering.
@@ -558,7 +563,7 @@ class AniListUpdater:
                 entry['status'] if entry is not None else None
             )
             # If the episode in the file name is larger than the total amount of episodes
-            # Then they are using absolute numbering format for episodes (looking at you SubsPlease)
+            # Then they are using absolute numbering format for episodes
             # Try to guess season and episode.
             if seasons[0]['episodes'] is not None and file_progress > seasons[0]['episodes']:
                 seasons = self.filter_valid_seasons(seasons)
