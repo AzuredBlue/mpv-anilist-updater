@@ -105,11 +105,20 @@ if conf_path then
     mpoptions.read_options(options, "anilistUpdater")
 end
 
+local function normalize_path(p)
+    p = p:gsub("\\", "/")
+    if p:sub(-1) == "/" then
+        p = p:sub(1, -2)
+    end
+    return p
+end
+
 -- Parse DIRECTORIES if it's a string (comma or semicolon separated)
 if type(options.DIRECTORIES) == "string" and options.DIRECTORIES ~= "" then
     local dirs = {}
     for dir in string.gmatch(options.DIRECTORIES, "([^,;]+)") do
-        table.insert(dirs, (dir:gsub("^%s*(.-)%s*$", "%1"):gsub('[\'"]', ''))) -- trim
+        local trimmed = (dir:gsub("^%s*(.-)%s*$", "%1"):gsub('[\'"]', '')) -- trim
+        table.insert(dirs, normalize_path(trimmed))
     end
     options.DIRECTORIES = dirs
 elseif type(options.DIRECTORIES) == "string" then
@@ -129,27 +138,13 @@ DIRECTORIES = options.DIRECTORIES
 UPDATE_PERCENTAGE = tonumber(options.UPDATE_PERCENTAGE) or 85
 
 local function path_starts_with_any(path, directories)
+    local norm_path = normalize_path(path)
     for _, dir in ipairs(directories) do
-        if path:sub(1, #dir) == dir then
+        if norm_path:sub(1, #dir) == dir then
             return true
         end
     end
     return false
-end
-
-local function get_path()
-    local directory = mp.get_property("working-directory")
-    -- It seems like in Linux working-directory sometimes returns it without a "/" at the end
-    directory = (directory:sub(-1) == '/' or directory:sub(-1) == '\\') and directory or directory .. '/'
-    -- For some reason, "path" sometimes returns the absolute path, sometimes it doesn't.
-    local file_path = mp.get_property("path")
-    local path = utils.join_path(directory, file_path)
-
-    if path:match("([^/\\]+)$"):lower() == "file.mp4" then
-        path = mp.get_property("media-title")
-    end
-
-    return path
 end
 
 function callback(success, result, error)
@@ -167,6 +162,21 @@ local function get_python_command()
         -- Linux
         return "python3"
     end
+end
+
+local function get_path()
+    local directory = mp.get_property("working-directory")
+    -- It seems like in Linux working-directory sometimes returns it without a "/" at the end
+    directory = (directory:sub(-1) == '/' or directory:sub(-1) == '\\') and directory or directory .. '/'
+    -- For some reason, "path" sometimes returns the absolute path, sometimes it doesn't.
+    local file_path = mp.get_property("path")
+    local path = utils.join_path(directory, file_path)
+
+    if path:match("([^/\\]+)$"):lower() == "file.mp4" then
+        path = mp.get_property("media-title")
+    end
+
+    return path
 end
 
 local python_command = get_python_command()
