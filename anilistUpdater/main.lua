@@ -109,7 +109,7 @@ end
 if type(options.DIRECTORIES) == "string" and options.DIRECTORIES ~= "" then
     local dirs = {}
     for dir in string.gmatch(options.DIRECTORIES, "([^,;]+)") do
-        table.insert(dirs, (dir:gsub("^%s*(.-)%s*$", "%1"))) -- trim
+        table.insert(dirs, (dir:gsub("^%s*(.-)%s*$", "%1"):gsub('[\'"]', ''))) -- trim
     end
     options.DIRECTORIES = dirs
 elseif type(options.DIRECTORIES) == "string" then
@@ -137,9 +137,24 @@ local function path_starts_with_any(path, directories)
     return false
 end
 
+local function get_path()
+    local directory = mp.get_property("working-directory")
+    -- It seems like in Linux working-directory sometimes returns it without a "/" at the end
+    directory = (directory:sub(-1) == '/' or directory:sub(-1) == '\\') and directory or directory .. '/'
+    -- For some reason, "path" sometimes returns the absolute path, sometimes it doesn't.
+    local file_path = mp.get_property("path")
+    local path = utils.join_path(directory, file_path)
+
+    if path:match("([^/\\]+)$"):lower() == "file.mp4" then
+        path = mp.get_property("media-title")
+    end
+
+    return path
+end
+
 function callback(success, result, error)
     if result.status == 0 then
-        mp.osd_message("Updated anime correctly.", 2)
+        mp.osd_message("Updated anime correctly.", 4)
     end
 end
 
@@ -181,12 +196,8 @@ function update_anilist(action)
         mp.osd_message("Launching AniList", 2)
     end
     local script_dir = debug.getinfo(1).source:match("@?(.*/)")
-    local directory = mp.get_property("working-directory")
-    -- It seems like in Linux working-directory sometimes returns it without a "/" at the end
-    directory = (directory:sub(-1) == '/' or directory:sub(-1) == '\\') and directory or directory .. '/'
-    -- For some reason, "path" sometimes returns the absolute path, sometimes it doesn't.
-    local file_path = mp.get_property("path")
-    local path = utils.join_path(directory, file_path)
+
+    local path = get_path()
 
     local table = {}
     table.name = "subprocess"
@@ -200,11 +211,7 @@ mp.observe_property("percent-pos", "number", check_progress)
 mp.register_event("file-loaded", function()
     triggered = false
     if #DIRECTORIES > 0 then
-        local directory = mp.get_property("working-directory")
-        directory = (directory:sub(-1) == '/' or directory:sub(-1) == '\\') and directory or directory .. '/'
-        local file_path = mp.get_property("path")
-        local path = utils.join_path(directory, file_path)
-        path = path:gsub("\\", "/")
+        local path = get_path()
 
         if not path_starts_with_any(path, DIRECTORIES) then
             mp.unobserve_property(check_progress)
