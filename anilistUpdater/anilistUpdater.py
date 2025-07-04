@@ -600,6 +600,9 @@ class AniListUpdater:
 
         anime_id, anime_name, current_progress, total_episodes, file_progress, current_status = result
 
+        if anime_id is None:
+            raise Exception(f'Couldn\'t find that anime! Make sure it is on your list and the title is correct.')
+
         # Only launch anilist
         if sys.argv[2] == 'launch':
             print(f'Opening AniList for "{anime_name}": https://anilist.co/anime/{anime_id}')
