@@ -40,13 +40,14 @@ class AniListUpdater:
     CACHE_REFRESH_RATE = 24 * 60 * 60
 
     # Load token and user id
-    def __init__(self, options):
+    def __init__(self, options, action):
         """
         Initializes the AniListUpdater, loading the access token and user ID.
         """
         self.access_token = self.load_access_token() # Replace token here if you don't use the .txt
         self.user_id = self.get_user_id()
         self.options = options
+        self.ACTION = action
 
     # Load token from anilistToken.txt
     def load_access_token(self):
@@ -312,7 +313,7 @@ class AniListUpdater:
         #   It is not in your watching/planning list.
         # This means that for shows with absolute numbering, if it updates, it will always call the API
         # Since it needs to convert from absolute to relative.
-        if cached_result is None or (cached_result and (file_info.get('episode') != cached_result[2] + 1) and sys.argv[2] != 'launch'):
+        if cached_result is None or (cached_result and (file_info.get('episode') != cached_result[2] + 1) and self.ACTION != 'launch'):
             result = self.get_anime_info_and_progress(file_info.get('name'), file_info.get('episode'), file_info.get('year'))
             result = self.update_episode_count(result) # Returns either the same, or the updated result
 
@@ -519,9 +520,9 @@ class AniListUpdater:
         # Only those that are in the user's list
 
         query = '''
-            query($search: String, $year: FuzzyDateInt, $page: Int) {
+            query($search: String, $year: FuzzyDateInt, $page: Int, $onList: Boolean) {
                 Page(page: $page) {
-                    media (search: $search, type: ANIME, startDate_greater: $year, onList: true) {
+                    media (search: $search, type: ANIME, startDate_greater: $year, onList: $onList) {
                         id
                         title { romaji }
                         season
@@ -541,50 +542,66 @@ class AniListUpdater:
                 }
             }
             '''
-        variables = {'search': name, 'year': year or 1, 'page': 1}
+        variables = {'search': name, 'year': year or 1, 'page': 1, 'onList': True}
 
         response = self.make_api_request(query, variables, self.access_token)
-        if response and 'data' in response:
-            seasons = response['data']['Page']['media']
-            # This is the first element, which is the same as Media(search: $search)
 
-            if len(seasons) == 0:
-                raise Exception(f"Couldn\'t find an anime from this title! ({name}). Is it on your list?")
+        if not response or 'data' not in response:
+            return (None, None, None, None, None, None)
+        
+        seasons = response['data']['Page']['media']
 
-            entry = seasons[0]['mediaListEntry']
-            anime_data = (
-                seasons[0]['id'],
-                seasons[0]['title']['romaji'],
-                entry['progress'] if entry is not None else None,
-                seasons[0]['episodes'],
-                file_progress,
-                entry['status'] if entry is not None else None
-            )
-            # If the episode in the file name is larger than the total amount of episodes
-            # Then they are using absolute numbering format for episodes
-            # Try to guess season and episode.
-            if seasons[0]['episodes'] is not None and file_progress > seasons[0]['episodes']:
-                seasons = self.filter_valid_seasons(seasons)
-                print('Related shows:', ", ".join(season["title"]["romaji"] for season in seasons))
+        # No results from the API request
+        if not seasons:
+            # Before erroring, if its a "launch" request we can search even if its not in the user list
+            if self.ACTION == 'launch':
+                variables['onList'] = False
+                response = self.make_api_request(query, variables, self.access_token)
 
-                anime_data = self.find_season_and_episode(seasons, file_progress)
+                if not response or 'data' not in response:
+                    return (None, None, None, None, None, None)
 
-                found_season = next((season for season in seasons if season['id'] == anime_data[0]), None)
-                found_entry = found_season['mediaListEntry'] if found_season and found_season['mediaListEntry'] else None
-                anime_data = (
-                    anime_data[0],
-                    anime_data[1],
-                    anime_data[2],
-                    anime_data[3],
-                    anime_data[4],
-                    found_entry['status'] if found_entry else None
-                )
-                print(f"Final guessed anime: {found_season}")
-                print(f'Absolute episode {file_progress} corresponds to Anime: {anime_data[1]}, Episode: {anime_data[-2]}')
+                seasons = response['data']['Page']['media']
+                # If its still empty
+                if not seasons:
+                    raise Exception(f"Couldn\'t find an anime from this title! ({name})")
             else:
-                print(f"Final guessed anime: {seasons[0]}")
-            return anime_data
-        return (None, None, None, None, None, None)
+                raise Exception(f"Couldn\'t find an anime from this title! ({name}). Is it in your list?")
+        
+        # This is the first element, which is the same as Media(search: $search)
+        entry = seasons[0]['mediaListEntry']
+        anime_data = (
+            seasons[0]['id'],
+            seasons[0]['title']['romaji'],
+            entry['progress'] if entry is not None else None,
+            seasons[0]['episodes'],
+            file_progress,
+            entry['status'] if entry is not None else None
+        )
+
+        # If the episode in the file name is larger than the total amount of episodes
+        # Then they are using absolute numbering format for episodes
+        # Try to guess season and episode.
+        if seasons[0]['episodes'] is not None and file_progress > seasons[0]['episodes']:
+            seasons = self.filter_valid_seasons(seasons)
+            print('Related shows:', ", ".join(season["title"]["romaji"] for season in seasons))
+            anime_data = self.find_season_and_episode(seasons, file_progress)
+            print(anime_data)
+            found_season = next((season for season in seasons if season['id'] == anime_data[0]), None)
+            found_entry = found_season['mediaListEntry'] if found_season and found_season['mediaListEntry'] else None
+            anime_data = (
+                anime_data[0],
+                anime_data[1],
+                anime_data[2],
+                anime_data[3],
+                anime_data[4],
+                found_entry['status'] if found_entry else None
+            )
+            print(f"Final guessed anime: {found_season}")
+            print(f'Absolute episode {file_progress} corresponds to Anime: {anime_data[1]}, Episode: {anime_data[-2]}')
+        else:
+            print(f"Final guessed anime: {seasons[0]}")
+        return anime_data
 
     # Update the anime based on file progress
     def update_episode_count(self, result):
@@ -604,7 +621,7 @@ class AniListUpdater:
             raise Exception(f'Couldn\'t find that anime! Make sure it is on your list and the title is correct.')
 
         # Only launch anilist
-        if sys.argv[2] == 'launch':
+        if self.ACTION == 'launch':
             print(f'Opening AniList for "{anime_name}": https://anilist.co/anime/{anime_id}')
             webbrowser.open_new_tab(f'https://anilist.co/anime/{anime_id}')
             return result
@@ -705,6 +722,7 @@ def main():
                 sys.stderr.reconfigure(encoding='utf-8')
             except Exception as e_reconfigure:
                 print(f"Couldn\'t reconfigure stdout/stderr to UTF-8: {e_reconfigure}", file=sys.stderr)
+        
         # Parse options from argv[3] if present
         options = {
             "SET_COMPLETED_TO_REWATCHING_ON_FIRST_EPISODE": False,
@@ -717,7 +735,7 @@ def main():
             options.update(user_options)
 
         # Pass options to AniListUpdater
-        updater = AniListUpdater(options)
+        updater = AniListUpdater(options, sys.argv[2])
         updater.handle_filename(sys.argv[1])
 
     except Exception as e:
