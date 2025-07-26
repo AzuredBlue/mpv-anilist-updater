@@ -67,6 +67,7 @@ If the config file exists in more than one location, the one in the highest-prio
 # or
 # DIRECTORIES=D:/Torrents;D:/Anime
 DIRECTORIES=
+EXCLUDED_DIRECTORIES=
 UPDATE_PERCENTAGE=85
 SET_COMPLETED_TO_REWATCHING_ON_FIRST_EPISODE=no
 UPDATE_PROGRESS_WHEN_REWATCHING=yes
@@ -78,6 +79,7 @@ SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING=yes
 
 - **DIRECTORIES**: Comma or semicolon separated list of directories. If empty, the script works for every video. Example: `DIRECTORIES=D:/Torrents,D:/Anime`
   - Restricting directories only prevents the script from automatically updating AniList for files outside the specified directories. Manual actions using the keybinds (Ctrl+A, Ctrl+B, Ctrl+D) will still work for any file, regardless of its location.
+- **EXCLUDED_DIRECTORIES**: Comma or semicolon separated list of directories. Useful for ignoring paths inside directories from above. Example: EXCLUDED_DIRECTORIES = {"D:/Torrents/Watched", "D:/Anime/Planned"}
 - **UPDATE_PERCENTAGE**: Number (0-100). The percentage of the video you need to watch before it updates AniList automatically. Default is `85`.
 - **SET_COMPLETED_TO_REWATCHING_ON_FIRST_EPISODE**: `yes`/`no`. If `yes`, when watching episode 1 of a completed anime, set it to rewatching and update progress. Default is `no`.
 - **UPDATE_PROGRESS_WHEN_REWATCHING**: `yes`/`no`. If `yes`, allow updating progress for anime set to rewatching. Default is `yes`.
@@ -125,7 +127,7 @@ The script uses Guessit to try to get as much information as possible from the f
 
 If the "episode" and "season" guess are before the title, it will consider that title wrong and try to get the title from the name of the folder it is in.
 
-If the torrent file has absolute numbering (looking at you, SubsPlease), it will try to guess the season and episode by:
+If the torrent file has absolute numbering (only episode number), it will try to guess the season and episode by:
 
 1. Searching for the anime name on the AniList API.
 2. Get all results with a similar name, whose format are `TV` and the duration greater than 21 minutes.
@@ -141,7 +143,7 @@ changing the episode number to the normal format yourself, or simply give up on 
 
 A: It should work on most formats as long as the name is present in the file itself or the folder name.
 
-`[SubsPlease] Boku no Hero Academia - 152 (1080p) [AAC292E7].mkv` will be detected as S7 E14 and updated accordingly.
+`Boku no Hero Academia - 152 (1080p).mkv` will be detected as S7 E14 and updated accordingly.
 
 `E12 - Welcome [F1119374].mkv` will work if the folder that it is in has `86` in the name. If it has `86 Part 2` then it should be `Episode 1`
 

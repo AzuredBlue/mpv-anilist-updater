@@ -3,6 +3,8 @@ Configuration options for anilistUpdater (set in anilistUpdater.conf):
 
 DIRECTORIES: Table or comma/semicolon-separated string. The directories the script will work on. Leaving it empty will make it work on every video you watch with mpv. Example: DIRECTORIES = {"D:/Torrents", "D:/Anime"}
 
+EXCLUDED_DIRECTORIES: Table or comma/semicolon-separated string. Useful for ignoring paths inside directories from above. Example: EXCLUDED_DIRECTORIES = {"D:/Torrents/Watched", "D:/Anime/Planned"}
+
 UPDATE_PERCENTAGE: Number (0-100). The percentage of the video you need to watch before it updates AniList automatically. Default is 85 (usually before the ED of a usual episode duration).
 
 SET_COMPLETED_TO_REWATCHING_ON_FIRST_EPISODE: Boolean. If true, when watching episode 1 of a completed anime, set it to rewatching and update progress.
@@ -12,7 +14,8 @@ UPDATE_PROGRESS_WHEN_REWATCHING: Boolean. If true, allow updating progress for a
 SET_TO_COMPLETED_AFTER_LAST_EPISODE_CURRENT: Boolean. If true, set to COMPLETED after last episode if status was CURRENT.
 
 SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING: Boolean. If true, set to COMPLETED after last episode if status was REPEATING (rewatching).
-]] 
+]]
+
 local utils = require 'mp.utils'
 local mpoptions = require("mp.options")
 
@@ -50,6 +53,7 @@ local default_conf = [[
 # or
 # DIRECTORIES=D:/Torrents;D:/Anime
 DIRECTORIES=
+EXCLUDED_DIRECTORIES=
 UPDATE_PERCENTAGE=85
 SET_COMPLETED_TO_REWATCHING_ON_FIRST_EPISODE=no
 UPDATE_PROGRESS_WHEN_REWATCHING=yes
@@ -65,7 +69,7 @@ for _, path in ipairs(conf_paths) do
         if f then
             f:close()
             conf_path = path
-            print("Found config at: " .. path)
+            -- print("Found config at: " .. path)
             break
         end
     end
@@ -95,6 +99,7 @@ end
 -- Now load options as usual
 local options = {
     DIRECTORIES = "",
+    EXCLUDED_DIRECTORIES = "",
     UPDATE_PERCENTAGE = 85,
     SET_COMPLETED_TO_REWATCHING_ON_FIRST_EPISODE = false,
     UPDATE_PROGRESS_WHEN_REWATCHING = true,
@@ -125,6 +130,17 @@ elseif type(options.DIRECTORIES) == "string" then
     options.DIRECTORIES = {}
 end
 
+if type(options.EXCLUDED_DIRECTORIES) == "string" and options.EXCLUDED_DIRECTORIES ~= "" then
+    local dirs = {}
+    for dir in string.gmatch(options.EXCLUDED_DIRECTORIES, "([^,;]+)") do
+        local trimmed = (dir:gsub("^%s*(.-)%s*$", "%1"):gsub('[\'"]', '')) -- trim
+        table.insert(dirs, normalize_path(trimmed))
+    end
+    options.EXCLUDED_DIRECTORIES = dirs
+elseif type(options.EXCLUDED_DIRECTORIES) == "string" then
+    options.EXCLUDED_DIRECTORIES = {}
+end
+
 -- When calling Python, pass only the options relevant to it
 local python_options = {
     SET_COMPLETED_TO_REWATCHING_ON_FIRST_EPISODE = options.SET_COMPLETED_TO_REWATCHING_ON_FIRST_EPISODE,
@@ -135,6 +151,7 @@ local python_options = {
 local python_options_json = utils.format_json(python_options)
 
 DIRECTORIES = options.DIRECTORIES
+EXCLUDED_DIRECTORIES = options.EXCLUDED_DIRECTORIES
 UPDATE_PERCENTAGE = tonumber(options.UPDATE_PERCENTAGE) or 85
 
 local function path_starts_with_any(path, directories)
@@ -225,6 +242,12 @@ mp.register_event("file-loaded", function()
 
         if not path_starts_with_any(path, DIRECTORIES) then
             mp.unobserve_property(check_progress)
+        else
+            -- If it starts with the directories, check if it starts with any of the excluded directories
+            if #EXCLUDED_DIRECTORIES > 0 and path_starts_with_any(path, EXCLUDED_DIRECTORIES) then
+                mp.unobserve_property(check_progress)
+            end
+
         end
     end
 end)
