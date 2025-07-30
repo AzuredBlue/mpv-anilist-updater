@@ -406,6 +406,11 @@ class AniListUpdater:
             # For some reason AniList has this film in 3 parts.
             path_parts[title_depth] = path_parts[title_depth].replace('per Second', 'per Second 3')
 
+        match = re.search(r'(E\d+)v\d', path_parts[title_depth])
+        if match:
+            episode = match.group(1)
+            path_parts[title_depth] = path_parts[title_depth].replace(match.group(0), episode)
+
         return path_parts
 
     # Parse the file name using guessit
