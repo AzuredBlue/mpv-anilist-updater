@@ -406,6 +406,7 @@ class AniListUpdater:
             # For some reason AniList has this film in 3 parts.
             path_parts[title_depth] = path_parts[title_depth].replace('per Second', 'per Second 3')
 
+        # Remove 'v2', 'v3'... from the title since it fucks up with episode detection
         match = re.search(r'(E\d+)v\d', path_parts[title_depth])
         if match:
             episode = match.group(1)
@@ -424,7 +425,7 @@ class AniListUpdater:
         """
         path_parts = self.fix_filename(filepath.replace('\\', '/').split('/'))
         filename = path_parts[-1]
-        name, season, part, year = '', '', '', ''
+        name, season, part, year, remaining = '', '', '', '',  []
         episode = 1
         # First, try to guess from the filename
         guess = guessit(filename, self.OPTIONS)
@@ -455,6 +456,7 @@ class AniListUpdater:
         # 'episode': [86, 13] (EIGHTY-SIX), [1, 2, 3] (RANMA) lol.
         if isinstance(episode, list):
             print(f'Detected multiple episodes: {episode}. Picking last one.')
+            remaining = episode[:-1]
             episode = episode[-1]
 
         # 'season': [2, 3] in "S2 03"
@@ -496,6 +498,11 @@ class AniListUpdater:
                     # If we got the name, its probable we already got season and part from the way folders are usually structured
                     if name != '':
                         break
+
+        # Haven't tested enough but seems to work fine
+        if remaining:
+            # If there are remaining episodes, append them to the name
+            name += ' ' + ' '.join(str(ep) for ep in remaining)
 
         # Add season and part if there are
         if season and (int(season) > 1 or part):
