@@ -36,6 +36,7 @@ class AniListUpdater:
     """
     ANILIST_API_URL = 'https://graphql.anilist.co'
     TOKEN_PATH = os.path.join(os.path.dirname(__file__), 'anilistToken.txt')
+    CACHE_PATH = os.path.join(os.path.dirname(__file__), 'cache.json')
     OPTIONS = "--excludes country --excludes language --type episode"
     CACHE_REFRESH_RATE = 24 * 60 * 60
 
@@ -48,6 +49,8 @@ class AniListUpdater:
         self.user_id = self.get_user_id()
         self.options = options
         self.ACTION = action
+        # Attempt migrating old inline cache entries if any
+        self.migrate_legacy_cache()
 
     # Load token from anilistToken.txt
     def load_access_token(self):
@@ -114,16 +117,27 @@ class AniListUpdater:
 
     def cache_to_file(self, path, guessed_name, result):
         """
-        Appends a cache entry to the token file for a given file path and guessed anime name.
+        Stores/updates a structured cache entry in cache.json.
+        Cache schema (per spec): hash -> { guessed_name, anime_id, last_progress, ttl }
+        ttl is an absolute epoch time (expiry moment).
         Args:
-            path (str): The file path.
-            guessed_name (str): The guessed anime name.
-            result (tuple): The result to cache.
+            path (str): The path to the media file.
+            guessed_name (str): The guessed name of the anime.
+            result (tuple): The result from the API call.
         """
         try:
-            with open(self.TOKEN_PATH, 'a', encoding='utf-8') as file:
-                # Epoch Time, hash of the path, guessed name, result
-                file.write(f'\n{time.time()};;{self.hash_path(os.path.dirname(path))};;{guessed_name};;{result}')
+            dir_hash = self.hash_path(os.path.dirname(path))
+            cache = self.load_cache()
+            if result is not None:
+                anime_id = result[0]
+                last_progress = result[2]
+                cache[dir_hash] = {
+                    'guessed_name': guessed_name,
+                    'anime_id': anime_id,
+                    'last_progress': last_progress,
+                    'ttl': time.time() + self.CACHE_REFRESH_RATE
+                }
+                self.save_cache(cache)
         except Exception as e:
             print(f'Error trying to cache {result}: {e}')
 
@@ -139,70 +153,98 @@ class AniListUpdater:
 
     def check_and_clean_cache(self, path, guessed_name):
         """
-        Checks the cache for a matching entry and cleans out expired entries.
+        Returns structured cache entry if valid. Cleans expired entries.
+        Returns (entry_dict or None).
         Args:
-            path (str): The file path.
-            guessed_name (str): The guessed anime name.
-        Returns:
-            tuple: (cached_result, line_index) or (None, None) if not found.
+            path (str): The path to the media file.
+            guessed_name (str): The guessed name of the anime.
         """
         try:
-            valid_lines = []
-            unique = set()
-            path = self.hash_path(os.path.dirname(path))
-            cached_result = (None, None)
+            cache = self.load_cache()
+            now = time.time()
+            changed = False
+            # Purge expired
+            for k, v in list(cache.items()):
+                if v.get('ttl', 0) < now:
+                    cache.pop(k, None)
+                    changed = True
+            if changed:
+                self.save_cache(cache)
 
-            with open(self.TOKEN_PATH, 'r+', encoding='utf-8') as file:
-                orig_lines = file.readlines()
-
-            for line in orig_lines:
-                if line.strip():
-                    if ';;' in line:
-                        epoch, dir_path, guess, result = line.strip().split(';;')
-
-                        if time.time() - float(epoch) < self.CACHE_REFRESH_RATE and (dir_path, guess) not in unique:
-                            unique.add((dir_path, guess))
-                            valid_lines.append(line)
-
-                            if dir_path == path and guess == guessed_name:
-                                cached_result = (result, len(valid_lines) - 1)
-                    else:
-                        valid_lines.append(line)
-
-            if valid_lines != orig_lines:
-                with open(self.TOKEN_PATH, 'w', encoding='utf-8') as file:
-                    file.writelines(valid_lines)
-
-            return cached_result
+            dir_hash = self.hash_path(os.path.dirname(path))
+            entry = cache.get(dir_hash)
+            if entry and entry.get('guessed_name') == guessed_name and entry.get('ttl', 0) >= now:
+                return entry
+            return None
         except Exception as e:
             print(f'Error trying to read cache file: {e}')
+            return None
 
-    def update_cache(self, path, guessed_name, result, index):
+
+    def load_cache(self):
+        try:
+            if not os.path.exists(self.CACHE_PATH):
+                return {}
+            with open(self.CACHE_PATH, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception:
+            return {}
+
+    def save_cache(self, cache):
+        try:
+            with open(self.CACHE_PATH, 'w', encoding='utf-8') as f:
+                json.dump(cache, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            print(f'Failed saving cache.json: {e}')
+
+    def migrate_legacy_cache(self):
         """
-        Updates a cache entry at the given index with new data.
-        Args:
-            path (str): The file path.
-            guessed_name (str): The guessed anime name.
-            result (tuple): The result to cache.
-            index (int): The line index in the cache file.
+        Migrates old inline cache entries from token file (lines with ';;') into cache.json once.
         """
         try:
-            with open(self.TOKEN_PATH, 'r', encoding='utf-8') as file:
-                lines = file.readlines()
-
-            if 0 <= index < len(lines):
-                # Update the line at the given index with the new cache data
-                updated_line = f'{time.time()};;{self.hash_path(os.path.dirname(path))};;{guessed_name};;{result}\n' if result is not None else ''
-                lines[index] = updated_line
-
-                # Write the updated lines back to the file
-                with open(self.TOKEN_PATH, 'w', encoding='utf-8') as file:
-                    file.writelines(lines)
-
-            else:
-                print(f"Invalid index {index} for updating cache.")
+            if not os.path.exists(self.TOKEN_PATH):
+                return
+            with open(self.TOKEN_PATH, 'r', encoding='utf-8') as f:
+                lines = f.read().splitlines()
+            if not any(';;' in ln for ln in lines):
+                return  # Nothing to migrate
+            header = lines[0] if lines else ''
+            cache = self.load_cache()
+            now = time.time()
+            for ln in lines[1:]:
+                if ';;' not in ln:
+                    continue
+                try:
+                    epoch_str, dir_hash, guess, result_repr = ln.split(';;', 3)
+                    epoch = float(epoch_str)
+                    if now - epoch >= self.CACHE_REFRESH_RATE:
+                        continue  # expired
+                    # Safely eval the old tuple to extract anime_id & progress
+                    anime_id = None
+                    last_progress = None
+                    try:
+                        parsed = ast.literal_eval(result_repr)
+                        if isinstance(parsed, (tuple, list)) and len(parsed) >= 3:
+                            anime_id = parsed[0]
+                            last_progress = parsed[2]
+                    except Exception:
+                        pass
+                    if anime_id is not None and last_progress is not None:
+                        cache[dir_hash] = {
+                            'guessed_name': guess,
+                            'anime_id': anime_id,
+                            'last_progress': last_progress,
+                            'ttl': epoch + self.CACHE_REFRESH_RATE
+                        }
+                except Exception:
+                    continue
+            # Rewrite token file without legacy cache lines
+            with open(self.TOKEN_PATH, 'w', encoding='utf-8') as f:
+                f.write(header + ('\n' if header else ''))
+            self.save_cache(cache)
+            print('Migrated legacy cache entries to cache.json.')
         except Exception as e:
-            print(f'Error trying to update cache file: {e}')
+            print(f'Cache migration failed: {e}')
 
     # Function to make an api request to AniList's api
     def make_api_request(self, query, variables=None, access_token=None):
@@ -295,72 +337,22 @@ class AniListUpdater:
             filename (str): The path to the video file.
         """
         file_info = self.parse_filename(filename)
-        cached_result, line_index = self.check_and_clean_cache(filename, file_info.get('name'))
-        # str -> tuple
-        if cached_result:
-            try:
-                cached_result = ast.literal_eval(cached_result)
-                if not isinstance(cached_result, (tuple, list)):
-                    cached_result = None
-            except Exception:
-                cached_result = None
-        else:
-            cached_result = None
+        cache_entry = self.check_and_clean_cache(filename, file_info.get('name'))
 
-        # True if:
-        #   Is not cached
-        #   Tries to update and current episode is not the next one.
-        #   It is not in your watching/planning list.
-        # This means that for shows with absolute numbering, if it updates, it will always call the API
-        # Since it needs to convert from absolute to relative.
-        if cached_result is None or (cached_result and (file_info.get('episode') != cached_result[2] + 1) and self.ACTION != 'launch'):
-            result = self.get_anime_info_and_progress(file_info.get('name'), file_info.get('episode'), file_info.get('year'))
-            result = self.update_episode_count(result) # Returns either the same, or the updated result
+        # If launching and cache has anime_id, we can skip search and open directly.
+        if self.ACTION == 'launch' and cache_entry and cache_entry.get('anime_id'):
+            anime_id = cache_entry['anime_id']
+            print(f'Opening AniList (cached) for guessed "{file_info.get("name")}": https://anilist.co/anime/{anime_id}')
+            webbrowser.open_new_tab(f'https://anilist.co/anime/{anime_id}')
+            return
 
-            # If it returned a result and the progress isnt None, then put it in cache, since it wasn't.
-            if result and result[2] is not None:
-                if line_index is not None:
-                    print(f'Updating cache to: {result}')
-                    self.update_cache(filename, file_info.get('name'), result, line_index)
-                else:
-                    print(f'Not found in cache! Adding to file... {result}')
-                    self.cache_to_file(filename, file_info.get('name'), result)
+        # Always fetch fresh info (simplified due to reduced cache fields)
+        result = self.get_anime_info_and_progress(file_info.get('name'), file_info.get('episode'), file_info.get('year'))
+        result = self.update_episode_count(result)
 
-        # True for opening AniList and updating next episode.
-        else:
-            print(f'Found in cache! {cached_result}')
-            # Only proceed if cached_result is a tuple/list and has enough elements
-            if isinstance(cached_result, (tuple, list)) and len(cached_result) >= 4:
-                # Change to the episode that needs to be updated
-                if len(cached_result) > 5:
-                    cached_result = tuple(cached_result[:4]) + (file_info.get('episode'),) + tuple(cached_result[5:])
-                else:
-                    cached_result = tuple(cached_result[:4]) + (file_info.get('episode'),)
-                # Ensure tuple is 6 elements (pad with "CURRENT" if needed)
-                if len(cached_result) == 5:
-                    cached_result = cached_result + ("CURRENT",)
-                result = self.update_episode_count(cached_result)
-
-                # If it's different, update in cache as well.
-                if cached_result != result and result:
-                    print(f'Updating cache to: {result}')
-                    self.update_cache(filename, file_info.get('name'), result, line_index)
-
-                # If it either errored or couldn't update, retry without cache.
-                if not result:
-                    print('Failed to update through cache, retrying without.')
-                    # Deleting from the cache
-                    self.update_cache(filename, file_info.get('name'), None, line_index)
-                    # Retrying
-                    self.handle_filename(filename)
-            else:
-                print('Cached result is invalid, ignoring cache.')
-                # Remove invalid cache entry
-                if line_index is not None:
-                    self.update_cache(filename, file_info.get('name'), None, line_index)
-                # Retry without cache
-                self.handle_filename(filename)
-
+        if result and result[2] is not None:
+            # Update structured cache
+            self.cache_to_file(filename, file_info.get('name'), result)
         return
 
     # Hardcoded exceptions to fix detection
