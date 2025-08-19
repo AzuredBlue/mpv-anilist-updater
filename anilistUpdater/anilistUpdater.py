@@ -38,57 +38,67 @@ class AniListUpdater:
     TOKEN_PATH = os.path.join(os.path.dirname(__file__), 'anilistToken.txt')
     CACHE_PATH = os.path.join(os.path.dirname(__file__), 'cache.json')
     OPTIONS = "--excludes country --excludes language --type episode"
-    CACHE_REFRESH_RATE = 24 * 60 * 60
-    # Maximum number of cache entries retained. When exceeded, least-recently-used
-    # (based on last_access) entries are evicted after expired TTL entries are purged.
+    CACHE_REFRESH_RATE =  7 * 24 * 60 * 60 # Weekly
     MAX_CACHE_ENTRIES = 300
 
     # Load token and user id
     def __init__(self, options, action):
+        """Initializes the AniListUpdater (single file read for user id + token).
         """
-        Initializes the AniListUpdater, loading the access token and user ID.
-        """
-        self.access_token = self.load_access_token() # Replace token here if you don't use the .txt
-        self.user_id = self.get_user_id()
+        self.user_id, self.access_token = self.load_access_token()
         self.options = options
         self.ACTION = action
-        # Attempt migrating old inline cache entries if any
+        if self.user_id is None and self.access_token:
+            self.get_user_id()
         self.migrate_legacy_cache()
 
     # Load token from anilistToken.txt
     def load_access_token(self):
         """
-        Loads the AniList access token from the token file.
+        Loads user id (if present) and access token in a single file read.
+        Token file formats supported:
+          - token_only
+          - user_id:token (first line)
+          (legacy cache lines with ';;' are ignored by this reader and handled later by migrate_legacy_cache)
         Returns:
-            str or None: The access token, or None if not found.
+            tuple: (user_id or None, access_token or None)
         """
         try:
-            with open(self.TOKEN_PATH, 'r', encoding='utf-8') as file:
-                content = file.read().strip()
-                if ':' in content:
-                    token = content.split(':', 1)[1].splitlines()[0]
-                    return token
-
-                return content
+            if not os.path.exists(self.TOKEN_PATH):
+                return (None, None)
+            with open(self.TOKEN_PATH, 'r', encoding='utf-8') as f:
+                lines = f.read().splitlines()
+            if not lines:
+                return (None, None)
+            header = lines[0].strip()
+            user_id = None
+            token = None
+            if ':' in header:
+                left, right = header.split(':', 1)
+                if left.isdigit():
+                    user_id = int(left)
+                    token = right.strip()
+                else:
+                    token = header.strip()
+            else:
+                token = header.strip()
+            if token == '':
+                token = None
+            return (user_id, token)
         except Exception as e:
             print(f'Error reading access token: {e}')
-            return None
+            return (None, None)
+
 
     # Load user id from file, if not then make api request and save it.
     def get_user_id(self):
         """
-        Loads the AniList user ID from the token file, or fetches and caches it if not present.
-        Returns:
-            int or None: The user ID, or None if not found.
+        Returns cached user id or fetches from API (single token file read model).
         """
-        try:
-            with open(self.TOKEN_PATH, 'r', encoding='utf-8') as file:
-                content = file.read().strip()
-                if ':' in content:
-                    return int(content.split(':')[0])
-        except Exception as e:
-            print(f'Error reading user ID: {e}')
-
+        if getattr(self, 'user_id', None) is not None:
+            return self.user_id
+        if not self.access_token:
+            return None
         query = '''
         query {
             Viewer {
@@ -98,23 +108,32 @@ class AniListUpdater:
         '''
         response = self.make_api_request(query, None, self.access_token)
         if response and 'data' in response:
-            user_id = response['data']['Viewer']['id']
-            self.save_user_id(user_id)
-            return user_id
+            self.user_id = response['data']['Viewer']['id']
+            self.save_user_id(self.user_id)
+            return self.user_id
         return None
 
     # Cache user id
     def save_user_id(self, user_id):
         """
-        Saves the user ID to the token file, prepending it to the existing content.
-        Args:
-            user_id (int): The AniList user ID.
+        Persists user id without re-reading token elsewhere; keeps legacy lines intact for migration.
         """
+        if not self.access_token:
+            return
         try:
-            with open(self.TOKEN_PATH, 'r+', encoding='utf-8') as file:
-                content = file.read()
-                file.seek(0)
-                file.write(f'{user_id}:{content}')
+            existing_lines = []
+            if os.path.exists(self.TOKEN_PATH):
+                with open(self.TOKEN_PATH, 'r', encoding='utf-8') as f:
+                    existing_lines = f.read().splitlines()
+            # Drop previous header if it contained a ':' or the lone token line
+            if existing_lines:
+                first = existing_lines[0]
+                if ':' in first or first.strip() == self.access_token:
+                    existing_lines = existing_lines[1:]
+            with open(self.TOKEN_PATH, 'w', encoding='utf-8') as f:
+                f.write(f'{user_id}:{self.access_token}\n')
+                if existing_lines:
+                    f.write('\n'.join(existing_lines) + ('\n' if not existing_lines[-1].endswith('\n') else ''))
         except Exception as e:
             print(f'Error saving user ID: {e}')
 
