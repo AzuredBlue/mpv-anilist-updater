@@ -23,7 +23,6 @@ import sys
 import os
 import webbrowser
 import time
-import ast
 import hashlib
 import re
 import json
@@ -50,7 +49,7 @@ class AniListUpdater:
         self.ACTION = action
         if self.user_id is None and self.access_token:
             self.get_user_id()
-        self.migrate_legacy_cache()
+        self.cleanup_legacy_cache()
 
     # Load token from anilistToken.txt
     def load_access_token(self):
@@ -59,7 +58,7 @@ class AniListUpdater:
         Token file formats supported:
           - token_only
           - user_id:token (first line)
-          (legacy cache lines with ';;' are ignored by this reader and handled later by migrate_legacy_cache)
+          (legacy cache lines with ';;' are ignored by this reader and handled later by cleanup_legacy_cache)
         Returns:
             tuple: (user_id or None, access_token or None)
         """
@@ -144,26 +143,29 @@ class AniListUpdater:
     def cache_to_file(self, path, guessed_name, result):
         """
         Stores/updates a structured cache entry in cache.json.
-        Cache schema (per spec): hash -> { guessed_name, anime_id, last_progress, ttl }
+        Cache schema: hash -> { guessed_name, anime_id, current_progress, total_episodes, current_status, ttl }
         ttl is an absolute epoch time (expiry moment).
         Args:
             path (str): The file path.
             guessed_name (str): The guessed anime name.
-            result (tuple): The result to cache.
+            result (tuple): The result to cache (anime_id, anime_name, current_progress, total_episodes, file_progress, current_status).
         """
         try:
             dir_hash = self.hash_path(os.path.dirname(path))
             cache = self.load_cache()
             if result is not None:
                 anime_id = result[0]
-                last_progress = result[2]
+                current_progress = result[2]
+                total_episodes = result[3]
+                current_status = result[5]
                 now = time.time()
                 cache[dir_hash] = {
                     'guessed_name': guessed_name,
                     'anime_id': anime_id,
-                    'last_progress': last_progress,
-                    'ttl': now + self.CACHE_REFRESH_RATE,
-                    'last_access': now
+                    'current_progress': current_progress,
+                    'total_episodes': total_episodes,
+                    'current_status': current_status,
+                    'ttl': now + self.CACHE_REFRESH_RATE
                 }
                 self.save_cache(cache)
         except Exception as e:
@@ -202,10 +204,6 @@ class AniListUpdater:
             dir_hash = self.hash_path(os.path.dirname(path))
             entry = cache.get(dir_hash)
             if entry and entry.get('guessed_name') == guessed_name and entry.get('ttl', 0) >= now:
-                # Update last_access for LRU tracking
-                entry['last_access'] = now
-                cache[dir_hash] = entry
-                self.save_cache(cache)
                 return entry
             return None
         except Exception as e:
@@ -218,18 +216,7 @@ class AniListUpdater:
             if not os.path.exists(self.CACHE_PATH):
                 return {}
             with open(self.CACHE_PATH, 'r', encoding='utf-8') as f:
-                raw = json.load(f)
-                # Ensure structure: add missing last_access for backward compatibility
-                now = time.time()
-                mutated = False
-                for k, v in raw.items():
-                    if isinstance(v, dict):
-                        if 'last_access' not in v:
-                            v['last_access'] = v.get('ttl', now)
-                            mutated = True
-                if mutated:
-                    self.save_cache(raw)
-                return raw
+                return json.load(f)
         except Exception:
             return {}
 
@@ -240,9 +227,10 @@ class AniListUpdater:
         except Exception as e:
             print(f'Failed saving cache.json: {e}')
 
-    def migrate_legacy_cache(self):
+    def cleanup_legacy_cache(self):
         """
-        Migrates old inline cache entries from token file (lines with ';;') into cache.json once.
+        Removes old inline cache entries from token file (lines with ';;') without migrating them.
+        This ensures a clean start with the new cache structure.
         """
         try:
             if not os.path.exists(self.TOKEN_PATH):
@@ -250,45 +238,18 @@ class AniListUpdater:
             with open(self.TOKEN_PATH, 'r', encoding='utf-8') as f:
                 lines = f.read().splitlines()
             if not any(';;' in ln for ln in lines):
-                return  # Nothing to migrate
+                return  # Nothing to clean up
+
+            # Keep only the header (first line with token/user_id)
             header = lines[0] if lines else ''
-            cache = self.load_cache()
-            now = time.time()
-            for ln in lines[1:]:
-                if ';;' not in ln:
-                    continue
-                try:
-                    epoch_str, dir_hash, guess, result_repr = ln.split(';;', 3)
-                    epoch = float(epoch_str)
-                    if now - epoch >= self.CACHE_REFRESH_RATE:
-                        continue  # expired
-                    # Safely eval the old tuple to extract anime_id & progress
-                    anime_id = None
-                    last_progress = None
-                    try:
-                        parsed = ast.literal_eval(result_repr)
-                        if isinstance(parsed, (tuple, list)) and len(parsed) >= 3:
-                            anime_id = parsed[0]
-                            last_progress = parsed[2]
-                    except Exception:
-                        pass
-                    if anime_id is not None and last_progress is not None:
-                        cache[dir_hash] = {
-                            'guessed_name': guess,
-                            'anime_id': anime_id,
-                            'last_progress': last_progress,
-                            'ttl': epoch + self.CACHE_REFRESH_RATE,
-                            'last_access': epoch
-                        }
-                except Exception:
-                    continue
-            # Rewrite token file without legacy cache lines
+
+            # Rewrite token file with just the header, removing all cache lines
             with open(self.TOKEN_PATH, 'w', encoding='utf-8') as f:
                 f.write(header + ('\n' if header else ''))
-            self.save_cache(cache)
-            print('Migrated legacy cache entries to cache.json.')
+
+            print('Cleaned up legacy cache entries from token file.')
         except Exception as e:
-            print(f'Cache migration failed: {e}')
+            print(f'Cache cleanup failed: {e}')
 
     # Function to make an api request to AniList's api
     def make_api_request(self, query, variables=None, access_token=None):
@@ -390,12 +351,25 @@ class AniListUpdater:
             webbrowser.open_new_tab(f'https://anilist.co/anime/{anime_id}')
             return
 
-        # Always fetch fresh info (simplified due to reduced cache fields)
-        result = self.get_anime_info_and_progress(file_info.get('name'), file_info.get('episode'), file_info.get('year'))
+        # Use cached data if available, otherwise fetch fresh info
+        if cache_entry:
+            # Reconstruct result tuple from cache
+            result = (
+                cache_entry['anime_id'],
+                cache_entry['guessed_name'],
+                cache_entry['current_progress'],
+                cache_entry['total_episodes'],
+                file_info.get('episode'),
+                cache_entry['current_status']
+            )
+            print(f'Using cached data for "{file_info.get("name")}"')
+        else:
+            result = self.get_anime_info_and_progress(file_info.get('name'), file_info.get('episode'), file_info.get('year'))
+
         result = self.update_episode_count(result)
 
         if result and result[2] is not None:
-            # Update structured cache
+            # Update cache with latest data
             self.cache_to_file(filename, file_info.get('name'), result)
         return
 
@@ -596,7 +570,7 @@ class AniListUpdater:
 
         if not response or 'data' not in response:
             return (None, None, None, None, None, None)
-        
+
         seasons = response['data']['Page']['media']
 
         # No results from the API request
@@ -615,7 +589,7 @@ class AniListUpdater:
                     raise Exception(f"Couldn\'t find an anime from this title! ({name})")
             else:
                 raise Exception(f"Couldn\'t find an anime from this title! ({name}). Is it in your list?")
-        
+
         # This is the first element, which is the same as Media(search: $search)
         entry = seasons[0]['mediaListEntry']
         anime_data = (
@@ -679,12 +653,12 @@ class AniListUpdater:
 
         # Handle completed -> rewatching on first episode
         if (current_status == 'COMPLETED' and file_progress == 1 and self.options['SET_COMPLETED_TO_REWATCHING_ON_FIRST_EPISODE']):
-            
-            # Needs to update in 2 steps, since AniList 
-            # doesn't allow setting progress while changing the status from completed to rewatching. 
+
+            # Needs to update in 2 steps, since AniList
+            # doesn't allow setting progress while changing the status from completed to rewatching.
             # If you try, it will just reset the progress to 0.
             print('Setting status to REPEATING (rewatching) and updating progress for first episode of completed anime.')
-            
+
             # Step 1: Set to REPEATING, progress=0
             query = '''
             mutation ($mediaId: Int, $progress: Int, $status: MediaListStatus) {
@@ -695,40 +669,40 @@ class AniListUpdater:
                 }
             }
             '''
-            
+
             variables = {'mediaId': anime_id, 'progress': 0, 'status': 'REPEATING'}
             response = self.make_api_request(query, variables, self.access_token)
-            
+
             # Step 2: Set progress to 1
             variables = {'mediaId': anime_id, 'progress': 1}
             response = self.make_api_request(query, variables, self.access_token)
-            
+
             if response and 'data' in response:
                 updated_progress = response['data']['SaveMediaListEntry']['progress']
                 print(f'Episode count updated successfully! New progress: {updated_progress}')
-                
+
                 return (anime_id, anime_name, updated_progress, total_episodes, 1, 'REPEATING')
             print('Failed to update episode count.')
-            
+
             return False
-        
+
         # Handle updating progress for rewatching
         if (current_status == 'REPEATING' and self.options['UPDATE_PROGRESS_WHEN_REWATCHING']):
             print('Updating progress for anime set to REPEATING (rewatching).')
             status_to_set = 'REPEATING'
-        
+
         # Only update if status is CURRENT or PLANNING
         elif current_status in ['CURRENT', 'PLANNING']:
-            
+
             # If its lower than the current progress, dont update.
             if file_progress <= current_progress:
                 raise Exception(f'Episode was not new. Not updating ({file_progress} <= {current_progress})')
-            
+
             status_to_set = 'CURRENT'
-        
+
         else:
             raise Exception(f'Anime is not in a modifiable state (status: {current_status}). Not updating.')
-        
+
         # Set to COMPLETED if last episode and the option is enabled
         if file_progress == total_episodes:
             if (current_status == 'CURRENT' and self.options['SET_TO_COMPLETED_AFTER_LAST_EPISODE_CURRENT']) or (current_status == 'REPEATING' and self.options['SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING']):
@@ -770,7 +744,7 @@ def main():
                 sys.stderr.reconfigure(encoding='utf-8')
             except Exception as e_reconfigure:
                 print(f"Couldn\'t reconfigure stdout/stderr to UTF-8: {e_reconfigure}", file=sys.stderr)
-        
+
         # Parse options from argv[3] if present
         options = {
             "SET_COMPLETED_TO_REWATCHING_ON_FIRST_EPISODE": False,
