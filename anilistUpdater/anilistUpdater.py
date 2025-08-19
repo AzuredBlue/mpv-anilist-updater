@@ -204,17 +204,11 @@ class AniListUpdater:
             dir_hash = self.hash_path(os.path.dirname(path))
             entry = cache.get(dir_hash)
             if entry and entry.get('guessed_name') == guessed_name and entry.get('ttl', 0) >= now:
-                # Upgrade legacy entries missing last_access
-                if 'last_access' not in entry:
-                    entry['last_access'] = now
-                    changed = True
-                else:
-                    entry['last_access'] = now
-                    changed = True
-                if changed:
-                    cache[dir_hash] = entry
-                    self.prune_cache_size(cache)
-                    self.save_cache(cache)
+                # Update last_access for LRU tracking
+                entry['last_access'] = now
+                cache[dir_hash] = entry
+                self.prune_cache_size(cache)
+                self.save_cache(cache)
                 return entry
             return None
         except Exception as e:
