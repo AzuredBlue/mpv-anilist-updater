@@ -164,8 +164,7 @@ class AniListUpdater:
                     'anime_id': anime_id,
                     'last_progress': last_progress,
                     'ttl': now + self.CACHE_REFRESH_RATE,
-                    'last_access': now,
-                    'created': now
+                    'last_access': now
                 }
                 self.prune_cache_size(cache)
                 self.save_cache(cache)
@@ -237,9 +236,6 @@ class AniListUpdater:
                         if 'last_access' not in v:
                             v['last_access'] = v.get('ttl', now)
                             mutated = True
-                        if 'created' not in v:
-                            v['created'] = v.get('ttl', now)
-                            mutated = True
                 if mutated:
                     self.save_cache(raw)
                 return raw
@@ -291,8 +287,7 @@ class AniListUpdater:
                             'anime_id': anime_id,
                             'last_progress': last_progress,
                             'ttl': epoch + self.CACHE_REFRESH_RATE,
-                            'last_access': epoch,
-                            'created': epoch
+                            'last_access': epoch
                         }
                 except Exception:
                     continue
