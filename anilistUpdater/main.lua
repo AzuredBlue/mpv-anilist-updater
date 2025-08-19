@@ -200,21 +200,32 @@ local python_command = get_python_command()
 
 -- Make sure it doesnt trigger twice in 1 video
 local triggered = false
+-- Debounce state for percent-pos events
+local last_percent_check_time = 0
+-- Seconds between handling percent-pos changes (below threshold)
+local PERCENT_POS_DEBOUNCE = 0.5
 
 -- Function to check if we've reached the user-defined percentage of the video
 function check_progress()
     if triggered then
         return
     end
-
     local percent_pos = mp.get_property_number("percent-pos")
-
-    if percent_pos then
-        if percent_pos >= UPDATE_PERCENTAGE then
-            update_anilist("update")
-            triggered = true
-        end
+    if not percent_pos then
+        return
     end
+
+    if percent_pos >= UPDATE_PERCENTAGE then
+        update_anilist("update")
+        triggered = true
+        return
+    end
+
+    local now = mp.get_time()
+    if (now - last_percent_check_time) < PERCENT_POS_DEBOUNCE then
+        return
+    end
+    last_percent_check_time = now
 end
 
 -- Function to launch the .py script
@@ -237,6 +248,7 @@ mp.observe_property("percent-pos", "number", check_progress)
 -- Reset triggered
 mp.register_event("file-loaded", function()
     triggered = false
+    last_percent_check_time = 0
     if #DIRECTORIES > 0 then
         local path = get_path()
 
