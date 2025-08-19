@@ -38,8 +38,7 @@ class AniListUpdater:
     TOKEN_PATH = os.path.join(os.path.dirname(__file__), 'anilistToken.txt')
     CACHE_PATH = os.path.join(os.path.dirname(__file__), 'cache.json')
     OPTIONS = "--excludes country --excludes language --type episode"
-    CACHE_REFRESH_RATE =  7 * 24 * 60 * 60 # Weekly
-    MAX_CACHE_ENTRIES = 300
+    CACHE_REFRESH_RATE =  24 * 60 * 60
 
     # Load token and user id
     def __init__(self, options, action):
@@ -166,7 +165,6 @@ class AniListUpdater:
                     'ttl': now + self.CACHE_REFRESH_RATE,
                     'last_access': now
                 }
-                self.prune_cache_size(cache)
                 self.save_cache(cache)
         except Exception as e:
             print(f'Error trying to cache {result}: {e}')
@@ -207,7 +205,6 @@ class AniListUpdater:
                 # Update last_access for LRU tracking
                 entry['last_access'] = now
                 cache[dir_hash] = entry
-                self.prune_cache_size(cache)
                 self.save_cache(cache)
                 return entry
             return None
@@ -292,24 +289,6 @@ class AniListUpdater:
             print('Migrated legacy cache entries to cache.json.')
         except Exception as e:
             print(f'Cache migration failed: {e}')
-
-    def prune_cache_size(self, cache):
-        """
-        Enforce MAX_CACHE_ENTRIES using LRU eviction (by last_access). Mutates cache.
-        """
-        try:
-            if len(cache) <= self.MAX_CACHE_ENTRIES:
-                return
-            # Build list of (key, last_access)
-            items = [(k, v.get('last_access', 0)) for k, v in cache.items()]
-            # Sort ascending (oldest first)
-            items.sort(key=lambda x: x[1])
-            to_remove = len(cache) - self.MAX_CACHE_ENTRIES
-            for i in range(to_remove):
-                del cache[items[i][0]]
-            print(f'Cache pruned: removed {to_remove} old entries (max={self.MAX_CACHE_ENTRIES}).')
-        except Exception as e:
-            print(f'Failed pruning cache size: {e}')
 
     # Function to make an api request to AniList's api
     def make_api_request(self, query, variables=None, access_token=None):
