@@ -43,7 +43,8 @@ class AniListUpdater:
 
     # Load token and user id
     def __init__(self, options, action):
-        """Initializes the AniListUpdater (single file read for user id + token).
+        """
+        Initializes the AniListUpdater, loading the access token and user ID.
         """
         self.user_id, self.access_token = self.load_access_token()
         self.options = options
@@ -93,7 +94,9 @@ class AniListUpdater:
     # Load user id from file, if not then make api request and save it.
     def get_user_id(self):
         """
-        Returns cached user id or fetches from API (single token file read model).
+        Loads the AniList user ID from the token file, or fetches and caches it if not present.
+        Returns:
+            int or None: The user ID, or None if not found.
         """
         if getattr(self, 'user_id', None) is not None:
             return self.user_id
@@ -117,6 +120,8 @@ class AniListUpdater:
     def save_user_id(self, user_id):
         """
         Persists user id without re-reading token elsewhere; keeps legacy lines intact for migration.
+        Args:
+            user_id (int): The AniList user ID.
         """
         if not self.access_token:
             return
@@ -143,9 +148,9 @@ class AniListUpdater:
         Cache schema (per spec): hash -> { guessed_name, anime_id, last_progress, ttl }
         ttl is an absolute epoch time (expiry moment).
         Args:
-            path (str): The path to the media file.
-            guessed_name (str): The guessed name of the anime.
-            result (tuple): The result from the API call.
+            path (str): The file path.
+            guessed_name (str): The guessed anime name.
+            result (tuple): The result to cache.
         """
         try:
             dir_hash = self.hash_path(os.path.dirname(path))
