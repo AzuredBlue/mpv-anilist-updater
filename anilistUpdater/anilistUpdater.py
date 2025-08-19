@@ -39,6 +39,9 @@ class AniListUpdater:
     CACHE_PATH = os.path.join(os.path.dirname(__file__), 'cache.json')
     OPTIONS = "--excludes country --excludes language --type episode"
     CACHE_REFRESH_RATE = 24 * 60 * 60
+    # Maximum number of cache entries retained. When exceeded, least-recently-used
+    # (based on last_access) entries are evicted after expired TTL entries are purged.
+    MAX_CACHE_ENTRIES = 300
 
     # Load token and user id
     def __init__(self, options, action):
@@ -131,12 +134,16 @@ class AniListUpdater:
             if result is not None:
                 anime_id = result[0]
                 last_progress = result[2]
+                now = time.time()
                 cache[dir_hash] = {
                     'guessed_name': guessed_name,
                     'anime_id': anime_id,
                     'last_progress': last_progress,
-                    'ttl': time.time() + self.CACHE_REFRESH_RATE
+                    'ttl': now + self.CACHE_REFRESH_RATE,
+                    'last_access': now,
+                    'created': now
                 }
+                self.prune_cache_size(cache)
                 self.save_cache(cache)
         except Exception as e:
             print(f'Error trying to cache {result}: {e}')
@@ -174,6 +181,17 @@ class AniListUpdater:
             dir_hash = self.hash_path(os.path.dirname(path))
             entry = cache.get(dir_hash)
             if entry and entry.get('guessed_name') == guessed_name and entry.get('ttl', 0) >= now:
+                # Upgrade legacy entries missing last_access
+                if 'last_access' not in entry:
+                    entry['last_access'] = now
+                    changed = True
+                else:
+                    entry['last_access'] = now
+                    changed = True
+                if changed:
+                    cache[dir_hash] = entry
+                    self.prune_cache_size(cache)
+                    self.save_cache(cache)
                 return entry
             return None
         except Exception as e:
@@ -186,7 +204,21 @@ class AniListUpdater:
             if not os.path.exists(self.CACHE_PATH):
                 return {}
             with open(self.CACHE_PATH, 'r', encoding='utf-8') as f:
-                return json.load(f)
+                raw = json.load(f)
+                # Ensure structure: add missing last_access for backward compatibility
+                now = time.time()
+                mutated = False
+                for k, v in raw.items():
+                    if isinstance(v, dict):
+                        if 'last_access' not in v:
+                            v['last_access'] = v.get('ttl', now)
+                            mutated = True
+                        if 'created' not in v:
+                            v['created'] = v.get('ttl', now)
+                            mutated = True
+                if mutated:
+                    self.save_cache(raw)
+                return raw
         except Exception:
             return {}
 
@@ -234,7 +266,9 @@ class AniListUpdater:
                             'guessed_name': guess,
                             'anime_id': anime_id,
                             'last_progress': last_progress,
-                            'ttl': epoch + self.CACHE_REFRESH_RATE
+                            'ttl': epoch + self.CACHE_REFRESH_RATE,
+                            'last_access': epoch,
+                            'created': epoch
                         }
                 except Exception:
                     continue
@@ -245,6 +279,24 @@ class AniListUpdater:
             print('Migrated legacy cache entries to cache.json.')
         except Exception as e:
             print(f'Cache migration failed: {e}')
+
+    def prune_cache_size(self, cache):
+        """
+        Enforce MAX_CACHE_ENTRIES using LRU eviction (by last_access). Mutates cache.
+        """
+        try:
+            if len(cache) <= self.MAX_CACHE_ENTRIES:
+                return
+            # Build list of (key, last_access)
+            items = [(k, v.get('last_access', 0)) for k, v in cache.items()]
+            # Sort ascending (oldest first)
+            items.sort(key=lambda x: x[1])
+            to_remove = len(cache) - self.MAX_CACHE_ENTRIES
+            for i in range(to_remove):
+                del cache[items[i][0]]
+            print(f'Cache pruned: removed {to_remove} old entries (max={self.MAX_CACHE_ENTRIES}).')
+        except Exception as e:
+            print(f'Failed pruning cache size: {e}')
 
     # Function to make an api request to AniList's api
     def make_api_request(self, query, variables=None, access_token=None):
@@ -622,7 +674,7 @@ class AniListUpdater:
         anime_id, anime_name, current_progress, total_episodes, file_progress, current_status = result
 
         if anime_id is None:
-            raise Exception(f'Couldn\'t find that anime! Make sure it is on your list and the title is correct.')
+            raise Exception('Couldn\'t find that anime! Make sure it is on your list and the title is correct.')
 
         # Only launch anilist
         if self.ACTION == 'launch':
