@@ -36,7 +36,6 @@ You **WILL** need an AniList access token for it to work:
 3. Copy the token
 4. Create an `anilistToken.txt` file in the `anilistUpdater` folder (if not already there) and paste the token there.
 
-This .txt file is also used to cache your AniList user id and to cache recently seen shows, avoiding extra API Calls.
 This token is what allows the script to update the anime episode count and make api requests, it is not used for anything else.
 
 ## Configuration (`anilistUpdater.conf`)
