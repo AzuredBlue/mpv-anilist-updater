@@ -47,6 +47,7 @@ class AniListUpdater:
         self.user_id, self.access_token = self.load_access_token()
         self.options = options
         self.ACTION = action
+        self._cache = None
         if self.user_id is None and self.access_token:
             self.get_user_id()
 
@@ -236,26 +237,32 @@ class AniListUpdater:
 
     def load_cache(self):
         """
-        Loads the cache from the CACHE_PATH JSON file.
+        Loads the cache from the CACHE_PATH JSON file with lazy loading.
+        Returns the cached data if already loaded, otherwise loads from file.
         Returns an empty dictionary if the file does not exist or an error occurs.
         """
-        try:
-            if not os.path.exists(self.CACHE_PATH):
-                return {}
-            with open(self.CACHE_PATH, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        except Exception:
-            return {}
+        if self._cache is None:
+            try:
+                if not os.path.exists(self.CACHE_PATH):
+                    self._cache = {}
+                else:
+                    with open(self.CACHE_PATH, 'r', encoding='utf-8') as f:
+                        self._cache = json.load(f)
+            except Exception:
+                self._cache = {}
+        return self._cache
 
     def save_cache(self, cache):
         """
-        Saves the cache dictionary to the CACHE_PATH JSON file.
+        Saves the cache dictionary to the CACHE_PATH JSON file and updates the local cache.
         Args:
             cache (dict): The cache data to save.
         """
         try:
             with open(self.CACHE_PATH, 'w', encoding='utf-8') as f:
                 json.dump(cache, f, ensure_ascii=False, indent=2)
+            # Keep local cache in sync
+            self._cache = cache
         except Exception as e:
             print(f'Failed saving cache.json: {e}')
 
