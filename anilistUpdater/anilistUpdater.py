@@ -39,49 +39,48 @@ class AniListUpdater:
     OPTIONS = "--excludes country --excludes language --type episode"
     CACHE_REFRESH_RATE =  24 * 60 * 60
 
-    # Load token and user id
+    # Load token
     def __init__(self, options, action):
         """
-        Initializes the AniListUpdater, loading the access token and user ID.
+        Initializes the AniListUpdater, loading the access token.
         """
-        self.user_id, self.access_token = self.load_access_token()
+        self.access_token = self.load_access_token()
         self.options = options
         self.ACTION = action
         self._cache = None
-        if self.user_id is None and self.access_token:
-            self.get_user_id()
 
     # Load token from anilistToken.txt
     def load_access_token(self):
         """
-        Loads user id (if present) and access token in a single file read.
+        Loads access token in a single file read.
         Token file formats supported:
           - token_only
-          - user_id:token (first line)
-          (legacy cache lines with ';;' are ignored by this reader and cleaned up if found)
+          - user_id:token (legacy - user_id will be removed)
+          (legacy cache lines with ';;' are also cleaned up if found)
         Returns:
-            tuple: (user_id or None, access_token or None)
+            str or None: access_token or None
         """
         try:
             if not os.path.exists(self.TOKEN_PATH):
-                return (None, None)
+                return None
             with open(self.TOKEN_PATH, 'r', encoding='utf-8') as f:
                 lines = f.read().splitlines()
             if not lines:
-                return (None, None)
+                return None
 
-            # Check for legacy cache lines and clean them up if found
+            # Check for legacy formats and clean them up if found
             has_legacy_cache = any(';;' in ln for ln in lines)
-            if has_legacy_cache:
-                self._cleanup_legacy_cache_lines(lines)
+            has_legacy_user_id = ':' in lines[0] and lines[0].split(':', 1)[0].isdigit()
+
+            if has_legacy_cache or has_legacy_user_id:
+                self._cleanup_legacy_formats(lines, has_legacy_user_id)
 
             header = lines[0].strip()
-            user_id = None
             token = None
             if ':' in header:
                 left, right = header.split(':', 1)
                 if left.isdigit():
-                    user_id = int(left)
+                    # Legacy user_id:token format
                     token = right.strip()
                 else:
                     token = header.strip()
@@ -89,80 +88,38 @@ class AniListUpdater:
                 token = header.strip()
             if token == '':
                 token = None
-            return (user_id, token)
+            return token
         except Exception as e:
             print(f'Error reading access token: {e}')
-            return (None, None)
+            return None
 
-    def _cleanup_legacy_cache_lines(self, lines):
+    def _cleanup_legacy_formats(self, lines, has_legacy_user_id):
         """
-        Removes legacy cache entries from token file (lines with ';;') using already-read lines.
+        Removes legacy cache entries and user_id from token file using already-read lines.
         Args:
             lines (list): The lines already read from the token file.
+            has_legacy_user_id (bool): Whether the first line has user_id:token format.
         """
         try:
-            # Keep only the header (first line with token/user_id)
             header = lines[0] if lines else ''
 
-            # Rewrite token file with just the header, removing all cache lines
+            # Extract just the token if it's in user_id:token format
+            if has_legacy_user_id and ':' in header:
+                token = header.split(':', 1)[1].strip()
+            else:
+                token = header.strip()
+
+            # Rewrite token file with just the token, removing user_id and cache lines
             with open(self.TOKEN_PATH, 'w', encoding='utf-8') as f:
-                f.write(header + ('\n' if header else ''))
+                f.write(token + ('\n' if token else ''))
 
-            print('Cleaned up legacy cache entries from token file.')
+            if has_legacy_user_id:
+                print('Cleaned up legacy user_id from token file.')
+            if any(';;' in ln for ln in lines):
+                print('Cleaned up legacy cache entries from token file.')
         except Exception as e:
-            print(f'Cache cleanup failed: {e}')
+            print(f'Legacy format cleanup failed: {e}')
 
-
-    # Load user id from file, if not then make api request and save it.
-    def get_user_id(self):
-        """
-        Loads the AniList user ID from the token file, or fetches and caches it if not present.
-        Returns:
-            int or None: The user ID, or None if not found.
-        """
-        if getattr(self, 'user_id', None) is not None:
-            return self.user_id
-        if not self.access_token:
-            return None
-        query = '''
-        query {
-            Viewer {
-                id
-            }
-        }
-        '''
-        response = self.make_api_request(query, None, self.access_token)
-        if response and 'data' in response:
-            self.user_id = response['data']['Viewer']['id']
-            self.save_user_id(self.user_id)
-            return self.user_id
-        return None
-
-    # Cache user id
-    def save_user_id(self, user_id):
-        """
-        Persists user id without re-reading token elsewhere; keeps legacy lines intact for migration.
-        Args:
-            user_id (int): The AniList user ID.
-        """
-        if not self.access_token:
-            return
-        try:
-            existing_lines = []
-            if os.path.exists(self.TOKEN_PATH):
-                with open(self.TOKEN_PATH, 'r', encoding='utf-8') as f:
-                    existing_lines = f.read().splitlines()
-            # Drop previous header if it contained a ':' or the lone token line
-            if existing_lines:
-                first = existing_lines[0]
-                if ':' in first or first.strip() == self.access_token:
-                    existing_lines = existing_lines[1:]
-            with open(self.TOKEN_PATH, 'w', encoding='utf-8') as f:
-                f.write(f'{user_id}:{self.access_token}\n')
-                if existing_lines:
-                    f.write('\n'.join(existing_lines) + ('\n' if not existing_lines[-1].endswith('\n') else ''))
-        except Exception as e:
-            print(f'Error saving user ID: {e}')
 
     def cache_to_file(self, path, guessed_name, result):
         """
