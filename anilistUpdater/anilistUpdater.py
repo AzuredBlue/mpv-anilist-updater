@@ -49,7 +49,6 @@ class AniListUpdater:
         self.ACTION = action
         if self.user_id is None and self.access_token:
             self.get_user_id()
-        self.cleanup_legacy_cache()
 
     # Load token from anilistToken.txt
     def load_access_token(self):
@@ -58,7 +57,7 @@ class AniListUpdater:
         Token file formats supported:
           - token_only
           - user_id:token (first line)
-          (legacy cache lines with ';;' are ignored by this reader and handled later by cleanup_legacy_cache)
+          (legacy cache lines with ';;' are ignored by this reader and cleaned up if found)
         Returns:
             tuple: (user_id or None, access_token or None)
         """
@@ -69,6 +68,12 @@ class AniListUpdater:
                 lines = f.read().splitlines()
             if not lines:
                 return (None, None)
+
+            # Check for legacy cache lines and clean them up if found
+            has_legacy_cache = any(';;' in ln for ln in lines)
+            if has_legacy_cache:
+                self._cleanup_legacy_cache_lines(lines)
+
             header = lines[0].strip()
             user_id = None
             token = None
@@ -87,6 +92,24 @@ class AniListUpdater:
         except Exception as e:
             print(f'Error reading access token: {e}')
             return (None, None)
+
+    def _cleanup_legacy_cache_lines(self, lines):
+        """
+        Removes legacy cache entries from token file (lines with ';;') using already-read lines.
+        Args:
+            lines (list): The lines already read from the token file.
+        """
+        try:
+            # Keep only the header (first line with token/user_id)
+            header = lines[0] if lines else ''
+
+            # Rewrite token file with just the header, removing all cache lines
+            with open(self.TOKEN_PATH, 'w', encoding='utf-8') as f:
+                f.write(header + ('\n' if header else ''))
+
+            print('Cleaned up legacy cache entries from token file.')
+        except Exception as e:
+            print(f'Cache cleanup failed: {e}')
 
 
     # Load user id from file, if not then make api request and save it.
@@ -212,6 +235,10 @@ class AniListUpdater:
 
 
     def load_cache(self):
+        """
+        Loads the cache from the CACHE_PATH JSON file.
+        Returns an empty dictionary if the file does not exist or an error occurs.
+        """
         try:
             if not os.path.exists(self.CACHE_PATH):
                 return {}
@@ -221,35 +248,16 @@ class AniListUpdater:
             return {}
 
     def save_cache(self, cache):
+        """
+        Saves the cache dictionary to the CACHE_PATH JSON file.
+        Args:
+            cache (dict): The cache data to save.
+        """
         try:
             with open(self.CACHE_PATH, 'w', encoding='utf-8') as f:
                 json.dump(cache, f, ensure_ascii=False, indent=2)
         except Exception as e:
             print(f'Failed saving cache.json: {e}')
-
-    def cleanup_legacy_cache(self):
-        """
-        Removes old inline cache entries from token file (lines with ';;') without migrating them.
-        This ensures a clean start with the new cache structure.
-        """
-        try:
-            if not os.path.exists(self.TOKEN_PATH):
-                return
-            with open(self.TOKEN_PATH, 'r', encoding='utf-8') as f:
-                lines = f.read().splitlines()
-            if not any(';;' in ln for ln in lines):
-                return  # Nothing to clean up
-
-            # Keep only the header (first line with token/user_id)
-            header = lines[0] if lines else ''
-
-            # Rewrite token file with just the header, removing all cache lines
-            with open(self.TOKEN_PATH, 'w', encoding='utf-8') as f:
-                f.write(header + ('\n' if header else ''))
-
-            print('Cleaned up legacy cache entries from token file.')
-        except Exception as e:
-            print(f'Cache cleanup failed: {e}')
 
     # Function to make an api request to AniList's api
     def make_api_request(self, query, variables=None, access_token=None):
