@@ -72,28 +72,18 @@ class AniListUpdater:
             has_legacy_cache = any(';;' in ln for ln in lines)
             has_legacy_user_id = ':' in lines[0] and lines[0].split(':', 1)[0].isdigit()
 
+            # Cleans up the file and returns the token directly
             if has_legacy_cache or has_legacy_user_id:
-                self._cleanup_legacy_formats(lines, has_legacy_user_id)
+                return self.cleanup_legacy_formats(lines, has_legacy_user_id)
 
-            header = lines[0].strip()
-            token = None
-            if ':' in header:
-                left, right = header.split(':', 1)
-                if left.isdigit():
-                    # Legacy user_id:token format
-                    token = right.strip()
-                else:
-                    token = header.strip()
-            else:
-                token = header.strip()
-            if token == '':
-                token = None
-            return token
+            # If no legacy formats, the first line should have the token.
+            return lines[0].strip()
+
         except Exception as e:
             print(f'Error reading access token: {e}')
             return None
 
-    def _cleanup_legacy_formats(self, lines, has_legacy_user_id):
+    def cleanup_legacy_formats(self, lines, has_legacy_user_id):
         """
         Removes legacy cache entries and user_id from token file using already-read lines.
         Args:
@@ -113,12 +103,16 @@ class AniListUpdater:
             with open(self.TOKEN_PATH, 'w', encoding='utf-8') as f:
                 f.write(token + ('\n' if token else ''))
 
+            lines = token
+
             if has_legacy_user_id:
                 print('Cleaned up legacy user_id from token file.')
             if any(';;' in ln for ln in lines):
                 print('Cleaned up legacy cache entries from token file.')
         except Exception as e:
             print(f'Legacy format cleanup failed: {e}')
+
+        return lines
 
 
     def cache_to_file(self, path, guessed_name, result):
@@ -134,21 +128,23 @@ class AniListUpdater:
         try:
             dir_hash = self.hash_path(os.path.dirname(path))
             cache = self.load_cache()
-            if result is not None:
-                anime_id = result[0]
-                current_progress = result[2]
-                total_episodes = result[3]
-                current_status = result[5]
-                now = time.time()
-                cache[dir_hash] = {
-                    'guessed_name': guessed_name,
-                    'anime_id': anime_id,
-                    'current_progress': current_progress,
-                    'total_episodes': total_episodes,
-                    'current_status': current_status,
-                    'ttl': now + self.CACHE_REFRESH_RATE
-                }
-                self.save_cache(cache)
+            
+            anime_id = result[0]
+            current_progress = result[2]
+            total_episodes = result[3]
+            current_status = result[5]
+            now = time.time()
+
+            cache[dir_hash] = {
+                'guessed_name': guessed_name,
+                'anime_id': anime_id,
+                'current_progress': current_progress,
+                'total_episodes': total_episodes,
+                'current_status': current_status,
+                'ttl': now + self.CACHE_REFRESH_RATE
+            }
+
+            self.save_cache(cache)
         except Exception as e:
             print(f'Error trying to cache {result}: {e}')
 
@@ -184,8 +180,10 @@ class AniListUpdater:
 
             dir_hash = self.hash_path(os.path.dirname(path))
             entry = cache.get(dir_hash)
-            if entry and entry.get('guessed_name') == guessed_name and entry.get('ttl', 0) >= now:
+
+            if entry and entry.get('guessed_name') == guessed_name:
                 return entry
+            
             return None
         except Exception as e:
             print(f'Error trying to read cache file: {e}')
