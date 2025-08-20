@@ -202,8 +202,6 @@ local python_command = get_python_command()
 
 -- Make sure it doesnt trigger twice in 1 video
 local triggered = false
--- Timer for periodic progress checks
-local progress_timer = nil
 -- Check progress every X seconds (when not paused)
 local UPDATE_INTERVAL = 0.5
 
@@ -221,19 +219,17 @@ function check_progress()
     if percent_pos >= UPDATE_PERCENTAGE then
         update_anilist("update")
         triggered = true
-        if progress_timer then
-            progress_timer:stop()
-        end
+        progress_timer:stop()
         return
     end
 end
 
 -- Handle pause/unpause events to control the timer
 function on_pause_change(name, value)
-    if progress_timer then
-        if value then
-            progress_timer:stop()
-        else
+    if value then
+        progress_timer:stop()
+    else
+        if not triggered then
             progress_timer:resume()
         end
     end
@@ -256,15 +252,15 @@ end
 
 mp.observe_property("pause", "bool", on_pause_change)
 
+-- Initialize timer once - we control it with stop/resume
+local progress_timer = mp.add_periodic_timer(UPDATE_INTERVAL, check_progress)
+-- Start with timer stopped - it will be started when a valid file loads
+progress_timer:stop()
+
 -- Reset triggered and start/stop timer based on file loading
 mp.register_event("file-loaded", function()
     triggered = false
-
-    -- Stop existing timer if any
-    if progress_timer then
-        progress_timer:kill()
-        progress_timer = nil
-    end
+    progress_timer:stop()
 
     if #DIRECTORIES > 0 then
         local path = get_path()
@@ -280,7 +276,7 @@ mp.register_event("file-loaded", function()
     end
 
     -- Start timer for this file
-    progress_timer = mp.add_periodic_timer(UPDATE_INTERVAL, check_progress)
+    progress_timer:resume()
 end)
 
 -- Keybinds, modify as you please
