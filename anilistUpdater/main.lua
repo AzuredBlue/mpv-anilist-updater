@@ -205,8 +205,8 @@ local triggered = false
 -- Check progress every X seconds (when not paused)
 local UPDATE_INTERVAL = 0.5
 
--- Function to check if we've reached the user-defined percentage of the video
-function check_progress()
+-- Initialize timer once - we control it with stop/resume
+local progress_timer = mp.add_periodic_timer(UPDATE_INTERVAL, function()
     if triggered then
         return
     end
@@ -224,10 +224,7 @@ function check_progress()
         end
         return
     end
-end
-
--- Initialize timer once - we control it with stop/resume
-local progress_timer = mp.add_periodic_timer(UPDATE_INTERVAL, check_progress)
+end)
 -- Start with timer stopped - it will be started when a valid file loads
 progress_timer:stop()
 
