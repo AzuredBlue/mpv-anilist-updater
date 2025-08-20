@@ -210,6 +210,13 @@ function check_progress()
     if triggered then
         return
     end
+
+    local now = mp.get_time()
+    if (now - last_percent_check_time) < PERCENT_POS_DEBOUNCE then
+        return
+    end
+    last_percent_check_time = now
+
     local percent_pos = mp.get_property_number("percent-pos")
     if not percent_pos then
         return
@@ -220,12 +227,6 @@ function check_progress()
         triggered = true
         return
     end
-
-    local now = mp.get_time()
-    if (now - last_percent_check_time) < PERCENT_POS_DEBOUNCE then
-        return
-    end
-    last_percent_check_time = now
 end
 
 -- Function to launch the .py script
