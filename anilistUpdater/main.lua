@@ -219,10 +219,17 @@ function check_progress()
     if percent_pos >= UPDATE_PERCENTAGE then
         update_anilist("update")
         triggered = true
-        progress_timer:stop()
+        if progress_timer then
+            progress_timer:stop()
+        end
         return
     end
 end
+
+-- Initialize timer once - we control it with stop/resume
+local progress_timer = mp.add_periodic_timer(UPDATE_INTERVAL, check_progress)
+-- Start with timer stopped - it will be started when a valid file loads
+progress_timer:stop()
 
 -- Handle pause/unpause events to control the timer
 function on_pause_change(name, value)
@@ -251,11 +258,6 @@ function update_anilist(action)
 end
 
 mp.observe_property("pause", "bool", on_pause_change)
-
--- Initialize timer once - we control it with stop/resume
-local progress_timer = mp.add_periodic_timer(UPDATE_INTERVAL, check_progress)
--- Start with timer stopped - it will be started when a valid file loads
-progress_timer:stop()
 
 -- Reset triggered and start/stop timer based on file loading
 mp.register_event("file-loaded", function()
