@@ -29,9 +29,11 @@ if script_opts_dir then
     script_opts_dir = utils.join_path(script_opts_dir, "script-opts")
 else
     -- Fallback: try to find mpv config dir
-    script_opts_dir = os.getenv("APPDATA") and utils.join_path(utils.join_path(os.getenv("APPDATA"), "mpv"), "script-opts") or
-                          os.getenv("HOME") and utils.join_path(utils.join_path(utils.join_path(os.getenv("HOME"), ".config"), "mpv"), "script-opts") or
-                          nil
+    script_opts_dir = os.getenv("APPDATA") and
+                          utils.join_path(utils.join_path(os.getenv("APPDATA"), "mpv"), "script-opts") or
+                          os.getenv("HOME") and
+                          utils.join_path(utils.join_path(utils.join_path(os.getenv("HOME"), ".config"), "mpv"),
+            "script-opts") or nil
 end
 
 local script_opts_path = script_opts_dir and utils.join_path(script_opts_dir, conf_name) or nil
@@ -200,22 +202,16 @@ local python_command = get_python_command()
 
 -- Make sure it doesnt trigger twice in 1 video
 local triggered = false
--- Debounce state for percent-pos events
-local last_percent_check_time = 0
--- Seconds between handling percent-pos changes (below threshold)
-local PERCENT_POS_DEBOUNCE = 0.5
+-- Timer for periodic progress checks
+local progress_timer = nil
+-- Check progress every X seconds (when not paused)
+local UPDATE_INTERVAL = 0.5
 
 -- Function to check if we've reached the user-defined percentage of the video
 function check_progress()
     if triggered then
         return
     end
-
-    local now = mp.get_time()
-    if (now - last_percent_check_time) < PERCENT_POS_DEBOUNCE then
-        return
-    end
-    last_percent_check_time = now
 
     local percent_pos = mp.get_property_number("percent-pos")
     if not percent_pos then
@@ -225,7 +221,21 @@ function check_progress()
     if percent_pos >= UPDATE_PERCENTAGE then
         update_anilist("update")
         triggered = true
+        if progress_timer then
+            progress_timer:stop()
+        end
         return
+    end
+end
+
+-- Handle pause/unpause events to control the timer
+function on_pause_change(name, value)
+    if progress_timer then
+        if value then
+            progress_timer:stop()
+        else
+            progress_timer:resume()
+        end
     end
 end
 
@@ -244,25 +254,33 @@ function update_anilist(action)
     local cmd = mp.command_native_async(table, callback)
 end
 
-mp.observe_property("percent-pos", "number", check_progress)
+mp.observe_property("pause", "bool", on_pause_change)
 
--- Reset triggered
+-- Reset triggered and start/stop timer based on file loading
 mp.register_event("file-loaded", function()
     triggered = false
-    last_percent_check_time = 0
+
+    -- Stop existing timer if any
+    if progress_timer then
+        progress_timer:kill()
+        progress_timer = nil
+    end
+
     if #DIRECTORIES > 0 then
         local path = get_path()
 
         if not path_starts_with_any(path, DIRECTORIES) then
-            mp.unobserve_property(check_progress)
+            return
         else
             -- If it starts with the directories, check if it starts with any of the excluded directories
             if #EXCLUDED_DIRECTORIES > 0 and path_starts_with_any(path, EXCLUDED_DIRECTORIES) then
-                mp.unobserve_property(check_progress)
+                return
             end
-
         end
     end
+
+    -- Start timer for this file
+    progress_timer = mp.add_periodic_timer(UPDATE_INTERVAL, check_progress)
 end)
 
 -- Keybinds, modify as you please
