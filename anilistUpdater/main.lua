@@ -200,6 +200,8 @@ end
 
 local python_command = get_python_command()
 
+local isPaused = false
+
 -- Make sure it doesnt trigger twice in 1 video
 local triggered = false
 -- Check progress every X seconds (when not paused)
@@ -210,7 +212,7 @@ local progress_timer = mp.add_periodic_timer(UPDATE_INTERVAL, function()
     if triggered then
         return
     end
-
+    
     local percent_pos = mp.get_property_number("percent-pos")
     if not percent_pos then
         return
@@ -230,6 +232,7 @@ progress_timer:stop()
 
 -- Handle pause/unpause events to control the timer
 function on_pause_change(name, value)
+    isPaused = value
     if value then
         progress_timer:stop()
     else
@@ -275,7 +278,9 @@ mp.register_event("file-loaded", function()
     end
 
     -- Start timer for this file
-    progress_timer:resume()
+    if not isPaused then
+        progress_timer:resume()
+    end
 end)
 
 -- Keybinds, modify as you please
