@@ -268,10 +268,12 @@ mp.register_event("file-loaded", function()
         local path = get_path()
 
         if not path_starts_with_any(path, DIRECTORIES) then
+            mp.unobserve_property(on_pause_change)
             return
         else
             -- If it starts with the directories, check if it starts with any of the excluded directories
             if #EXCLUDED_DIRECTORIES > 0 and path_starts_with_any(path, EXCLUDED_DIRECTORIES) then
+                mp.unobserve_property(on_pause_change)
                 return
             end
         end
