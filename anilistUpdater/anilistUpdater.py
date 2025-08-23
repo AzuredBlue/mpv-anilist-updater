@@ -115,7 +115,7 @@ class AniListUpdater:
         return lines
 
 
-    def cache_to_file(self, path, guessed_name, result):
+    def cache_to_file(self, path, guessed_name, absolute_progress, result):
         """
         Stores/updates a structured cache entry in cache.json.
         Cache schema: hash -> { guessed_name, anime_id, current_progress, total_episodes, current_status, ttl }
@@ -123,22 +123,21 @@ class AniListUpdater:
         Args:
             path (str): The file path.
             guessed_name (str): The guessed anime name.
-            result (tuple): The result to cache (anime_id, anime_name, current_progress, total_episodes, file_progress, current_status).
+            result (tuple): The result to cache (anime_id, anime_name, current_progress, total_episodes, relative_progress, current_status).
         """
         try:
             dir_hash = self.hash_path(os.path.dirname(path))
             cache = self.load_cache()
             
-            anime_id = result[0]
-            current_progress = result[2]
-            total_episodes = result[3]
-            current_status = result[5]
+            anime_id, _, current_progress, total_episodes, relative_progress, current_status = result
+
             now = time.time()
 
             cache[dir_hash] = {
                 'guessed_name': guessed_name,
                 'anime_id': anime_id,
                 'current_progress': current_progress,
+                'relative_progress': f"{absolute_progress}->{relative_progress}",
                 'total_episodes': total_episodes,
                 'current_status': current_status,
                 'ttl': now + self.CACHE_REFRESH_RATE
@@ -322,17 +321,30 @@ class AniListUpdater:
             return
 
         # Use cached data if available, otherwise fetch fresh info
-        if cache_entry and file_info.get('episode') == cache_entry.get('current_progress', 0) + 1:
-            # Reconstruct result tuple from cache
-            result = (
-                cache_entry['anime_id'],
-                cache_entry['guessed_name'],
-                cache_entry['current_progress'],
-                cache_entry['total_episodes'],
-                file_info.get('episode'),
-                cache_entry['current_status']
-            )
+        if cache_entry:
+
             print(f'Using cached data for "{file_info.get("name")}"')
+
+            l, r = cache_entry.get('relative_progress', '0->0').split('->')
+            # For example, if 19->7, that means that 19 absolute is equivalent to 7 relative to this season
+            # File episode 20: 18 - 19 + 7 = 8 relative to this season
+            offset = int(l) - int(r)
+
+            relative_episode = file_info.get('episode') - offset
+
+            if 1 <= relative_episode <= cache_entry.get('total_episodes'):
+                # Reconstruct result tuple from cache
+                result = (
+                    cache_entry['anime_id'],
+                    cache_entry['guessed_name'],
+                    cache_entry['current_progress'],
+                    cache_entry['total_episodes'],
+                    relative_episode,
+                    cache_entry['current_status']
+                )
+            else:
+                result = self.get_anime_info_and_progress(file_info.get('name'), file_info.get('episode'), file_info.get('year'))
+
         else:
             result = self.get_anime_info_and_progress(file_info.get('name'), file_info.get('episode'), file_info.get('year'))
 
@@ -340,7 +352,7 @@ class AniListUpdater:
 
         if result and result[2] is not None:
             # Update cache with latest data
-            self.cache_to_file(filename, file_info.get('name'), result)
+            self.cache_to_file(filename, file_info.get('name'), file_info.get('episode') , result)
         return
 
     # Hardcoded exceptions to fix detection
