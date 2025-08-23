@@ -322,7 +322,7 @@ class AniListUpdater:
             return
 
         # Use cached data if available, otherwise fetch fresh info
-        if cache_entry:
+        if cache_entry and file_info.get('episode') == cache_entry.get('current_progress', 0) + 1:
             # Reconstruct result tuple from cache
             result = (
                 cache_entry['anime_id'],
@@ -422,7 +422,7 @@ class AniListUpdater:
 
         # If its >2, theres probably a Release Group and Title / Season / Part, so its good
 
-        episode = guess.get('episode', None)
+        episode = guess.get('episode', 1)
         season = guess.get('season', '')
         part = str(guess.get('part', ''))
         year = str(guess.get('year', ''))
@@ -448,7 +448,6 @@ class AniListUpdater:
 
             season = season[0]
 
-        episode = episode or 1
         season = str(season)
 
         keys = list(guess.keys())
@@ -487,7 +486,7 @@ class AniListUpdater:
         # Add season and part if there are
         if season and (int(season) > 1 or part):
             name += f" Season {season}"
-
+            
         if part:
             name += f" Part {part}"
 
