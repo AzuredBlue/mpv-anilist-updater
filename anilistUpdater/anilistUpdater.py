@@ -11,6 +11,7 @@ Parses anime filenames, finds AniList entries, and updates progress/status.
 #   UPDATE_PROGRESS_WHEN_REWATCHING: Boolean. If true, allow updating progress for anime set to rewatching. This is for if you want to set anime to rewatching manually, but still update progress automatically.
 #   SET_TO_COMPLETED_AFTER_LAST_EPISODE_CURRENT: Boolean. If true, set to COMPLETED after last episode if status was CURRENT.
 #   SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING: Boolean. If true, set to COMPLETED after last episode if status was REPEATING (rewatching).
+#   ADD_ENTRY_IF_MISSING: Boolean. If true, automatically add anime to your list if it's not found during search. Default is False.
 
 # ═══════════════════════════════════════════════════════════════════════════════════════════════════════
 # IMPORTS
@@ -72,7 +73,7 @@ class FileInfo:
 
 class AniListQueries:
     """GraphQL queries for AniList API operations."""
-    
+
     # Query to search for anime with optional filters
     # Variables: search (String), year (FuzzyDateInt), page (Int), onList (Boolean)
     SEARCH_ANIME = '''
@@ -98,7 +99,7 @@ class AniListQueries:
             }
         }
     '''
-    
+
     # Mutation to update progress and/or status of a media list entry
     # Variables: mediaId (Int), progress (Int), status (MediaListStatus)
     UPDATE_MEDIA_LIST_ENTRY = '''
@@ -107,6 +108,19 @@ class AniListQueries:
                 status
                 id
                 progress
+            }
+        }
+    '''
+
+    # Mutation to add a new anime to the user's list
+    # Variables: mediaId (Int), status (MediaListStatus), progress (Int)
+    ADD_MEDIA_LIST_ENTRY = '''
+        mutation ($mediaId: Int, $status: MediaListStatus, $progress: Int) {
+            SaveMediaListEntry (mediaId: $mediaId, status: $status, progress: $progress) {
+                status
+                id
+                progress
+                mediaId
             }
         }
     '''
@@ -221,7 +235,7 @@ class AniListUpdater:
         try:
             dir_hash = self.hash_path(os.path.dirname(path))
             cache = self.load_cache()
-            
+
             anime_id, _, current_progress, total_episodes, relative_progress, current_status = result
 
             now = time.time()
@@ -276,7 +290,7 @@ class AniListUpdater:
 
             if entry and entry.get('guessed_name') == guessed_name:
                 return entry
-            
+
             return None
         except Exception as e:
             print(f'Error trying to read cache file: {e}')
@@ -490,7 +504,8 @@ class AniListUpdater:
         """
         path_parts = self.fix_filename(filepath.replace('\\', '/').split('/'))
         filename = path_parts[-1]
-        name, season, part, year, remaining = '', '', '', '',  []
+        name, season, part, year = '', '', '', ''
+        remaining: List[int] = []
         episode = 1
         # First, try to guess from the filename
         guess = guessit(filename, self.OPTIONS)
@@ -550,8 +565,8 @@ class AniListUpdater:
 
             # Depth=2 folders
             for depth in [2, 3]:
-                folder_guess = guessit(path_parts[-depth], self.OPTIONS) if len(path_parts) > depth-1 else ''
-                if folder_guess != '':
+                folder_guess = guessit(path_parts[-depth], self.OPTIONS) if len(path_parts) > depth-1 else None
+                if folder_guess:
                     print(f'{depth-1}{"st" if depth-1==1 else "nd"} Folder guess:\n{path_parts[-depth]} -> {dict(folder_guess)}')
 
                     name = str(folder_guess.get('title', ''))
@@ -571,7 +586,7 @@ class AniListUpdater:
         # Add season and part if there are
         if season and (int(season) > 1 or part):
             name += f" Season {season}"
-            
+
         if part:
             name += f" Part {part}"
 
@@ -640,6 +655,33 @@ class AniListUpdater:
                 # If its still empty
                 if not seasons:
                     raise Exception(f"Couldn\'t find an anime from this title! ({name})")
+            # If ADD_ENTRY_IF_MISSING is enabled, try to find and add the anime
+            elif self.options.get('ADD_ENTRY_IF_MISSING', False):
+                print(f"Anime '{name}' not found in your list. Searching all anime and attempting to add...")
+                variables['onList'] = False
+                response = self.make_api_request(query, variables, self.access_token)
+
+                if not response or 'data' not in response:
+                    return AnimeInfo(None, None, None, None, None, None)
+
+                seasons = response['data']['Page']['media']
+                if not seasons:
+                    raise Exception(f"Couldn\'t find an anime from this title! ({name})")
+
+                # Found anime not in list - try to add it
+                anime_to_add = seasons[0]
+                anime_id = anime_to_add['id']
+                anime_title = anime_to_add['title']['romaji']
+
+                # Determine initial status based on episode progress
+                initial_status = 'CURRENT' if file_progress > 0 else 'PLANNING'
+                initial_progress = min(file_progress - 1, 0) if file_progress > 0 else 0  # Set to previous episode or 0
+
+                # Add to list
+                if self.add_anime_to_list(anime_id, anime_title, initial_status, initial_progress):
+                    # Create AnimeInfo with the newly added entry
+                    return AnimeInfo(anime_id, anime_title, initial_progress, anime_to_add['episodes'], file_progress, initial_status)
+                raise Exception(f"Failed to add '{name}' to your list.")
             else:
                 raise Exception(f"Couldn\'t find an anime from this title! ({name}). Is it in your list?")
 
@@ -755,6 +797,36 @@ class AniListUpdater:
         print('Failed to update episode count.')
         raise Exception('Failed to update episode count.')
 
+    def add_anime_to_list(self, anime_id: int, anime_name: str, initial_status: str = 'PLANNING', initial_progress: int = 0) -> bool:
+        """
+        Add an anime to the user's AniList.
+        Args:
+            anime_id (int): AniList anime ID.
+            anime_name (str): Anime title for logging.
+            initial_status (str): Initial status to set (default: 'PLANNING').
+            initial_progress (int): Initial progress to set (default: 0).
+        Returns:
+            bool: True if successfully added, False otherwise.
+        """
+        try:
+            query = AniListQueries.ADD_MEDIA_LIST_ENTRY
+            variables = {
+                'mediaId': anime_id,
+                'status': initial_status,
+                'progress': initial_progress
+            }
+
+            response = self.make_api_request(query, variables, self.access_token)
+
+            if response and 'data' in response and response['data']['SaveMediaListEntry']:
+                print(f'Successfully added "{anime_name}" to your list with status {initial_status} and progress {initial_progress}.')
+                return True
+            print(f'Failed to add "{anime_name}" to your list.')
+            return False
+        except Exception as e:
+            print(f'Error adding "{anime_name}" to list: {e}')
+            return False
+
 
 # ═══════════════════════════════════════════════════════════════════════════════════════════════════════
 # MAIN ENTRY POINT
@@ -778,7 +850,8 @@ def main() -> None:
             "SET_COMPLETED_TO_REWATCHING_ON_FIRST_EPISODE": False,
             "UPDATE_PROGRESS_WHEN_REWATCHING": True,
             "SET_TO_COMPLETED_AFTER_LAST_EPISODE_CURRENT": False,
-            "SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING": True
+            "SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING": True,
+            "ADD_ENTRY_IF_MISSING": False
         }
         if len(sys.argv) > 3:
             user_options = json.loads(sys.argv[3])

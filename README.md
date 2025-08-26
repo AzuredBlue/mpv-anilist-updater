@@ -88,6 +88,7 @@ KEYBIND_OPEN_FOLDER=ctrl+d
 - **UPDATE_PROGRESS_WHEN_REWATCHING**: `yes`/`no`. If `yes`, allow updating progress for anime set to rewatching. Default is `yes`.
 - **SET_TO_COMPLETED_AFTER_LAST_EPISODE_CURRENT**: `yes`/`no`. If `yes`, set to COMPLETED after last episode if status was CURRENT. **Default is `yes`.**
 - **SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING**: `yes`/`no`. If `yes`, set to COMPLETED after last episode if status was REPEATING (rewatching). Default is `yes`.
+- **ADD_ENTRY_IF_MISSING**: `yes`/`no`. If `yes`, automatically add anime to your list if it's not found during search. When enabled, if an anime is not in your list, the script will search for it in the AniList database and add it with status CURRENT (if watching mid-series) or PLANNING (if starting from episode 1). Default is `no`.
 - **KEYBIND_UPDATE_ANILIST**: String. The keybind to manually update AniList. Default is `ctrl+a`.
 - **KEYBIND_LAUNCH_ANILIST**: String. The keybind to open AniList page in browser. Default is `ctrl+b`.
 - **KEYBIND_OPEN_FOLDER**: String. The keybind to open the folder containing the current video. Default is `ctrl+d`.
