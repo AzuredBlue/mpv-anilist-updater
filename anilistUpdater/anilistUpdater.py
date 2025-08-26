@@ -1,23 +1,16 @@
 """
-mpv-anilist-updater: Automatically updates your AniList based on the file you just watched in MPV.
+mpv-anilist-updater: Auto-update AniList based on MPV file watching.
 
-This script parses anime filenames, determines the correct AniList entry, and updates your progress
-or status accordingly.
+Parses anime filenames, finds AniList entries, and updates progress/status.
 """
 
 # Configuration options for anilistUpdater (set in anilistUpdater.conf):
-#
-# DIRECTORIES: List or comma/semicolon-separated string. The directories the script will work on. Leaving it empty will make it work on every video you watch with mpv. Example: DIRECTORIES = ["D:/Torrents", "D:/Anime"]
-#
-# UPDATE_PERCENTAGE: Integer (0-100). The percentage of the video you need to watch before it updates AniList automatically. Default is 85 (usually before the ED of a usual episode duration).
-#
-# SET_COMPLETED_TO_REWATCHING_ON_FIRST_EPISODE: Boolean. If true, when watching episode 1 of a completed anime, set it to rewatching and update progress.
-#
-# UPDATE_PROGRESS_WHEN_REWATCHING: Boolean. If true, allow updating progress for anime set to rewatching. This is for if you want to set anime to rewatching manually, but still update progress automatically.
-#
-# SET_TO_COMPLETED_AFTER_LAST_EPISODE_CURRENT: Boolean. If true, set to COMPLETED after last episode if status was CURRENT.
-#
-# SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING: Boolean. If true, set to COMPLETED after last episode if status was REPEATING (rewatching).
+#   DIRECTORIES: List or comma/semicolon-separated string. The directories the script will work on. Leaving it empty will make it work on every video you watch with mpv. Example: DIRECTORIES = ["D:/Torrents", "D:/Anime"]
+#   UPDATE_PERCENTAGE: Integer (0-100). The percentage of the video you need to watch before it updates AniList automatically. Default is 85 (usually before the ED of a usual episode duration).
+#   SET_COMPLETED_TO_REWATCHING_ON_FIRST_EPISODE: Boolean. If true, when watching episode 1 of a completed anime, set it to rewatching and update progress.
+#   UPDATE_PROGRESS_WHEN_REWATCHING: Boolean. If true, allow updating progress for anime set to rewatching. This is for if you want to set anime to rewatching manually, but still update progress automatically.
+#   SET_TO_COMPLETED_AFTER_LAST_EPISODE_CURRENT: Boolean. If true, set to COMPLETED after last episode if status was CURRENT.
+#   SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING: Boolean. If true, set to COMPLETED after last episode if status was REPEATING (rewatching).
 
 import sys
 import os
@@ -34,7 +27,7 @@ from guessit import guessit
 
 @dataclass
 class SeasonEpisodeInfo:
-    """Information about a season and episode for absolute numbering."""
+    """Season and episode info for absolute numbering."""
     season_id: Optional[int]
     season_title: Optional[str]
     progress: Optional[int]
@@ -44,7 +37,7 @@ class SeasonEpisodeInfo:
 
 @dataclass
 class AnimeInfo:
-    """Complete anime information including progress and status."""
+    """Anime information including progress and status."""
     anime_id: Optional[int]
     anime_name: Optional[str]
     current_progress: Optional[int]
@@ -55,14 +48,14 @@ class AnimeInfo:
 
 @dataclass
 class FileInfo:
-    """Parsed information from a filename."""
+    """Parsed filename information."""
     name: str
     episode: int
     year: str
 
 
 class AniListQueries:
-    """Centralized GraphQL queries for AniList API operations."""
+    """GraphQL queries for AniList API operations."""
     
     # Query to search for anime with optional filters
     # Variables: search (String), year (FuzzyDateInt), page (Int), onList (Boolean)
@@ -104,7 +97,7 @@ class AniListQueries:
 
 class AniListUpdater:
     """
-    Handles AniList authentication, file parsing, API requests, and updating anime progress/status.
+    AniList authentication, file parsing, API requests, and progress updates.
     """
     ANILIST_API_URL: str = 'https://graphql.anilist.co'
     TOKEN_PATH: str = os.path.join(os.path.dirname(__file__), 'anilistToken.txt')
@@ -115,10 +108,10 @@ class AniListUpdater:
     # Load token
     def __init__(self, options: Dict[str, Any], action: str) -> None:
         """
-        Initializes the AniListUpdater, loading the access token.
+        Initialize AniListUpdater with configuration and action.
         Args:
-            options (dict): Configuration options for the updater.
-            action (str): The action to perform ('update' or 'launch').
+            options (Dict[str, Any]): Configuration options.
+            action (str): Action to perform ('update' or 'launch').
         """
         self.access_token: Optional[str] = self.load_access_token()
         self.options: Dict[str, Any] = options
@@ -128,13 +121,9 @@ class AniListUpdater:
     # Load token from anilistToken.txt
     def load_access_token(self) -> Optional[str]:
         """
-        Loads access token in a single file read.
-        Token file formats supported:
-          - token_only
-          - user_id:token (legacy - user_id will be removed)
-          (legacy cache lines with ';;' are also cleaned up if found)
+        Load access token from file, supporting legacy formats.
         Returns:
-            str or None: access_token or None
+            Optional[str]: Access token or None if not found.
         """
         try:
             if not os.path.exists(self.TOKEN_PATH):
@@ -161,12 +150,12 @@ class AniListUpdater:
 
     def cleanup_legacy_formats(self, lines: List[str], has_legacy_user_id: bool) -> str:
         """
-        Removes legacy cache entries and user_id from token file using already-read lines.
+        Clean legacy cache entries and user_id from token file.
         Args:
-            lines (list): The lines already read from the token file.
-            has_legacy_user_id (bool): Whether the first line has user_id:token format.
+            lines (List[str]): Lines read from token file.
+            has_legacy_user_id (bool): Whether first line has user_id:token format.
         Returns:
-            str: The cleaned token.
+            str: Cleaned token.
         """
         token = ""
         try:
@@ -194,14 +183,12 @@ class AniListUpdater:
 
     def cache_to_file(self, path: str, guessed_name: str, absolute_progress: int, result: AnimeInfo) -> None:
         """
-        Stores/updates a structured cache entry in cache.json.
-        Cache schema: hash -> { guessed_name, anime_id, current_progress, total_episodes, current_status, ttl }
-        ttl is an absolute epoch time (expiry moment).
+        Store/update cache entry for anime information.
         Args:
-            path (str): The file path.
-            guessed_name (str): The guessed anime name.
-            absolute_progress (int): The absolute episode progress.
-            result (AnimeInfo): The anime information to cache.
+            path (str): File path.
+            guessed_name (str): Guessed anime name.
+            absolute_progress (int): Absolute episode number.
+            result (AnimeInfo): Anime information to cache.
         """
         try:
             dir_hash = self.hash_path(os.path.dirname(path))
@@ -225,23 +212,22 @@ class AniListUpdater:
 
     def hash_path(self, path: str) -> str:
         """
-        Returns a SHA256 hash of the given path.
+        Generate SHA256 hash of path.
         Args:
-            path (str): The path to hash.
+            path (str): Path to hash.
         Returns:
-            str: The hashed path.
+            str: Hashed path.
         """
         return hashlib.sha256(path.encode('utf-8')).hexdigest()
 
     def check_and_clean_cache(self, path: str, guessed_name: str) -> Optional[Dict[str, Any]]:
         """
-        Returns structured cache entry if valid. Cleans expired entries.
-        Returns (entry_dict or None).
+        Get valid cache entry and clean expired entries.
         Args:
-            path (str): The path to the media file.
-            guessed_name (str): The guessed name of the anime.
+            path (str): Path to media file.
+            guessed_name (str): Guessed anime name.
         Returns:
-            Optional[dict]: Cache entry dictionary or None if not found/valid.
+            Optional[Dict[str, Any]]: Cache entry or None if not found/valid.
         """
         try:
             cache = self.load_cache()
@@ -269,9 +255,9 @@ class AniListUpdater:
 
     def load_cache(self) -> Dict[str, Any]:
         """
-        Loads the cache from the CACHE_PATH JSON file with lazy loading.
-        Returns the cached data if already loaded, otherwise loads from file.
-        Returns an empty dictionary if the file does not exist or an error occurs.
+        Load cache from JSON file with lazy loading.
+        Returns:
+            Dict[str, Any]: Cache data or empty dict if file doesn't exist.
         """
         if self._cache is None:
             try:
@@ -288,9 +274,9 @@ class AniListUpdater:
 
     def save_cache(self, cache: Dict[str, Any]) -> None:
         """
-        Saves the cache dictionary to the CACHE_PATH JSON file and updates the local cache.
+        Save cache dictionary to JSON file.
         Args:
-            cache (dict): The cache data to save.
+            cache (Dict[str, Any]): Cache data to save.
         """
         try:
             with open(self.CACHE_PATH, 'w', encoding='utf-8') as f:
@@ -303,13 +289,13 @@ class AniListUpdater:
     # Function to make an api request to AniList's api
     def make_api_request(self, query: str, variables: Optional[Dict[str, Any]] = None, access_token: Optional[str] = None) -> Optional[Dict[str, Any]]:
         """
-        Makes a POST request to the AniList GraphQL API.
+        Make POST request to AniList GraphQL API.
         Args:
-            query (str): The GraphQL query string.
-            variables (dict, optional): Variables for the query.
-            access_token (str, optional): AniList access token.
+            query (str): GraphQL query string.
+            variables (Optional[Dict[str, Any]]): Query variables.
+            access_token (Optional[str]): AniList access token.
         Returns:
-            dict or None: The API response as a dict, or None on error.
+            Optional[Dict[str, Any]]: API response or None on error.
         """
         headers = {
             'Content-Type': 'application/json',
@@ -329,21 +315,21 @@ class AniListUpdater:
     @staticmethod
     def season_order(season: Optional[str]) -> int:
         """
-        Returns a numeric order for seasons for sorting.
+        Get numeric order for season sorting.
         Args:
-            season (str): The season name (WINTER, SPRING, SUMMER, FALL).
+            season (Optional[str]): Season name (WINTER, SPRING, SUMMER, FALL).
         Returns:
-            int: The order value.
+            int: Order value.
         """
         return {'WINTER': 1, 'SPRING': 2, 'SUMMER': 3, 'FALL': 4}.get(season, 5) # type: ignore
 
     def filter_valid_seasons(self, seasons: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
-        Filters and sorts valid TV seasons for absolute numbering logic.
+        Filter and sort valid TV seasons for absolute numbering.
         Args:
-            seasons (list): List of season dicts from AniList API.
+            seasons (List[Dict[str, Any]]): Season dicts from AniList API.
         Returns:
-            list: Filtered and sorted list of seasons.
+            List[Dict[str, Any]]: Filtered and sorted seasons.
         """
         # Filter only to those whose format is TV and duration > 21 OR those who have no duration and are releasing.
         # This is due to newly added anime having duration as null
@@ -362,12 +348,12 @@ class AniListUpdater:
     # Finds the season and episode of an anime with absolute numbering
     def find_season_and_episode(self, seasons: List[Dict[str, Any]], absolute_episode: int) -> SeasonEpisodeInfo:
         """
-        Finds the correct season and relative episode for an absolute episode number.
+        Find correct season and relative episode for absolute episode number.
         Args:
-            seasons (list): List of season dicts.
-            absolute_episode (int): The absolute episode number.
+            seasons (List[Dict[str, Any]]): Season dicts.
+            absolute_episode (int): Absolute episode number.
         Returns:
-            SeasonEpisodeInfo: Information about the season and episode.
+            SeasonEpisodeInfo: Season and episode information.
         """
         accumulated_episodes = 0
         for season in seasons:
@@ -386,9 +372,9 @@ class AniListUpdater:
 
     def handle_filename(self, filename: str) -> None:
         """
-        Main entry point for handling a file: parses, checks cache, updates AniList, and manages cache.
+        Handle file processing: parse, check cache, update AniList.
         Args:
-            filename (str): The path to the video file.
+            filename (str): Path to video file.
         """
         file_info = self.parse_filename(filename)
         cache_entry = self.check_and_clean_cache(filename, file_info.name)
@@ -440,11 +426,11 @@ class AniListUpdater:
     # Every exception I find will be added here
     def fix_filename(self, path_parts: List[str]) -> List[str]:
         """
-        Applies hardcoded exceptions and fixes to the filename and folder structure for better title detection.
+        Apply hardcoded fixes to filename/folder structure for better detection.
         Args:
-            path_parts (list): List of path components.
+            path_parts (List[str]): Path components.
         Returns:
-            list: Modified path components.
+            List[str]: Modified path components.
         """
         guess = guessit(path_parts[-1], self.OPTIONS) # Simply easier for fixing the filename if we have what it is detecting.
 
@@ -489,11 +475,11 @@ class AniListUpdater:
     # Parse the file name using guessit
     def parse_filename(self, filepath: str) -> FileInfo:
         """
-        Parses the filename and folder structure to extract anime title, episode, season, and year.
+        Parse filename/folder structure to extract anime info.
         Args:
-            filepath (str): The path to the video file.
+            filepath (str): Path to video file.
         Returns:
-            dict: Parsed info with keys 'name', 'episode', 'year'.
+            FileInfo: Parsed info with name, episode, year.
         """
         path_parts = self.fix_filename(filepath.replace('\\', '/').split('/'))
         filename = path_parts[-1]
@@ -591,13 +577,13 @@ class AniListUpdater:
 
     def get_anime_info_and_progress(self, name: str, file_progress: int, year: str) -> AnimeInfo:
         """
-        Queries AniList for anime info and user progress for a given title and year.
+        Query AniList for anime info and user progress.
         Args:
             name (str): Anime title.
-            file_progress (int): Episode number from the file.
+            file_progress (int): Episode number from file.
             year (str): Year string (may be empty).
         Returns:
-            AnimeInfo: Complete anime information including progress and status.
+            AnimeInfo: Complete anime information.
         """
 
         # Only those that are in the user's list
@@ -666,11 +652,11 @@ class AniListUpdater:
     # Update the anime based on file progress
     def update_episode_count(self, result: AnimeInfo) -> AnimeInfo:
         """
-        Updates the episode count and/or status for an anime entry on AniList, according to user settings.
+        Update episode count and/or status on AniList per user settings.
         Args:
-            result (AnimeInfo): Complete anime information.
+            result (AnimeInfo): Anime information.
         Returns:
-            AnimeInfo: Updated anime information, or raises exception on failure.
+            AnimeInfo: Updated anime information.
         """
         if result is None:
             raise Exception('Parameter in update_episode_count is null.')
@@ -767,7 +753,7 @@ class AniListUpdater:
 
 def main() -> None:
     """
-    Main entry point for the script. Handles encoding and runs the updater.
+    Main entry point for the script.
     """
     try:
         # Reconfigure to utf-8
