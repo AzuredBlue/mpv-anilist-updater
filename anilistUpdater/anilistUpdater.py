@@ -376,13 +376,7 @@ class AniListUpdater:
             season_episodes = season.get('episodes', 12) if season.get('episodes') else 12
 
             if accumulated_episodes + season_episodes >= absolute_episode:
-                return SeasonEpisodeInfo(
-                    season_id=season.get('id'),
-                    season_title=season.get('title', {}).get('romaji'),
-                    progress=season.get('mediaListEntry', {}).get('progress') if season.get('mediaListEntry') else None,
-                    episodes=season.get('episodes'),
-                    relative_episode=absolute_episode - accumulated_episodes
-                )
+                return SeasonEpisodeInfo(season.get('id'), season.get('title', {}).get('romaji'), season.get('mediaListEntry', {}).get('progress') if season.get('mediaListEntry') else None, episodes=season.get('episodes'), relative_episode=absolute_episode - accumulated_episodes)
             accumulated_episodes += season_episodes
         return SeasonEpisodeInfo(None, None, None, None, None)
 
@@ -420,14 +414,7 @@ class AniListUpdater:
 
             if 1 <= relative_episode <= (cache_entry.get('total_episodes') or 0):
                 # Reconstruct result from cache
-                result = AnimeInfo(
-                    anime_id=cache_entry['anime_id'],
-                    anime_name=cache_entry['guessed_name'],
-                    current_progress=cache_entry['current_progress'],
-                    total_episodes=cache_entry['total_episodes'],
-                    file_progress=relative_episode,
-                    current_status=cache_entry['current_status']
-                )
+                result = AnimeInfo(cache_entry['anime_id'], cache_entry['guessed_name'], cache_entry['current_progress'], cache_entry['total_episodes'], relative_episode, cache_entry['current_status'])
             else:
                 result = self.get_anime_info_and_progress(file_info.name, file_info.episode, file_info.year)
 
@@ -589,11 +576,7 @@ class AniListUpdater:
             name += f" Part {part}"
 
         print('Guessed name: ' + name)
-        return FileInfo(
-            name=name,
-            episode=episode,
-            year=year,
-        )
+        return FileInfo(name, episode, year=year)
 
     # ──────────────────────────────────────────────────────────────────────────────────────────────────
     # ANIME INFO & PROGRESS UPDATES
@@ -662,14 +645,7 @@ class AniListUpdater:
 
         # This is the first element, which is the same as Media(search: $search)
         entry = seasons[0]['mediaListEntry']
-        anime_data = AnimeInfo(
-            anime_id=seasons[0]['id'],
-            anime_name=seasons[0]['title']['romaji'],
-            current_progress=entry['progress'] if entry is not None else None,
-            total_episodes=seasons[0]['episodes'],
-            file_progress=file_progress,
-            current_status=entry['status'] if entry is not None else None
-        )
+        anime_data = AnimeInfo(seasons[0]['id'], seasons[0]['title']['romaji'], entry['progress'] if entry is not None else None, seasons[0]['episodes'], file_progress, entry['status'] if entry is not None else None)
 
         # If the episode in the file name is larger than the total amount of episodes
         # Then they are using absolute numbering format for episodes
@@ -681,14 +657,7 @@ class AniListUpdater:
             print(season_episode_info)
             found_season = next((season for season in seasons if season['id'] == season_episode_info.season_id), None)
             found_entry = found_season['mediaListEntry'] if found_season and found_season['mediaListEntry'] else None
-            anime_data = AnimeInfo(
-                anime_id=season_episode_info.season_id,
-                anime_name=season_episode_info.season_title,
-                current_progress=season_episode_info.progress,
-                total_episodes=season_episode_info.episodes,
-                file_progress=season_episode_info.relative_episode,
-                current_status=found_entry['status'] if found_entry else None
-            )
+            anime_data = AnimeInfo(season_episode_info.season_id, season_episode_info.season_title, season_episode_info.progress, season_episode_info.episodes, season_episode_info.relative_episode, found_entry['status'] if found_entry else None)
             print(f"Final guessed anime: {found_season}")
             print(f'Absolute episode {file_progress} corresponds to Anime: {anime_data.anime_name}, Episode: {anime_data.file_progress}')
         else:
@@ -743,14 +712,7 @@ class AniListUpdater:
                 updated_progress = response['data']['SaveMediaListEntry']['progress']
                 print(f'Episode count updated successfully! New progress: {updated_progress}')
 
-                return AnimeInfo(
-                    anime_id=anime_id,
-                    anime_name=anime_name,
-                    current_progress=updated_progress,
-                    total_episodes=total_episodes,
-                    file_progress=1,
-                    current_status='REPEATING'
-                )
+                return AnimeInfo(anime_id, anime_name, updated_progress, total_episodes, 1, 'REPEATING')
             print('Failed to update episode count.')
             raise Exception('Failed to update episode count.')
 
@@ -788,13 +750,7 @@ class AniListUpdater:
             print(f'Episode count updated successfully! New progress: {updated_progress}')
             updated_status = response['data']['SaveMediaListEntry']['status']
 
-            return AnimeInfo(
-                anime_id=anime_id,
-                anime_name=anime_name,
-                current_progress=updated_progress,
-                total_episodes=total_episodes,
-                file_progress=file_progress,
-                current_status=updated_status
+            return AnimeInfo(anime_id, anime_name, updated_progress, total_episodes, file_progress, updated_status
             )
         print('Failed to update episode count.')
         raise Exception('Failed to update episode count.')
