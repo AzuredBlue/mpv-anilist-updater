@@ -591,7 +591,7 @@ class AniListUpdater:
             name += f" Part {part}"
 
         print('Guessed name: ' + name)
-        return FileInfo(name, episode, year=year)
+        return FileInfo(name, episode, year)
 
     # ──────────────────────────────────────────────────────────────────────────────────────────────────
     # ANIME INFO & PROGRESS UPDATES
@@ -643,21 +643,9 @@ class AniListUpdater:
 
         # No results from the API request
         if not seasons:
-            # Before erroring, if its a "launch" request we can search even if its not in the user list
-            if self.ACTION == 'launch':
-                variables['onList'] = False
-                response = self.make_api_request(query, variables, self.access_token)
-
-                if not response or 'data' not in response:
-                    return AnimeInfo(None, None, None, None, None, None)
-
-                seasons = response['data']['Page']['media']
-                # If its still empty
-                if not seasons:
-                    raise Exception(f"Couldn\'t find an anime from this title! ({name})")
-            # If ADD_ENTRY_IF_MISSING is enabled, try to find and add the anime
-            elif self.options.get('ADD_ENTRY_IF_MISSING', False):
-                print(f"Anime '{name}' not found in your list. Searching all anime and attempting to add...")
+            # For launch action or ADD_ENTRY_IF_MISSING, search all anime (not just user's list)
+            if self.ACTION == 'launch' or self.options.get('ADD_ENTRY_IF_MISSING', False):
+                print(f"Anime '{name}' not found in your list. Searching all anime...")
                 variables['onList'] = False
                 response = self.make_api_request(query, variables, self.access_token)
 
@@ -668,20 +656,22 @@ class AniListUpdater:
                 if not seasons:
                     raise Exception(f"Couldn\'t find an anime from this title! ({name})")
 
-                # Found anime not in list - try to add it
-                anime_to_add = seasons[0]
-                anime_id = anime_to_add['id']
-                anime_title = anime_to_add['title']['romaji']
+                # If this is an ADD_ENTRY_IF_MISSING request, try to add the anime
+                if self.ACTION != 'launch' and self.options.get('ADD_ENTRY_IF_MISSING', False):
+                    anime_to_add = seasons[0]
+                    anime_id = anime_to_add['id']
+                    anime_title = anime_to_add['title']['romaji']
 
-                # Determine initial status based on episode progress
-                initial_status = 'CURRENT' if file_progress > 0 else 'PLANNING'
-                initial_progress = min(file_progress - 1, 0) if file_progress > 0 else 0  # Set to previous episode or 0
+                    # Since user is actively watching this anime, always set to CURRENT
+                    # Set progress to previous episode so the current one will be an update
+                    initial_status = 'CURRENT'
+                    initial_progress = max(file_progress - 1, 0)  # Set to previous episode or 0
 
-                # Add to list
-                if self.add_anime_to_list(anime_id, anime_title, initial_status, initial_progress):
-                    # Create AnimeInfo with the newly added entry
-                    return AnimeInfo(anime_id, anime_title, initial_progress, anime_to_add['episodes'], file_progress, initial_status)
-                raise Exception(f"Failed to add '{name}' to your list.")
+                    # Add to list
+                    if self.add_anime_to_list(anime_id, anime_title, initial_status, initial_progress):
+                        # Create AnimeInfo with the newly added entry
+                        return AnimeInfo(anime_id, anime_title, initial_progress, anime_to_add['episodes'], file_progress, initial_status)
+                    raise Exception(f"Failed to add '{name}' to your list.")
             else:
                 raise Exception(f"Couldn\'t find an anime from this title! ({name}). Is it in your list?")
 
