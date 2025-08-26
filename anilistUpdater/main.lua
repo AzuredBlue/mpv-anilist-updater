@@ -14,6 +14,12 @@ UPDATE_PROGRESS_WHEN_REWATCHING: Boolean. If true, allow updating progress for a
 SET_TO_COMPLETED_AFTER_LAST_EPISODE_CURRENT: Boolean. If true, set to COMPLETED after last episode if status was CURRENT.
 
 SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING: Boolean. If true, set to COMPLETED after last episode if status was REPEATING (rewatching).
+
+KEYBIND_UPDATE_ANILIST: String. The keybind to manually update AniList. Default is "ctrl+a".
+
+KEYBIND_LAUNCH_ANILIST: String. The keybind to open AniList page in browser. Default is "ctrl+b".
+
+KEYBIND_OPEN_FOLDER: String. The keybind to open the folder containing the current video. Default is "ctrl+d".
 ]]
 
 local utils = require 'mp.utils'
@@ -61,6 +67,10 @@ SET_COMPLETED_TO_REWATCHING_ON_FIRST_EPISODE=no
 UPDATE_PROGRESS_WHEN_REWATCHING=yes
 SET_TO_COMPLETED_AFTER_LAST_EPISODE_CURRENT=yes
 SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING=yes
+# Keybind configuration (use MPV keybind format)
+KEYBIND_UPDATE_ANILIST=ctrl+a
+KEYBIND_LAUNCH_ANILIST=ctrl+b
+KEYBIND_OPEN_FOLDER=ctrl+d
 ]]
 
 -- Try to find config file
@@ -106,7 +116,10 @@ local options = {
     SET_COMPLETED_TO_REWATCHING_ON_FIRST_EPISODE = false,
     UPDATE_PROGRESS_WHEN_REWATCHING = true,
     SET_TO_COMPLETED_AFTER_LAST_EPISODE_CURRENT = true,
-    SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING = true
+    SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING = true,
+    KEYBIND_UPDATE_ANILIST = "ctrl+a",
+    KEYBIND_LAUNCH_ANILIST = "ctrl+b",
+    KEYBIND_OPEN_FOLDER = "ctrl+d"
 }
 if conf_path then
     mpoptions.read_options(options, "anilistUpdater")
@@ -142,6 +155,11 @@ if type(options.EXCLUDED_DIRECTORIES) == "string" and options.EXCLUDED_DIRECTORI
 elseif type(options.EXCLUDED_DIRECTORIES) == "string" then
     options.EXCLUDED_DIRECTORIES = {}
 end
+
+-- Set default keybinds if not configured
+options.KEYBIND_UPDATE_ANILIST = options.KEYBIND_UPDATE_ANILIST or "ctrl+a"
+options.KEYBIND_LAUNCH_ANILIST = options.KEYBIND_LAUNCH_ANILIST or "ctrl+b"
+options.KEYBIND_OPEN_FOLDER = options.KEYBIND_OPEN_FOLDER or "ctrl+d"
 
 -- When calling Python, pass only the options relevant to it
 local python_options = {
@@ -285,12 +303,12 @@ mp.register_event("file-loaded", function()
     end
 end)
 
--- Keybinds, modify as you please
-mp.add_key_binding('ctrl+a', 'update_anilist', function()
+-- Keybinds (configurable via anilistUpdater.conf)
+mp.add_key_binding(options.KEYBIND_UPDATE_ANILIST, 'update_anilist', function()
     update_anilist("update")
 end)
 
-mp.add_key_binding('ctrl+b', 'launch_anilist', function()
+mp.add_key_binding(options.KEYBIND_LAUNCH_ANILIST, 'launch_anilist', function()
     update_anilist("launch")
 end)
 
@@ -332,4 +350,4 @@ function open_folder()
     })
 end
 
-mp.add_key_binding('ctrl+d', 'open_folder', open_folder)
+mp.add_key_binding(options.KEYBIND_OPEN_FOLDER, 'open_folder', open_folder)
