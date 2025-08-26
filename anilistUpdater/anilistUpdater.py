@@ -28,7 +28,7 @@ import re
 import json
 import requests
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Dict, List, Any
 from guessit import guessit
 
 
@@ -106,24 +106,24 @@ class AniListUpdater:
     """
     Handles AniList authentication, file parsing, API requests, and updating anime progress/status.
     """
-    ANILIST_API_URL = 'https://graphql.anilist.co'
-    TOKEN_PATH = os.path.join(os.path.dirname(__file__), 'anilistToken.txt')
-    CACHE_PATH = os.path.join(os.path.dirname(__file__), 'cache.json')
-    OPTIONS = "--excludes country --excludes language --type episode"
-    CACHE_REFRESH_RATE =  24 * 60 * 60
+    ANILIST_API_URL: str = 'https://graphql.anilist.co'
+    TOKEN_PATH: str = os.path.join(os.path.dirname(__file__), 'anilistToken.txt')
+    CACHE_PATH: str = os.path.join(os.path.dirname(__file__), 'cache.json')
+    OPTIONS: str = "--excludes country --excludes language --type episode"
+    CACHE_REFRESH_RATE: int = 24 * 60 * 60
 
     # Load token
-    def __init__(self, options: dict, action: str) -> None:
+    def __init__(self, options: Dict[str, Any], action: str) -> None:
         """
         Initializes the AniListUpdater, loading the access token.
         Args:
             options (dict): Configuration options for the updater.
             action (str): The action to perform ('update' or 'launch').
         """
-        self.access_token = self.load_access_token()
-        self.options = options
-        self.ACTION = action
-        self._cache = None
+        self.access_token: Optional[str] = self.load_access_token()
+        self.options: Dict[str, Any] = options
+        self.ACTION: str = action
+        self._cache: Optional[Dict[str, Any]] = None
 
     # Load token from anilistToken.txt
     def load_access_token(self) -> Optional[str]:
@@ -159,7 +159,7 @@ class AniListUpdater:
             print(f'Error reading access token: {e}')
             return None
 
-    def cleanup_legacy_formats(self, lines: list, has_legacy_user_id: bool) -> str:
+    def cleanup_legacy_formats(self, lines: List[str], has_legacy_user_id: bool) -> str:
         """
         Removes legacy cache entries and user_id from token file using already-read lines.
         Args:
@@ -233,7 +233,7 @@ class AniListUpdater:
         """
         return hashlib.sha256(path.encode('utf-8')).hexdigest()
 
-    def check_and_clean_cache(self, path: str, guessed_name: str) -> Optional[dict]:
+    def check_and_clean_cache(self, path: str, guessed_name: str) -> Optional[Dict[str, Any]]:
         """
         Returns structured cache entry if valid. Cleans expired entries.
         Returns (entry_dict or None).
@@ -267,7 +267,7 @@ class AniListUpdater:
             return None
 
 
-    def load_cache(self):
+    def load_cache(self) -> Dict[str, Any]:
         """
         Loads the cache from the CACHE_PATH JSON file with lazy loading.
         Returns the cached data if already loaded, otherwise loads from file.
@@ -282,9 +282,11 @@ class AniListUpdater:
                         self._cache = json.load(f)
             except Exception:
                 self._cache = {}
+        # At this point, self._cache is guaranteed to be a Dict
+        assert self._cache is not None
         return self._cache
 
-    def save_cache(self, cache):
+    def save_cache(self, cache: Dict[str, Any]) -> None:
         """
         Saves the cache dictionary to the CACHE_PATH JSON file and updates the local cache.
         Args:
@@ -299,7 +301,7 @@ class AniListUpdater:
             print(f'Failed saving cache.json: {e}')
 
     # Function to make an api request to AniList's api
-    def make_api_request(self, query, variables=None, access_token=None):
+    def make_api_request(self, query: str, variables: Optional[Dict[str, Any]] = None, access_token: Optional[str] = None) -> Optional[Dict[str, Any]]:
         """
         Makes a POST request to the AniList GraphQL API.
         Args:
@@ -325,7 +327,7 @@ class AniListUpdater:
         return None
 
     @staticmethod
-    def season_order(season):
+    def season_order(season: Optional[str]) -> int:
         """
         Returns a numeric order for seasons for sorting.
         Args:
@@ -333,9 +335,9 @@ class AniListUpdater:
         Returns:
             int: The order value.
         """
-        return {'WINTER': 1, 'SPRING': 2, 'SUMMER': 3, 'FALL': 4}.get(season, 5)
+        return {'WINTER': 1, 'SPRING': 2, 'SUMMER': 3, 'FALL': 4}.get(season, 5) # type: ignore
 
-    def filter_valid_seasons(self, seasons):
+    def filter_valid_seasons(self, seasons: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
         Filters and sorts valid TV seasons for absolute numbering logic.
         Args:
@@ -354,11 +356,11 @@ class AniListUpdater:
                 # But if accepted any format, it would also include many ONA's which arent included in absolute numbering.
 
                 # Sort them based on release date
-        seasons = sorted(seasons, key=lambda x: (x['seasonYear'] if x['seasonYear'] else float("inf"), self.season_order(x['season'] if x['season'] else float("inf"))))
+        seasons = sorted(seasons, key=lambda x: (x['seasonYear'] if x['seasonYear'] else float("inf"), self.season_order(x['season'])))
         return seasons
 
     # Finds the season and episode of an anime with absolute numbering
-    def find_season_and_episode(self, seasons, absolute_episode) -> SeasonEpisodeInfo:
+    def find_season_and_episode(self, seasons: List[Dict[str, Any]], absolute_episode: int) -> SeasonEpisodeInfo:
         """
         Finds the correct season and relative episode for an absolute episode number.
         Args:
@@ -410,7 +412,7 @@ class AniListUpdater:
 
             relative_episode = file_info.episode - offset
 
-            if 1 <= relative_episode <= cache_entry.get('total_episodes'):
+            if 1 <= relative_episode <= (cache_entry.get('total_episodes') or 0):
                 # Reconstruct result from cache
                 result = AnimeInfo(
                     anime_id=cache_entry['anime_id'],
@@ -436,7 +438,7 @@ class AniListUpdater:
     # Hardcoded exceptions to fix detection
     # Easier than just renaming my files 1 by 1 on Qbit
     # Every exception I find will be added here
-    def fix_filename(self, path_parts):
+    def fix_filename(self, path_parts: List[str]) -> List[str]:
         """
         Applies hardcoded exceptions and fixes to the filename and folder structure for better title detection.
         Args:
@@ -727,7 +729,7 @@ class AniListUpdater:
         elif result.current_status in ['CURRENT', 'PLANNING']:
 
             # If its lower than the current progress, dont update.
-            if result.file_progress <= result.current_progress:
+            if (result.file_progress and result.current_progress is not None and result.file_progress <= result.current_progress):
                 raise Exception(f'Episode was not new. Not updating ({result.file_progress} <= {result.current_progress})')
 
             status_to_set = 'CURRENT'
@@ -763,7 +765,7 @@ class AniListUpdater:
         print('Failed to update episode count.')
         raise Exception('Failed to update episode count.')
 
-def main():
+def main() -> None:
     """
     Main entry point for the script. Handles encoding and runs the updater.
     """
