@@ -12,6 +12,10 @@ Parses anime filenames, finds AniList entries, and updates progress/status.
 #   SET_TO_COMPLETED_AFTER_LAST_EPISODE_CURRENT: Boolean. If true, set to COMPLETED after last episode if status was CURRENT.
 #   SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING: Boolean. If true, set to COMPLETED after last episode if status was REPEATING (rewatching).
 
+# ═══════════════════════════════════════════════════════════════════════════════════════════════════════
+# IMPORTS
+# ═══════════════════════════════════════════════════════════════════════════════════════════════════════
+
 import sys
 import os
 import webbrowser
@@ -24,6 +28,10 @@ from dataclasses import dataclass
 from typing import Optional, Dict, List, Any
 from guessit import guessit
 
+
+# ═══════════════════════════════════════════════════════════════════════════════════════════════════════
+# DATA CLASSES
+# ═══════════════════════════════════════════════════════════════════════════════════════════════════════
 
 @dataclass
 class SeasonEpisodeInfo:
@@ -53,6 +61,10 @@ class FileInfo:
     episode: int
     year: str
 
+
+# ═══════════════════════════════════════════════════════════════════════════════════════════════════════
+# GRAPHQL QUERIES
+# ═══════════════════════════════════════════════════════════════════════════════════════════════════════
 
 class AniListQueries:
     """GraphQL queries for AniList API operations."""
@@ -95,6 +107,11 @@ class AniListQueries:
         }
     '''
 
+
+# ═══════════════════════════════════════════════════════════════════════════════════════════════════════
+# MAIN ANILIST UPDATER CLASS
+# ═══════════════════════════════════════════════════════════════════════════════════════════════════════
+
 class AniListUpdater:
     """
     AniList authentication, file parsing, API requests, and progress updates.
@@ -104,6 +121,10 @@ class AniListUpdater:
     CACHE_PATH: str = os.path.join(os.path.dirname(__file__), 'cache.json')
     OPTIONS: str = "--excludes country --excludes language --type episode"
     CACHE_REFRESH_RATE: int = 24 * 60 * 60
+
+    # ──────────────────────────────────────────────────────────────────────────────────────────────────
+    # INITIALIZATION & TOKEN HANDLING
+    # ──────────────────────────────────────────────────────────────────────────────────────────────────
 
     # Load token
     def __init__(self, options: Dict[str, Any], action: str) -> None:
@@ -180,6 +201,9 @@ class AniListUpdater:
 
         return token
 
+    # ──────────────────────────────────────────────────────────────────────────────────────────────────
+    # CACHE MANAGEMENT
+    # ──────────────────────────────────────────────────────────────────────────────────────────────────
 
     def cache_to_file(self, path: str, guessed_name: str, absolute_progress: int, result: AnimeInfo) -> None:
         """
@@ -286,6 +310,10 @@ class AniListUpdater:
         except Exception as e:
             print(f'Failed saving cache.json: {e}')
 
+    # ──────────────────────────────────────────────────────────────────────────────────────────────────
+    # API COMMUNICATION
+    # ──────────────────────────────────────────────────────────────────────────────────────────────────
+
     # Function to make an api request to AniList's api
     def make_api_request(self, query: str, variables: Optional[Dict[str, Any]] = None, access_token: Optional[str] = None) -> Optional[Dict[str, Any]]:
         """
@@ -312,6 +340,10 @@ class AniListUpdater:
         print(f'API request failed: {response.status_code} - {response.text}\nQuery: {query}\nVariables: {variables}')
         return None
 
+    # ──────────────────────────────────────────────────────────────────────────────────────────────────
+    # SEASON & EPISODE HANDLING
+    # ──────────────────────────────────────────────────────────────────────────────────────────────────
+
     @staticmethod
     def season_order(season: Optional[str]) -> int:
         """
@@ -322,28 +354,6 @@ class AniListUpdater:
             int: Order value.
         """
         return {'WINTER': 1, 'SPRING': 2, 'SUMMER': 3, 'FALL': 4}.get(season, 5) # type: ignore
-
-    def filter_valid_seasons(self, seasons: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """
-        Filter and sort valid TV seasons for absolute numbering.
-        Args:
-            seasons (List[Dict[str, Any]]): Season dicts from AniList API.
-        Returns:
-            List[Dict[str, Any]]: Filtered and sorted seasons.
-        """
-        # Filter only to those whose format is TV and duration > 21 OR those who have no duration and are releasing.
-        # This is due to newly added anime having duration as null
-        seasons = [
-                    season for season in seasons
-                if ((season['duration'] is None and season['status'] == 'RELEASING') or
-                   (season['duration'] is not None and season['duration'] > 21)) and season['format'] == 'TV'
-                ]
-                # One of the problems with this filter is needing the format to be 'TV'
-                # But if accepted any format, it would also include many ONA's which arent included in absolute numbering.
-
-                # Sort them based on release date
-        seasons = sorted(seasons, key=lambda x: (x['seasonYear'] if x['seasonYear'] else float("inf"), self.season_order(x['season'])))
-        return seasons
 
     # Finds the season and episode of an anime with absolute numbering
     def find_season_and_episode(self, seasons: List[Dict[str, Any]], absolute_episode: int) -> SeasonEpisodeInfo:
@@ -369,6 +379,10 @@ class AniListUpdater:
                 )
             accumulated_episodes += season_episodes
         return SeasonEpisodeInfo(None, None, None, None, None)
+
+    # ──────────────────────────────────────────────────────────────────────────────────────────────────
+    # FILE PROCESSING & PARSING
+    # ──────────────────────────────────────────────────────────────────────────────────────────────────
 
     def handle_filename(self, filename: str) -> None:
         """
@@ -575,6 +589,32 @@ class AniListUpdater:
             year=year,
         )
 
+    # ──────────────────────────────────────────────────────────────────────────────────────────────────
+    # ANIME INFO & PROGRESS UPDATES
+    # ──────────────────────────────────────────────────────────────────────────────────────────────────
+
+    def filter_valid_seasons(self, seasons: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Filter and sort valid TV seasons for absolute numbering.
+        Args:
+            seasons (List[Dict[str, Any]]): Season dicts from AniList API.
+        Returns:
+            List[Dict[str, Any]]: Filtered and sorted seasons.
+        """
+        # Filter only to those whose format is TV and duration > 21 OR those who have no duration and are releasing.
+        # This is due to newly added anime having duration as null
+        seasons = [
+                    season for season in seasons
+                if ((season['duration'] is None and season['status'] == 'RELEASING') or
+                (season['duration'] is not None and season['duration'] > 21)) and season['format'] == 'TV'
+                ]
+                # One of the problems with this filter is needing the format to be 'TV'
+                # But if accepted any format, it would also include many ONA's which arent included in absolute numbering.
+
+                # Sort them based on release date
+        seasons = sorted(seasons, key=lambda x: (x['seasonYear'] if x['seasonYear'] else float("inf"), self.season_order(x['season'])))
+        return seasons
+
     def get_anime_info_and_progress(self, name: str, file_progress: int, year: str) -> AnimeInfo:
         """
         Query AniList for anime info and user progress.
@@ -750,6 +790,11 @@ class AniListUpdater:
             )
         print('Failed to update episode count.')
         raise Exception('Failed to update episode count.')
+
+
+# ═══════════════════════════════════════════════════════════════════════════════════════════════════════
+# MAIN ENTRY POINT
+# ═══════════════════════════════════════════════════════════════════════════════════════════════════════
 
 def main() -> None:
     """
