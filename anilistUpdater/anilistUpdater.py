@@ -25,7 +25,7 @@ import re
 import json
 import requests
 from dataclasses import dataclass
-from typing import Optional, Dict, List, Any
+from typing import Optional, Dict, List, Any, Iterator
 from guessit import guessit
 
 
@@ -52,6 +52,10 @@ class AnimeInfo:
     total_episodes: Optional[int]
     file_progress: Optional[int]
     current_status: Optional[str]
+
+    def __iter__(self) -> Iterator[Any]: # Can not specify the type further. Causes some of the the variables type checking to be unhappy.
+        """Allow tuple unpacking of AnimeInfo."""
+        return iter((self.anime_id, self.anime_name, self.current_progress, self.total_episodes, self.file_progress, self.current_status))
 
 
 @dataclass
@@ -217,16 +221,18 @@ class AniListUpdater:
         try:
             dir_hash = self.hash_path(os.path.dirname(path))
             cache = self.load_cache()
+            
+            anime_id, _, current_progress, total_episodes, relative_progress, current_status = result
 
             now = time.time()
 
             cache[dir_hash] = {
                 'guessed_name': guessed_name,
-                'anime_id': result.anime_id,
-                'current_progress': result.current_progress,
-                'relative_progress': f"{absolute_progress}->{result.file_progress}",
-                'total_episodes': result.total_episodes,
-                'current_status': result.current_status,
+                'anime_id': anime_id,
+                'current_progress': current_progress,
+                'relative_progress': f"{absolute_progress}->{relative_progress}",
+                'total_episodes': total_episodes,
+                'current_status': current_status,
                 'ttl': now + self.CACHE_REFRESH_RATE
             }
 
@@ -701,20 +707,22 @@ class AniListUpdater:
         if result is None:
             raise Exception('Parameter in update_episode_count is null.')
 
-        if result.anime_id is None:
+        anime_id, anime_name, current_progress, total_episodes, file_progress, current_status = result
+
+        if anime_id is None:
             raise Exception('Couldn\'t find that anime! Make sure it is on your list and the title is correct.')
 
         # Only launch anilist
         if self.ACTION == 'launch':
-            print(f'Opening AniList for "{result.anime_name}": https://anilist.co/anime/{result.anime_id}')
-            webbrowser.open_new_tab(f'https://anilist.co/anime/{result.anime_id}')
+            print(f'Opening AniList for "{anime_name}": https://anilist.co/anime/{anime_id}')
+            webbrowser.open_new_tab(f'https://anilist.co/anime/{anime_id}')
             return result
 
-        if result.current_progress is None:
+        if current_progress is None:
             raise Exception('Failed to get current episode count. Is it on your list?')
 
         # Handle completed -> rewatching on first episode
-        if (result.current_status == 'COMPLETED' and result.file_progress == 1 and self.options['SET_COMPLETED_TO_REWATCHING_ON_FIRST_EPISODE']):
+        if (current_status == 'COMPLETED' and file_progress == 1 and self.options['SET_COMPLETED_TO_REWATCHING_ON_FIRST_EPISODE']):
 
             # Needs to update in 2 steps, since AniList
             # doesn't allow setting progress while changing the status from completed to rewatching.
@@ -724,11 +732,11 @@ class AniListUpdater:
             # Step 1: Set to REPEATING, progress=0
             query = AniListQueries.UPDATE_MEDIA_LIST_ENTRY
 
-            variables = {'mediaId': result.anime_id, 'progress': 0, 'status': 'REPEATING'}
+            variables = {'mediaId': anime_id, 'progress': 0, 'status': 'REPEATING'}
             response = self.make_api_request(query, variables, self.access_token)
 
             # Step 2: Set progress to 1
-            variables = {'mediaId': result.anime_id, 'progress': 1}
+            variables = {'mediaId': anime_id, 'progress': 1}
             response = self.make_api_request(query, variables, self.access_token)
 
             if response and 'data' in response:
@@ -736,10 +744,10 @@ class AniListUpdater:
                 print(f'Episode count updated successfully! New progress: {updated_progress}')
 
                 return AnimeInfo(
-                    anime_id=result.anime_id,
-                    anime_name=result.anime_name,
+                    anime_id=anime_id,
+                    anime_name=anime_name,
                     current_progress=updated_progress,
-                    total_episodes=result.total_episodes,
+                    total_episodes=total_episodes,
                     file_progress=1,
                     current_status='REPEATING'
                 )
@@ -747,30 +755,30 @@ class AniListUpdater:
             raise Exception('Failed to update episode count.')
 
         # Handle updating progress for rewatching
-        if (result.current_status == 'REPEATING' and self.options['UPDATE_PROGRESS_WHEN_REWATCHING']):
+        if (current_status == 'REPEATING' and self.options['UPDATE_PROGRESS_WHEN_REWATCHING']):
             print('Updating progress for anime set to REPEATING (rewatching).')
             status_to_set = 'REPEATING'
 
         # Only update if status is CURRENT or PLANNING
-        elif result.current_status in ['CURRENT', 'PLANNING']:
+        elif current_status in ['CURRENT', 'PLANNING']:
 
             # If its lower than the current progress, dont update.
-            if (result.file_progress and result.current_progress is not None and result.file_progress <= result.current_progress):
-                raise Exception(f'Episode was not new. Not updating ({result.file_progress} <= {result.current_progress})')
+            if (file_progress and current_progress is not None and file_progress <= current_progress):
+                raise Exception(f'Episode was not new. Not updating ({file_progress} <= {current_progress})')
 
             status_to_set = 'CURRENT'
 
         else:
-            raise Exception(f'Anime is not in a modifiable state (status: {result.current_status}). Not updating.')
+            raise Exception(f'Anime is not in a modifiable state (status: {current_status}). Not updating.')
 
         # Set to COMPLETED if last episode and the option is enabled
-        if result.file_progress == result.total_episodes:
-            if (result.current_status == 'CURRENT' and self.options['SET_TO_COMPLETED_AFTER_LAST_EPISODE_CURRENT']) or (result.current_status == 'REPEATING' and self.options['SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING']):
+        if file_progress == total_episodes:
+            if (current_status == 'CURRENT' and self.options['SET_TO_COMPLETED_AFTER_LAST_EPISODE_CURRENT']) or (current_status == 'REPEATING' and self.options['SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING']):
                 status_to_set = "COMPLETED"
 
         query = AniListQueries.UPDATE_MEDIA_LIST_ENTRY
 
-        variables = {'mediaId': result.anime_id, 'progress': result.file_progress}
+        variables = {'mediaId': anime_id, 'progress': file_progress}
         if status_to_set:
             variables['status'] = status_to_set
 
@@ -781,11 +789,11 @@ class AniListUpdater:
             updated_status = response['data']['SaveMediaListEntry']['status']
 
             return AnimeInfo(
-                anime_id=result.anime_id,
-                anime_name=result.anime_name,
+                anime_id=anime_id,
+                anime_name=anime_name,
                 current_progress=updated_progress,
-                total_episodes=result.total_episodes,
-                file_progress=result.file_progress,
+                total_episodes=total_episodes,
+                file_progress=file_progress,
                 current_status=updated_status
             )
         print('Failed to update episode count.')
