@@ -100,23 +100,11 @@ class AniListQueries:
         }
     '''
 
-    # Mutation to update progress and/or status of a media list entry
+    # Mutation to save/update media list entry (works for both adding and updating)
     # Variables: mediaId (Int), progress (Int), status (MediaListStatus)
-    UPDATE_MEDIA_LIST_ENTRY = '''
+    SAVE_MEDIA_LIST_ENTRY = '''
         mutation ($mediaId: Int, $progress: Int, $status: MediaListStatus) {
             SaveMediaListEntry (mediaId: $mediaId, progress: $progress, status: $status) {
-                status
-                id
-                progress
-            }
-        }
-    '''
-
-    # Mutation to add a new anime to the user's list
-    # Variables: mediaId (Int), status (MediaListStatus), progress (Int)
-    ADD_MEDIA_LIST_ENTRY = '''
-        mutation ($mediaId: Int, $status: MediaListStatus, $progress: Int) {
-            SaveMediaListEntry (mediaId: $mediaId, status: $status, progress: $progress) {
                 status
                 id
                 progress
@@ -740,7 +728,7 @@ class AniListUpdater:
             print('Setting status to REPEATING (rewatching) and updating progress for first episode of completed anime.')
 
             # Step 1: Set to REPEATING, progress=0
-            query = AniListQueries.UPDATE_MEDIA_LIST_ENTRY
+            query = AniListQueries.SAVE_MEDIA_LIST_ENTRY
 
             variables = {'mediaId': anime_id, 'progress': 0, 'status': 'REPEATING'}
             response = self.make_api_request(query, variables, self.access_token)
@@ -779,7 +767,7 @@ class AniListUpdater:
             if (current_status == 'CURRENT' and self.options['SET_TO_COMPLETED_AFTER_LAST_EPISODE_CURRENT']) or (current_status == 'REPEATING' and self.options['SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING']):
                 status_to_set = "COMPLETED"
 
-        query = AniListQueries.UPDATE_MEDIA_LIST_ENTRY
+        query = AniListQueries.SAVE_MEDIA_LIST_ENTRY
 
         variables = {'mediaId': anime_id, 'progress': file_progress}
         if status_to_set:
@@ -791,8 +779,7 @@ class AniListUpdater:
             print(f'Episode count updated successfully! New progress: {updated_progress}')
             updated_status = response['data']['SaveMediaListEntry']['status']
 
-            return AnimeInfo(anime_id, anime_name, updated_progress, total_episodes, file_progress, updated_status
-            )
+            return AnimeInfo(anime_id, anime_name, updated_progress, total_episodes, file_progress, updated_status)
         print('Failed to update episode count.')
         raise Exception('Failed to update episode count.')
 
@@ -808,7 +795,7 @@ class AniListUpdater:
             bool: True if successfully added, False otherwise.
         """
         try:
-            query = AniListQueries.ADD_MEDIA_LIST_ENTRY
+            query = AniListQueries.SAVE_MEDIA_LIST_ENTRY
             variables = {
                 'mediaId': anime_id,
                 'status': initial_status,
@@ -839,8 +826,8 @@ def main() -> None:
         # Reconfigure to utf-8
         if sys.stdout.encoding != 'utf-8':
             try:
-                sys.stdout.reconfigure(encoding='utf-8')
-                sys.stderr.reconfigure(encoding='utf-8')
+                sys.stdout.reconfigure(encoding='utf-8') # type: ignore
+                sys.stderr.reconfigure(encoding='utf-8') # type: ignore
             except Exception as e_reconfigure:
                 print(f"Couldn\'t reconfigure stdout/stderr to UTF-8: {e_reconfigure}", file=sys.stderr)
 
