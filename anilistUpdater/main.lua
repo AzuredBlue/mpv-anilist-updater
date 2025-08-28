@@ -30,6 +30,72 @@ local mpoptions = require("mp.options")
 local conf_name = "anilistUpdater.conf"
 local script_dir = (debug.getinfo(1).source:match("@?(.*/)") or "./")
 
+-- Helper function to get MPV config directory
+local function get_mpv_config_dir()
+    return os.getenv("APPDATA") and utils.join_path(os.getenv("APPDATA"), "mpv") or 
+           os.getenv("HOME") and utils.join_path(utils.join_path(os.getenv("HOME"), ".config"), "mpv") or nil
+end
+
+-- Helper function to normalize path separators
+local function normalize_path(p)
+    p = p:gsub("\\", "/")
+    if p:sub(-1) == "/" then
+        p = p:sub(1, -2)
+    end
+    return p
+end
+
+-- Helper function to parse directory strings (comma or semicolon separated)
+local function parse_directory_string(dir_string)
+    if type(dir_string) == "string" and dir_string ~= "" then
+        local dirs = {}
+        for dir in string.gmatch(dir_string, "([^,;]+)") do
+            local trimmed = (dir:gsub("^%s*(.-)%s*$", "%1"):gsub('[\'"]', '')) -- trim
+            table.insert(dirs, normalize_path(trimmed))
+        end
+        return dirs
+    else
+        return {}
+    end
+end
+
+-- Default configuration options
+local default_options = {
+    {key = "DIRECTORIES", value = "", default_value = ""},
+    {key = "EXCLUDED_DIRECTORIES", value = "", default_value = ""},
+    {key = "UPDATE_PERCENTAGE", value = 85, default_value = "85"},
+    {key = "SET_COMPLETED_TO_REWATCHING_ON_FIRST_EPISODE", value = false, default_value = "no"},
+    {key = "UPDATE_PROGRESS_WHEN_REWATCHING", value = true, default_value = "yes"},
+    {key = "SET_TO_COMPLETED_AFTER_LAST_EPISODE_CURRENT", value = true, default_value = "yes"},
+    {key = "SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING", value = true, default_value = "yes"},
+    {key = "ADD_ENTRY_IF_MISSING", value = false, default_value = "no"},
+    {key = "KEYBIND_UPDATE_ANILIST", value = "ctrl+a", default_value = "ctrl+a"},
+    {key = "KEYBIND_LAUNCH_ANILIST", value = "ctrl+b", default_value = "ctrl+b"},
+    {key = "KEYBIND_OPEN_FOLDER", value = "ctrl+d", default_value = "ctrl+d"}
+}
+
+-- Generate default config content from default_options
+local function generate_default_conf()
+    local conf_lines = {
+        "# Use 'yes' or 'no' for boolean options below",
+        "# Example for multiple directories (comma or semicolon separated):",
+        "# DIRECTORIES=D:/Torrents,D:/Anime",
+        "# or",
+        "# DIRECTORIES=D:/Torrents;D:/Anime"
+    }
+    
+    for _, option in ipairs(default_options) do
+        if option.key == "KEYBIND_UPDATE_ANILIST" then
+            table.insert(conf_lines, "# Keybind configuration (use MPV keybind format)")
+        end
+        table.insert(conf_lines, option.key .. "=" .. option.default_value)
+    end
+    
+    return table.concat(conf_lines, "\n") .. "\n"
+end
+
+local default_conf = generate_default_conf()
+
 -- Try script-opts directory (sibling to scripts)
 local script_opts_dir = script_dir:match("^(.-)[/\\]scripts[/\\]")
 
@@ -37,11 +103,8 @@ if script_opts_dir then
     script_opts_dir = utils.join_path(script_opts_dir, "script-opts")
 else
     -- Fallback: try to find mpv config dir
-    script_opts_dir = os.getenv("APPDATA") and
-                          utils.join_path(utils.join_path(os.getenv("APPDATA"), "mpv"), "script-opts") or
-                          os.getenv("HOME") and
-                          utils.join_path(utils.join_path(utils.join_path(os.getenv("HOME"), ".config"), "mpv"),
-            "script-opts") or nil
+    local mpv_conf_dir = get_mpv_config_dir()
+    script_opts_dir = mpv_conf_dir and utils.join_path(mpv_conf_dir, "script-opts") or nil
 end
 
 local script_opts_path = script_opts_dir and utils.join_path(script_opts_dir, conf_name) or nil
@@ -50,31 +113,10 @@ local script_opts_path = script_opts_dir and utils.join_path(script_opts_dir, co
 local script_path = utils.join_path(script_dir, conf_name)
 
 -- Try mpv config directory
-local mpv_conf_dir = os.getenv("APPDATA") and utils.join_path(os.getenv("APPDATA"), "mpv") or os.getenv("HOME") and
-                         utils.join_path(utils.join_path(os.getenv("HOME"), ".config"), "mpv") or nil
+local mpv_conf_dir = get_mpv_config_dir()
 local mpv_conf_path = mpv_conf_dir and utils.join_path(mpv_conf_dir, conf_name) or nil
 
 local conf_paths = {script_opts_path, script_path, mpv_conf_path}
-
-local default_conf = [[
-# Use 'yes' or 'no' for boolean options below
-# Example for multiple directories (comma or semicolon separated):
-# DIRECTORIES=D:/Torrents,D:/Anime
-# or
-# DIRECTORIES=D:/Torrents;D:/Anime
-DIRECTORIES=
-EXCLUDED_DIRECTORIES=
-UPDATE_PERCENTAGE=85
-SET_COMPLETED_TO_REWATCHING_ON_FIRST_EPISODE=no
-UPDATE_PROGRESS_WHEN_REWATCHING=yes
-SET_TO_COMPLETED_AFTER_LAST_EPISODE_CURRENT=yes
-SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING=yes
-ADD_ENTRY_IF_MISSING=no
-# Keybind configuration (use MPV keybind format)
-KEYBIND_UPDATE_ANILIST=ctrl+a
-KEYBIND_LAUNCH_ANILIST=ctrl+b
-KEYBIND_OPEN_FOLDER=ctrl+d
-]]
 
 -- Try to find config file
 local conf_path = nil
@@ -99,7 +141,7 @@ if not conf_path then
                 f:write(default_conf)
                 f:close()
                 conf_path = path
-                print("Created config at: " .. path)
+                -- print("Created config at: " .. path)
                 break
             end
         end
@@ -111,54 +153,49 @@ if not conf_path then
     mp.msg.warn("Could not find or create anilistUpdater.conf in any known location! Using default options.")
 end
 
--- Now load options as usual
-local options = {
-    DIRECTORIES = "",
-    EXCLUDED_DIRECTORIES = "",
-    UPDATE_PERCENTAGE = 85,
-    SET_COMPLETED_TO_REWATCHING_ON_FIRST_EPISODE = false,
-    UPDATE_PROGRESS_WHEN_REWATCHING = true,
-    SET_TO_COMPLETED_AFTER_LAST_EPISODE_CURRENT = true,
-    SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING = true,
-    ADD_ENTRY_IF_MISSING = false,
-    KEYBIND_UPDATE_ANILIST = "ctrl+a",
-    KEYBIND_LAUNCH_ANILIST = "ctrl+b",
-    KEYBIND_OPEN_FOLDER = "ctrl+d"
-}
+-- Initialize options from default_options
+local options = {}
+for _, option in ipairs(default_options) do
+    options[option.key] = option.value
+end
 if conf_path then
+    -- Read the current config file content
+    local current_config = ""
+    local config_file = io.open(conf_path, "r")
+    if config_file then
+        current_config = config_file:read("*all")
+        config_file:close()
+    end
+    
+    -- This will override the defaults with values from the config file
     mpoptions.read_options(options, "anilistUpdater")
+    
+    -- Check for missing options and append them
+    local missing_options = {}
+    
+    for _, option in ipairs(default_options) do
+        if not current_config:find(option.key .. "=") then
+            table.insert(missing_options, option.key .. "=" .. option.default_value)
+        end
+    end
+    
+    -- Append missing options to config file
+    if #missing_options > 0 then
+        local append_file = io.open(conf_path, "a")
+        if append_file then
+            append_file:write("\n# Auto-added missing options:\n")
+            for _, option in ipairs(missing_options) do
+                append_file:write(option .. "\n")
+            end
+            append_file:close()
+            -- print("Added " .. #missing_options .. " missing options to config file: " .. conf_path)
+        end
+    end
 end
 
-local function normalize_path(p)
-    p = p:gsub("\\", "/")
-    if p:sub(-1) == "/" then
-        p = p:sub(1, -2)
-    end
-    return p
-end
-
--- Parse DIRECTORIES if it's a string (comma or semicolon separated)
-if type(options.DIRECTORIES) == "string" and options.DIRECTORIES ~= "" then
-    local dirs = {}
-    for dir in string.gmatch(options.DIRECTORIES, "([^,;]+)") do
-        local trimmed = (dir:gsub("^%s*(.-)%s*$", "%1"):gsub('[\'"]', '')) -- trim
-        table.insert(dirs, normalize_path(trimmed))
-    end
-    options.DIRECTORIES = dirs
-elseif type(options.DIRECTORIES) == "string" then
-    options.DIRECTORIES = {}
-end
-
-if type(options.EXCLUDED_DIRECTORIES) == "string" and options.EXCLUDED_DIRECTORIES ~= "" then
-    local dirs = {}
-    for dir in string.gmatch(options.EXCLUDED_DIRECTORIES, "([^,;]+)") do
-        local trimmed = (dir:gsub("^%s*(.-)%s*$", "%1"):gsub('[\'"]', '')) -- trim
-        table.insert(dirs, normalize_path(trimmed))
-    end
-    options.EXCLUDED_DIRECTORIES = dirs
-elseif type(options.EXCLUDED_DIRECTORIES) == "string" then
-    options.EXCLUDED_DIRECTORIES = {}
-end
+-- Parse DIRECTORIES and EXCLUDED_DIRECTORIES using helper function
+options.DIRECTORIES = parse_directory_string(options.DIRECTORIES)
+options.EXCLUDED_DIRECTORIES = parse_directory_string(options.EXCLUDED_DIRECTORIES)
 
 -- Set default keybinds if not configured
 options.KEYBIND_UPDATE_ANILIST = options.KEYBIND_UPDATE_ANILIST or "ctrl+a"
