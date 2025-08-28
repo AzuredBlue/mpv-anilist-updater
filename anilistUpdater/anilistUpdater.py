@@ -11,7 +11,7 @@ Parses anime filenames, finds AniList entries, and updates progress/status.
 #   UPDATE_PROGRESS_WHEN_REWATCHING: Boolean. If true, allow updating progress for anime set to rewatching. This is for if you want to set anime to rewatching manually, but still update progress automatically.
 #   SET_TO_COMPLETED_AFTER_LAST_EPISODE_CURRENT: Boolean. If true, set to COMPLETED after last episode if status was CURRENT.
 #   SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING: Boolean. If true, set to COMPLETED after last episode if status was REPEATING (rewatching).
-#   ADD_ENTRY_IF_MISSING: Boolean. If true, automatically add anime to your list if it's not found during search. Default is False.
+#   ADD_ENTRY_IF_MISSING: Boolean. If true, automatically add anime to your list when an update is triggered (i.e., when you've watched enough of the episode). Default is False.
 
 # ═══════════════════════════════════════════════════════════════════════════════════════════════════════
 # IMPORTS
@@ -656,22 +656,15 @@ class AniListUpdater:
                 if not seasons:
                     raise Exception(f"Couldn\'t find an anime from this title! ({name})")
 
-                # If this is an ADD_ENTRY_IF_MISSING request, try to add the anime
+                # If this is an ADD_ENTRY_IF_MISSING request, prepare anime data for potential addition
                 if self.ACTION != 'launch' and self.options.get('ADD_ENTRY_IF_MISSING', False):
                     anime_to_add = seasons[0]
                     anime_id = anime_to_add['id']
                     anime_title = anime_to_add['title']['romaji']
 
-                    # Since user is actively watching this anime, always set to CURRENT
-                    # Set progress to previous episode so the current one will be an update
-                    initial_status = 'CURRENT'
-                    initial_progress = max(file_progress - 1, 0)  # Set to previous episode or 0
-
-                    # Add to list
-                    if self.add_anime_to_list(anime_id, anime_title, initial_status, initial_progress):
-                        # Create AnimeInfo with the newly added entry
-                        return AnimeInfo(anime_id, anime_title, initial_progress, anime_to_add['episodes'], file_progress, initial_status)
-                    raise Exception(f"Failed to add '{name}' to your list.")
+                    # Return AnimeInfo with None progress to indicate it needs to be added to list
+                    # The addition will happen in update_episode_count when update is actually triggered
+                    return AnimeInfo(anime_id, anime_title, None, anime_to_add['episodes'], file_progress, None)
             else:
                 raise Exception(f"Couldn\'t find an anime from this title! ({name}). Is it in your list?")
 
@@ -719,8 +712,24 @@ class AniListUpdater:
             webbrowser.open_new_tab(f'https://anilist.co/anime/{anime_id}')
             return result
 
-        if current_progress is None:
-            raise Exception('Failed to get current episode count. Is it on your list?')
+        # Handle adding anime to list if it's not already there (ADD_ENTRY_IF_MISSING feature)
+        if current_progress is None and current_status is None:
+            # This indicates anime was found in search but is not in user's list
+            if self.options.get('ADD_ENTRY_IF_MISSING', False):
+                print(f'Adding "{anime_name}" to your list since you\'re watching it...')
+                
+                # Since user is actively watching this anime, always set to CURRENT
+                initial_status = 'CURRENT'
+
+                # Add to list
+                if self.add_anime_to_list(anime_id, anime_name, initial_status, file_progress):
+                    print(f'Successfully added "{anime_name}" to your list with progress: {file_progress}')
+                    # Return updated result
+                    return AnimeInfo(anime_id, anime_name, file_progress, total_episodes, file_progress, initial_status)
+                else:
+                    raise Exception(f"Failed to add '{anime_name}' to your list.")
+            else:
+                raise Exception('Failed to get current episode count. Is it on your list?')
 
         # Handle completed -> rewatching on first episode
         if (current_status == 'COMPLETED' and file_progress == 1 and self.options['SET_COMPLETED_TO_REWATCHING_ON_FIRST_EPISODE']):
