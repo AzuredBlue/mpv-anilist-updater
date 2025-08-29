@@ -61,37 +61,38 @@ end
 
 -- Default configuration options
 local default_options = {
-    {key = "DIRECTORIES", value = "", default_value = ""},
-    {key = "EXCLUDED_DIRECTORIES", value = "", default_value = ""},
-    {key = "UPDATE_PERCENTAGE", value = 85, default_value = "85"},
-    {key = "SET_COMPLETED_TO_REWATCHING_ON_FIRST_EPISODE", value = false, default_value = "no"},
-    {key = "UPDATE_PROGRESS_WHEN_REWATCHING", value = true, default_value = "yes"},
-    {key = "SET_TO_COMPLETED_AFTER_LAST_EPISODE_CURRENT", value = true, default_value = "yes"},
-    {key = "SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING", value = true, default_value = "yes"},
-    {key = "ADD_ENTRY_IF_MISSING", value = false, default_value = "no"},
-    {key = "KEYBIND_UPDATE_ANILIST", value = "ctrl+a", default_value = "ctrl+a"},
-    {key = "KEYBIND_LAUNCH_ANILIST", value = "ctrl+b", default_value = "ctrl+b"},
-    {key = "KEYBIND_OPEN_FOLDER", value = "ctrl+d", default_value = "ctrl+d"}
+    {key = "DIRECTORIES", value = "", config_value = ""},
+    {key = "EXCLUDED_DIRECTORIES", value = "", config_value = ""},
+    {key = "UPDATE_PERCENTAGE", value = 85, config_value = "85"},
+    {key = "SET_COMPLETED_TO_REWATCHING_ON_FIRST_EPISODE", value = false, config_value = "no"},
+    {key = "UPDATE_PROGRESS_WHEN_REWATCHING", value = true, config_value = "yes"},
+    {key = "SET_TO_COMPLETED_AFTER_LAST_EPISODE_CURRENT", value = true, config_value = "yes"},
+    {key = "SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING", value = true, config_value = "yes"},
+    {key = "ADD_ENTRY_IF_MISSING", value = false, config_value = "no"},
+    {key = "KEYBIND_UPDATE_ANILIST", value = "ctrl+a", config_value = "ctrl+a"},
+    {key = "KEYBIND_LAUNCH_ANILIST", value = "ctrl+b", config_value = "ctrl+b"},
+    {key = "KEYBIND_OPEN_FOLDER", value = "ctrl+d", config_value = "ctrl+d"}
 }
 
--- Generate default config content from default_options
+-- Generate default config content
 local function generate_default_conf()
-    local conf_lines = {
-        "# Use 'yes' or 'no' for boolean options below",
-        "# Example for multiple directories (comma or semicolon separated):",
-        "# DIRECTORIES=D:/Torrents,D:/Anime",
-        "# or",
-        "# DIRECTORIES=D:/Torrents;D:/Anime"
-    }
-    
-    for _, option in ipairs(default_options) do
-        if option.key == "KEYBIND_UPDATE_ANILIST" then
-            table.insert(conf_lines, "# Keybind configuration (use MPV keybind format)")
-        end
-        table.insert(conf_lines, option.key .. "=" .. option.default_value)
-    end
-    
-    return table.concat(conf_lines, "\n") .. "\n"
+    return [[# Use 'yes' or 'no' for boolean options below
+# Example for multiple directories (comma or semicolon separated):
+# DIRECTORIES=D:/Torrents,D:/Anime
+# or
+# DIRECTORIES=D:/Torrents;D:/Anime
+DIRECTORIES=
+EXCLUDED_DIRECTORIES=
+UPDATE_PERCENTAGE=85
+SET_COMPLETED_TO_REWATCHING_ON_FIRST_EPISODE=no
+UPDATE_PROGRESS_WHEN_REWATCHING=yes
+SET_TO_COMPLETED_AFTER_LAST_EPISODE_CURRENT=yes
+SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING=yes
+ADD_ENTRY_IF_MISSING=no
+KEYBIND_UPDATE_ANILIST=ctrl+a
+KEYBIND_LAUNCH_ANILIST=ctrl+b
+KEYBIND_OPEN_FOLDER=ctrl+d
+]]
 end
 
 local default_conf = generate_default_conf()
@@ -172,23 +173,20 @@ if conf_path then
     
     -- Check for missing options and append them
     local missing_options = {}
-    
     for _, option in ipairs(default_options) do
         if not current_config:find(option.key .. "=") then
-            table.insert(missing_options, option.key .. "=" .. option.default_value)
+            table.insert(missing_options, option.key .. "=" .. option.config_value)
         end
     end
     
-    -- Append missing options to config file
+    -- Append missing options
     if #missing_options > 0 then
         local append_file = io.open(conf_path, "a")
         if append_file then
-            append_file:write("\n# Auto-added missing options:\n")
             for _, option in ipairs(missing_options) do
                 append_file:write(option .. "\n")
             end
             append_file:close()
-            -- print("Added " .. #missing_options .. " missing options to config file: " .. conf_path)
         end
     end
 end
@@ -196,11 +194,6 @@ end
 -- Parse DIRECTORIES and EXCLUDED_DIRECTORIES using helper function
 options.DIRECTORIES = parse_directory_string(options.DIRECTORIES)
 options.EXCLUDED_DIRECTORIES = parse_directory_string(options.EXCLUDED_DIRECTORIES)
-
--- Set default keybinds if not configured
-options.KEYBIND_UPDATE_ANILIST = options.KEYBIND_UPDATE_ANILIST or "ctrl+a"
-options.KEYBIND_LAUNCH_ANILIST = options.KEYBIND_LAUNCH_ANILIST or "ctrl+b"
-options.KEYBIND_OPEN_FOLDER = options.KEYBIND_OPEN_FOLDER or "ctrl+d"
 
 -- When calling Python, pass only the options relevant to it
 local python_options = {

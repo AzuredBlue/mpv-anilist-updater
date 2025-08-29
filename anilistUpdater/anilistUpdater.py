@@ -17,18 +17,17 @@ Parses anime filenames, finds AniList entries, and updates progress/status.
 # IMPORTS
 # ═══════════════════════════════════════════════════════════════════════════════════════════════════════
 
-import sys
-import os
-import webbrowser
-import time
 import hashlib
-import re
 import json
-import requests
+import os
+import re
+import sys
+import time
+import webbrowser
 from dataclasses import dataclass
-from typing import Optional, Dict, List, Any, Iterator
+from typing import Any, Dict, Iterator, List, Optional
+import requests
 from guessit import guessit
-
 
 # ═══════════════════════════════════════════════════════════════════════════════════════════════════════
 # DATA CLASSES
@@ -705,7 +704,7 @@ class AniListUpdater:
             # This indicates anime was found in search but is not in user's list
             if self.options.get('ADD_ENTRY_IF_MISSING', False):
                 print(f'Adding "{anime_name}" to your list since you\'re watching it...')
-                
+
                 # Since user is actively watching this anime, always set to CURRENT
                 initial_status = 'CURRENT'
 
@@ -714,10 +713,8 @@ class AniListUpdater:
                     print(f'Successfully added "{anime_name}" to your list with progress: {file_progress}')
                     # Return updated result
                     return AnimeInfo(anime_id, anime_name, file_progress, total_episodes, file_progress, initial_status)
-                else:
-                    raise Exception(f"Failed to add '{anime_name}' to your list.")
-            else:
-                raise Exception('Failed to get current episode count. Is it on your list?')
+                raise Exception(f"Failed to add '{anime_name}' to your list.")
+            raise Exception('Failed to get current episode count. Is it on your list?')
 
         # Handle completed -> rewatching on first episode
         if (current_status == 'COMPLETED' and file_progress == 1 and self.options['SET_COMPLETED_TO_REWATCHING_ON_FIRST_EPISODE']):
