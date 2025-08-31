@@ -516,7 +516,7 @@ class AniListUpdater:
 
         # Quick fixes assuming season before episode
         # 'episode_title': '02' in 'S2 02'
-        if guess.get('episode_title', '').isdigit() and episode is None:
+        if guess.get('episode_title', '').isdigit() and 'episode' not in guess:
             print(f'Detected episode in episode_title. Episode: {int(guess.get("episode_title"))}')
             episode = int(guess.get('episode_title'))
 
@@ -529,8 +529,9 @@ class AniListUpdater:
         # 'season': [2, 3] in "S2 03"
         if isinstance(season, list):
             print(f'Detected multiple seasons: {season}. Picking first one as season.')
-            if episode is None:
-                print('Episode still not detected. Picking last position of the season list.')
+            # If episode wasn't detected or is default, try to extract from season list
+            if 'episode' not in guess and len(season) > 1:
+                print('Episode not detected. Picking last position of the season list.')
                 episode = season[-1]
 
             season = season[0]
