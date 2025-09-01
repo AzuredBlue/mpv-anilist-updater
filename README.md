@@ -13,6 +13,8 @@ A script for MPV that automatically updates your AniList based on the file you j
 > - The file must have the episode number in it (absolute numbering should work)<br>
 > - In case of remakes, specify the year of the remake to ensure it updates the proper one<br>
 >
+> **For ani-cli users:** Enable `ANI_CLI_COMPATIBILITY=yes` in your config file to use media titles instead of file paths.<br>
+>
 > To avoid the script running and making useless API calls, you can set one or more directories in the config file. See the [Configuration](#configuration-anilistupdaterconf) section below.
 
 For any issues, you can either open an issue on here, or message me on discord (azuredblue)
@@ -73,6 +75,7 @@ UPDATE_PROGRESS_WHEN_REWATCHING=yes
 SET_TO_COMPLETED_AFTER_LAST_EPISODE_CURRENT=yes
 SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING=yes
 ADD_ENTRY_IF_MISSING=no
+ANI_CLI_COMPATIBILITY=no
 # Keybind configuration (use MPV keybind format)
 KEYBIND_UPDATE_ANILIST=ctrl+a
 KEYBIND_LAUNCH_ANILIST=ctrl+b
@@ -89,7 +92,8 @@ KEYBIND_OPEN_FOLDER=ctrl+d
 - **UPDATE_PROGRESS_WHEN_REWATCHING**: `yes`/`no`. If `yes`, allow updating progress for anime set to rewatching. Default is `yes`.
 - **SET_TO_COMPLETED_AFTER_LAST_EPISODE_CURRENT**: `yes`/`no`. If `yes`, set to COMPLETED after last episode if status was CURRENT. **Default is `yes`.**
 - **SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING**: `yes`/`no`. If `yes`, set to COMPLETED after last episode if status was REPEATING (rewatching). Default is `yes`.
-- **ADD_ENTRY_IF_MISSING**: `yes`/`no`. If `yes`, automatically add anime to your list if it's not found during search. When enabled, if an anime is not in your list, the script will search for it in the AniList database and add it with status CURRENT (if watching mid-series) or PLANNING (if starting from episode 1). Default is `no`.
+- **ADD_ENTRY_IF_MISSING**: `yes`/`no`. If `yes`, automatically add anime to your list if it's not found in your list during search. Default is `no`. **⚠️ Warning: This can add incorrect anime to your list if the detection is inaccurate.**
+- **ANI_CLI_COMPATIBILITY**: `yes`/`no`. If `yes`, enables compatibility with ani-cli by using the media title instead of the file path for anime detection. This bypasses directory restrictions and filename parsing. Default is `no`.
 - **KEYBIND_UPDATE_ANILIST**: String. The keybind to manually update AniList. Default is `ctrl+a`.
 - **KEYBIND_LAUNCH_ANILIST**: String. The keybind to open AniList page in browser. Default is `ctrl+b`.
 - **KEYBIND_OPEN_FOLDER**: String. The keybind to open the folder containing the current video. Default is `ctrl+d`.
