@@ -509,20 +509,16 @@ class AniListUpdater:
 
         # If its >2, theres probably a Release Group and Title / Season / Part, so its good
 
-        episode = guess.get('episode', 1)
+        episode = guess.get('episode', None)
         season = guess.get('season', '')
         part = str(guess.get('part', ''))
         year = str(guess.get('year', ''))
-
-        # Track if episode was extracted from episode_title to prioritize it
-        episode_from_title = False
 
         # Quick fixes assuming season before episode
         # 'episode_title': '02' in 'S2 02'
         if guess.get('episode_title', '').isdigit() and 'episode' not in guess:
             print(f'Detected episode in episode_title. Episode: {int(guess.get("episode_title"))}')
             episode = int(guess.get('episode_title'))
-            episode_from_title = True
 
         # 'episode': [86, 13] (EIGHTY-SIX), [1, 2, 3] (RANMA) lol.
         if isinstance(episode, list):
@@ -533,12 +529,15 @@ class AniListUpdater:
         # 'season': [2, 3] in "S2 03"
         if isinstance(season, list):
             print(f'Detected multiple seasons: {season}. Picking first one as season.')
-            # If episode wasn't detected or is default, and we haven't already got it from episode_title, try to extract from season list
-            if 'episode' not in guess and len(season) > 1 and not episode_from_title:
+            # If episode wasn't detected or is default, try to extract from season list
+            if episode is None and len(season) > 1:
                 print('Episode not detected. Picking last position of the season list.')
                 episode = season[-1]
 
             season = season[0]
+
+        # Ensure episode is never None
+        episode = episode or 1
 
         season = str(season)
 
