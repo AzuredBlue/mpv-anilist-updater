@@ -398,6 +398,7 @@ class AniListUpdater:
         if self.ACTION == 'launch' and cache_entry and cache_entry.get('anime_id'):
             anime_id = cache_entry['anime_id']
             print(f'Opening AniList (cached) for guessed "{file_info.name}": https://anilist.co/anime/{anime_id}')
+            osd_message(f'Opening AniList for "{file_info.name}"')
             webbrowser.open_new_tab(f'https://anilist.co/anime/{anime_id}')
             return
 
@@ -699,6 +700,7 @@ class AniListUpdater:
 
         # Only launch anilist
         if self.ACTION == 'launch':
+            osd_message(f'Opening AniList for "{anime_name}"')
             print(f'Opening AniList for "{anime_name}": https://anilist.co/anime/{anime_id}')
             webbrowser.open_new_tab(f'https://anilist.co/anime/{anime_id}')
             return result
@@ -714,6 +716,7 @@ class AniListUpdater:
 
                 # Add to list
                 if self.add_anime_to_list(anime_id, anime_name, initial_status, file_progress):
+                    osd_message(f'Added "{anime_name}" to your list with progress: {file_progress}')
                     print(f'Successfully added "{anime_name}" to your list with progress: {file_progress}')
                     # Return updated result
                     return AnimeInfo(anime_id, anime_name, file_progress, total_episodes, file_progress, initial_status)
@@ -740,6 +743,7 @@ class AniListUpdater:
 
             if response and 'data' in response:
                 updated_progress = response['data']['SaveMediaListEntry']['progress']
+                osd_message(f'Updated "{anime_name}" to REPEATING with progress: {updated_progress}')
                 print(f'Episode count updated successfully! New progress: {updated_progress}')
 
                 return AnimeInfo(anime_id, anime_name, updated_progress, total_episodes, 1, 'REPEATING')
@@ -777,6 +781,7 @@ class AniListUpdater:
         response = self.make_api_request(query, variables, self.access_token)
         if response and 'data' in response:
             updated_progress = response['data']['SaveMediaListEntry']['progress']
+            osd_message(f'Updated "{anime_name}" to: {updated_progress}')
             print(f'Episode count updated successfully! New progress: {updated_progress}')
             updated_status = response['data']['SaveMediaListEntry']['status']
 
@@ -817,6 +822,10 @@ class AniListUpdater:
 # ═══════════════════════════════════════════════════════════════════════════════════════════════════════
 # MAIN ENTRY POINT
 # ═══════════════════════════════════════════════════════════════════════════════════════════════════════
+
+def osd_message(msg: str) -> None:
+    print(f"OSD:{msg}")
+
 
 def main() -> None:
     """

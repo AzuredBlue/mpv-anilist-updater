@@ -176,9 +176,30 @@ local function path_starts_with_any(path, directories)
 end
 
 function callback(success, result, error)
-    if result.status == 0 then
-        mp.osd_message("Updated anime correctly.", 4)
+
+    -- Can send multiple OSD messages to display
+    local messages = {}
+    if result and result.stdout then
+        for line in result.stdout:gmatch("[^\r\n]+") do
+            local msg = line:match("^OSD:(.*)")
+            if msg then
+                table.insert(messages, msg:gsub("^%s*(.-)%s*$", "%1"))
+            else
+                print(line)
+            end
+        end
     end
+    
+
+    if success and result and result.status == 0 then
+        if #messages == 0 then
+            table.insert(messages, "Updated anime correctly.")
+        elseif #messages > 0 then
+            mp.osd_message(table.concat(messages, "\n"), 5)
+        end
+    end
+
+    -- Maybe show an error message from the script? Probably not needed
 end
 
 local function get_python_command()
@@ -281,6 +302,7 @@ function update_anilist(action)
     local table = {}
     table.name = "subprocess"
     table.args = {python_command, script_dir .. "anilistUpdater.py", path, action, python_options_json}
+    table.capture_stdout = true
     local cmd = mp.command_native_async(table, callback)
 end
 
