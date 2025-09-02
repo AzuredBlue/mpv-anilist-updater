@@ -53,21 +53,12 @@ local function parse_directory_string(dir_string)
     end
 end
 
--- Default configuration options
-local default_options = {
-    {key = "DIRECTORIES", value = "", config_value = ""},
-    {key = "EXCLUDED_DIRECTORIES", value = "", config_value = ""},
-    {key = "UPDATE_PERCENTAGE", value = 85, config_value = "85"},
-    {key = "SET_COMPLETED_TO_REWATCHING_ON_FIRST_EPISODE", value = false, config_value = "no"},
-    {key = "UPDATE_PROGRESS_WHEN_REWATCHING", value = true, config_value = "yes"},
-    {key = "SET_TO_COMPLETED_AFTER_LAST_EPISODE_CURRENT", value = true, config_value = "yes"},
-    {key = "SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING", value = true, config_value = "yes"},
-    {key = "ADD_ENTRY_IF_MISSING", value = false, config_value = "no"}
-}
+-- Default config
+local default_conf = [[# anilistUpdater Configuration
+# For detailed explanations of all available options, see:
+# https://github.com/AzuredBlue/mpv-anilist-updater?tab=readme-ov-file#configuration-anilistupdaterconf
 
--- Generate default config content
-local function generate_default_conf()
-    return [[# Use 'yes' or 'no' for boolean options below
+# Use 'yes' or 'no' for boolean options below
 # Example for multiple directories (comma or semicolon separated):
 # DIRECTORIES=D:/Torrents,D:/Anime
 # or
@@ -81,9 +72,6 @@ SET_TO_COMPLETED_AFTER_LAST_EPISODE_CURRENT=yes
 SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING=yes
 ADD_ENTRY_IF_MISSING=no
 ]]
-end
-
-local default_conf = generate_default_conf()
 
 -- Try script-opts directory (sibling to scripts)
 local script_opts_dir = script_dir:match("^(.-)[/\\]scripts[/\\]")
@@ -142,41 +130,21 @@ if not conf_path then
     mp.msg.warn("Could not find or create anilistUpdater.conf in any known location! Using default options.")
 end
 
--- Initialize options from default_options
-local options = {}
-for _, option in ipairs(default_options) do
-    options[option.key] = option.value
-end
+-- Initialize options with defaults
+local options = {
+    DIRECTORIES = "",
+    EXCLUDED_DIRECTORIES = "",
+    UPDATE_PERCENTAGE = 85,
+    SET_COMPLETED_TO_REWATCHING_ON_FIRST_EPISODE = false,
+    UPDATE_PROGRESS_WHEN_REWATCHING = true,
+    SET_TO_COMPLETED_AFTER_LAST_EPISODE_CURRENT = true,
+    SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING = true,
+    ADD_ENTRY_IF_MISSING = false
+}
+
+-- Override defaults with values from config file
 if conf_path then
-    -- Read the current config file content
-    local current_config = ""
-    local config_file = io.open(conf_path, "r")
-    if config_file then
-        current_config = config_file:read("*all")
-        config_file:close()
-    end
-    
-    -- This will override the defaults with values from the config file
     mpoptions.read_options(options, "anilistUpdater")
-    
-    -- Check for missing options and append them
-    local missing_options = {}
-    for _, option in ipairs(default_options) do
-        if not current_config:find(option.key .. "=") then
-            table.insert(missing_options, option.key .. "=" .. option.config_value)
-        end
-    end
-    
-    -- Append missing options
-    if #missing_options > 0 then
-        local append_file = io.open(conf_path, "a")
-        if append_file then
-            for _, option in ipairs(missing_options) do
-                append_file:write(option .. "\n")
-            end
-            append_file:close()
-        end
-    end
 end
 
 -- Parse DIRECTORIES and EXCLUDED_DIRECTORIES using helper function
