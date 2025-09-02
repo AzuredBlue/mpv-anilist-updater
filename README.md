@@ -72,6 +72,7 @@ SET_COMPLETED_TO_REWATCHING_ON_FIRST_EPISODE=no
 UPDATE_PROGRESS_WHEN_REWATCHING=yes
 SET_TO_COMPLETED_AFTER_LAST_EPISODE_CURRENT=yes
 SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING=yes
+ADD_ENTRY_IF_MISSING=no
 ```
 
 #### Option Descriptions
@@ -84,6 +85,7 @@ SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING=yes
 - **UPDATE_PROGRESS_WHEN_REWATCHING**: `yes`/`no`. If `yes`, allow updating progress for anime set to rewatching. Default is `yes`.
 - **SET_TO_COMPLETED_AFTER_LAST_EPISODE_CURRENT**: `yes`/`no`. If `yes`, set to COMPLETED after last episode if status was CURRENT. **Default is `yes`.**
 - **SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING**: `yes`/`no`. If `yes`, set to COMPLETED after last episode if status was REPEATING (rewatching). Default is `yes`.
+- **ADD_ENTRY_IF_MISSING**: `yes`/`no`. If `yes`, automatically add anime to your list if it's not found in your list during search. Default is `no`. **⚠️ Warning: This can add incorrect anime to your list if the detection is inaccurate.**
 
 > [!NOTE]
 > All boolean options must be `yes` or `no` (not `true`/`false`).
@@ -92,32 +94,20 @@ SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING=yes
 
 This script has 3 keybinds:
 
-- Ctrl + A: Manually updates your AniList with the current episode you are watching.
-- Ctrl + B: Opens the AniList page of the anime you are watching on your browser. Useful to see if it guessed the anime correctly.
-- Ctrl + D: Opens the folder where the current video is playing. Useful if you have "your own" anime library, and navigating through folders is a pain.
+- **Ctrl + A**: Manually updates your AniList with the current episode you are watching.
+- **Ctrl + B**: Opens the AniList page of the anime you are watching on your browser. Useful to see if it guessed the anime correctly.
+- **Ctrl + D**: Opens the folder where the current video is playing. Useful if you have "your own" anime library, and navigating through folders is a pain.
 
 The script will automatically update your AniList when the video you are watching reaches 85% completion (or the percentage you set in the config file).
 
-You can change the keybinds in your input.conf:
+### Customizing Keybinds
+
+You can change the keybinds in your `input.conf`:
 
 ```bash
 A script-binding update_anilist
 B script-binding launch_anilist
 D script-binding open_folder
-```
-
-Or in the `.lua` file:
-
-```lua
-mp.add_key_binding('ctrl+a', 'update_anilist', function()
-    update_anilist("update")
-end)
-
-mp.add_key_binding('ctrl+b', 'launch_anilist', function()
-    update_anilist("launch")
-end)
-
-mp.add_key_binding('ctrl+d', 'open_folder', open_folder)
 ```
 
 ## How It Works

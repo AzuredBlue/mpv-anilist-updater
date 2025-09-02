@@ -14,6 +14,8 @@ UPDATE_PROGRESS_WHEN_REWATCHING: Boolean. If true, allow updating progress for a
 SET_TO_COMPLETED_AFTER_LAST_EPISODE_CURRENT: Boolean. If true, set to COMPLETED after last episode if status was CURRENT.
 
 SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING: Boolean. If true, set to COMPLETED after last episode if status was REPEATING (rewatching).
+
+ADD_ENTRY_IF_MISSING: Boolean. If true, automatically add anime to your list if it's not found during search. Default is false.
 ]]
 
 local utils = require 'mp.utils'
@@ -22,33 +24,40 @@ local mpoptions = require("mp.options")
 local conf_name = "anilistUpdater.conf"
 local script_dir = (debug.getinfo(1).source:match("@?(.*/)") or "./")
 
--- Try script-opts directory (sibling to scripts)
-local script_opts_dir = script_dir:match("^(.-)[/\\]scripts[/\\]")
-
-if script_opts_dir then
-    script_opts_dir = utils.join_path(script_opts_dir, "script-opts")
-else
-    -- Fallback: try to find mpv config dir
-    script_opts_dir = os.getenv("APPDATA") and
-                          utils.join_path(utils.join_path(os.getenv("APPDATA"), "mpv"), "script-opts") or
-                          os.getenv("HOME") and
-                          utils.join_path(utils.join_path(utils.join_path(os.getenv("HOME"), ".config"), "mpv"),
-            "script-opts") or nil
+-- Helper function to get MPV config directory
+local function get_mpv_config_dir()
+    return os.getenv("APPDATA") and utils.join_path(os.getenv("APPDATA"), "mpv") or 
+           os.getenv("HOME") and utils.join_path(utils.join_path(os.getenv("HOME"), ".config"), "mpv") or nil
 end
 
-local script_opts_path = script_opts_dir and utils.join_path(script_opts_dir, conf_name) or nil
+-- Helper function to normalize path separators
+local function normalize_path(p)
+    p = p:gsub("\\", "/")
+    if p:sub(-1) == "/" then
+        p = p:sub(1, -2)
+    end
+    return p
+end
 
--- Try script directory
-local script_path = utils.join_path(script_dir, conf_name)
+-- Helper function to parse directory strings (comma or semicolon separated)
+local function parse_directory_string(dir_string)
+    if type(dir_string) == "string" and dir_string ~= "" then
+        local dirs = {}
+        for dir in string.gmatch(dir_string, "([^,;]+)") do
+            local trimmed = (dir:gsub("^%s*(.-)%s*$", "%1"):gsub('[\'"]', '')) -- trim
+            table.insert(dirs, normalize_path(trimmed))
+        end
+        return dirs
+    else
+        return {}
+    end
+end
 
--- Try mpv config directory
-local mpv_conf_dir = os.getenv("APPDATA") and utils.join_path(os.getenv("APPDATA"), "mpv") or os.getenv("HOME") and
-                         utils.join_path(utils.join_path(os.getenv("HOME"), ".config"), "mpv") or nil
-local mpv_conf_path = mpv_conf_dir and utils.join_path(mpv_conf_dir, conf_name) or nil
+-- Default config
+local default_conf = [[# anilistUpdater Configuration
+# For detailed explanations of all available options, see:
+# https://github.com/AzuredBlue/mpv-anilist-updater?tab=readme-ov-file#configuration-anilistupdaterconf
 
-local conf_paths = {script_opts_path, script_path, mpv_conf_path}
-
-local default_conf = [[
 # Use 'yes' or 'no' for boolean options below
 # Example for multiple directories (comma or semicolon separated):
 # DIRECTORIES=D:/Torrents,D:/Anime
@@ -61,7 +70,30 @@ SET_COMPLETED_TO_REWATCHING_ON_FIRST_EPISODE=no
 UPDATE_PROGRESS_WHEN_REWATCHING=yes
 SET_TO_COMPLETED_AFTER_LAST_EPISODE_CURRENT=yes
 SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING=yes
+ADD_ENTRY_IF_MISSING=no
 ]]
+
+-- Try script-opts directory (sibling to scripts)
+local script_opts_dir = script_dir:match("^(.-)[/\\]scripts[/\\]")
+
+if script_opts_dir then
+    script_opts_dir = utils.join_path(script_opts_dir, "script-opts")
+else
+    -- Fallback: try to find mpv config dir
+    local mpv_conf_dir = get_mpv_config_dir()
+    script_opts_dir = mpv_conf_dir and utils.join_path(mpv_conf_dir, "script-opts") or nil
+end
+
+local script_opts_path = script_opts_dir and utils.join_path(script_opts_dir, conf_name) or nil
+
+-- Try script directory
+local script_path = utils.join_path(script_dir, conf_name)
+
+-- Try mpv config directory
+local mpv_conf_dir = get_mpv_config_dir()
+local mpv_conf_path = mpv_conf_dir and utils.join_path(mpv_conf_dir, conf_name) or nil
+
+local conf_paths = {script_opts_path, script_path, mpv_conf_path}
 
 -- Try to find config file
 local conf_path = nil
@@ -86,7 +118,7 @@ if not conf_path then
                 f:write(default_conf)
                 f:close()
                 conf_path = path
-                print("Created config at: " .. path)
+                -- print("Created config at: " .. path)
                 break
             end
         end
@@ -98,7 +130,7 @@ if not conf_path then
     mp.msg.warn("Could not find or create anilistUpdater.conf in any known location! Using default options.")
 end
 
--- Now load options as usual
+-- Initialize options with defaults
 local options = {
     DIRECTORIES = "",
     EXCLUDED_DIRECTORIES = "",
@@ -106,49 +138,26 @@ local options = {
     SET_COMPLETED_TO_REWATCHING_ON_FIRST_EPISODE = false,
     UPDATE_PROGRESS_WHEN_REWATCHING = true,
     SET_TO_COMPLETED_AFTER_LAST_EPISODE_CURRENT = true,
-    SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING = true
+    SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING = true,
+    ADD_ENTRY_IF_MISSING = false
 }
+
+-- Override defaults with values from config file
 if conf_path then
     mpoptions.read_options(options, "anilistUpdater")
 end
 
-local function normalize_path(p)
-    p = p:gsub("\\", "/")
-    if p:sub(-1) == "/" then
-        p = p:sub(1, -2)
-    end
-    return p
-end
-
--- Parse DIRECTORIES if it's a string (comma or semicolon separated)
-if type(options.DIRECTORIES) == "string" and options.DIRECTORIES ~= "" then
-    local dirs = {}
-    for dir in string.gmatch(options.DIRECTORIES, "([^,;]+)") do
-        local trimmed = (dir:gsub("^%s*(.-)%s*$", "%1"):gsub('[\'"]', '')) -- trim
-        table.insert(dirs, normalize_path(trimmed))
-    end
-    options.DIRECTORIES = dirs
-elseif type(options.DIRECTORIES) == "string" then
-    options.DIRECTORIES = {}
-end
-
-if type(options.EXCLUDED_DIRECTORIES) == "string" and options.EXCLUDED_DIRECTORIES ~= "" then
-    local dirs = {}
-    for dir in string.gmatch(options.EXCLUDED_DIRECTORIES, "([^,;]+)") do
-        local trimmed = (dir:gsub("^%s*(.-)%s*$", "%1"):gsub('[\'"]', '')) -- trim
-        table.insert(dirs, normalize_path(trimmed))
-    end
-    options.EXCLUDED_DIRECTORIES = dirs
-elseif type(options.EXCLUDED_DIRECTORIES) == "string" then
-    options.EXCLUDED_DIRECTORIES = {}
-end
+-- Parse DIRECTORIES and EXCLUDED_DIRECTORIES using helper function
+options.DIRECTORIES = parse_directory_string(options.DIRECTORIES)
+options.EXCLUDED_DIRECTORIES = parse_directory_string(options.EXCLUDED_DIRECTORIES)
 
 -- When calling Python, pass only the options relevant to it
 local python_options = {
     SET_COMPLETED_TO_REWATCHING_ON_FIRST_EPISODE = options.SET_COMPLETED_TO_REWATCHING_ON_FIRST_EPISODE,
     UPDATE_PROGRESS_WHEN_REWATCHING = options.UPDATE_PROGRESS_WHEN_REWATCHING,
     SET_TO_COMPLETED_AFTER_LAST_EPISODE_CURRENT = options.SET_TO_COMPLETED_AFTER_LAST_EPISODE_CURRENT,
-    SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING = options.SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING
+    SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING = options.SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING,
+    ADD_ENTRY_IF_MISSING = options.ADD_ENTRY_IF_MISSING
 }
 local python_options_json = utils.format_json(python_options)
 
@@ -183,6 +192,16 @@ local function get_python_command()
     end
 end
 
+-- Helper function to detect ani-cli compatibility
+local function is_ani_cli_compatible()
+    local directory = mp.get_property("working-directory") or ""
+    local file_path = mp.get_property("path") or ""
+    local full_path = utils.join_path(directory, file_path)
+    
+    -- Auto-detect ani-cli compatibility by checking for http:// or https:// anywhere in the path
+    return full_path:match("https?://") ~= nil
+end
+
 local function get_path()
     local directory = mp.get_property("working-directory")
     -- It seems like in Linux working-directory sometimes returns it without a "/" at the end
@@ -190,6 +209,14 @@ local function get_path()
     -- For some reason, "path" sometimes returns the absolute path, sometimes it doesn't.
     local file_path = mp.get_property("path")
     local path = utils.join_path(directory, file_path)
+
+    -- Auto-detect ani-cli compatibility by checking for http:// or https:// anywhere in the path
+    if path:match("https?://") then
+        local media_title = mp.get_property("media-title")
+        if media_title and media_title ~= "" then
+            return media_title
+        end
+    end
 
     if path:match("([^/\\]+)$"):lower() == "file.mp4" then
         path = mp.get_property("media-title")
@@ -264,7 +291,7 @@ mp.register_event("file-loaded", function()
     triggered = false
     progress_timer:stop()
 
-    if #DIRECTORIES > 0 then
+    if not is_ani_cli_compatible() and #DIRECTORIES > 0 then
         local path = get_path()
 
         if not path_starts_with_any(path, DIRECTORIES) then
@@ -285,12 +312,12 @@ mp.register_event("file-loaded", function()
     end
 end)
 
--- Keybinds, modify as you please
-mp.add_key_binding('ctrl+a', 'update_anilist', function()
+-- Default keybinds - can be customized in input.conf using script-binding commands
+mp.add_key_binding("ctrl+a", 'update_anilist', function()
     update_anilist("update")
 end)
 
-mp.add_key_binding('ctrl+b', 'launch_anilist', function()
+mp.add_key_binding("ctrl+b", 'launch_anilist', function()
     update_anilist("launch")
 end)
 
@@ -332,4 +359,4 @@ function open_folder()
     })
 end
 
-mp.add_key_binding('ctrl+d', 'open_folder', open_folder)
+mp.add_key_binding("ctrl+d", 'open_folder', open_folder)
