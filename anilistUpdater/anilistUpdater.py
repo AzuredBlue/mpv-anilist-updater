@@ -806,7 +806,6 @@ class AniListUpdater:
             response = self.make_api_request(query, variables, self.access_token)
 
             if response and 'data' in response and response['data']['SaveMediaListEntry']:
-                print(f'Successfully added "{anime_name}" to your list with status {initial_status} and progress {initial_progress}.')
                 return True
             print(f'Failed to add "{anime_name}" to your list.')
             return False
