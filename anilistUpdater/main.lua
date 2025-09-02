@@ -16,14 +16,6 @@ SET_TO_COMPLETED_AFTER_LAST_EPISODE_CURRENT: Boolean. If true, set to COMPLETED 
 SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING: Boolean. If true, set to COMPLETED after last episode if status was REPEATING (rewatching).
 
 ADD_ENTRY_IF_MISSING: Boolean. If true, automatically add anime to your list if it's not found during search. Default is false.
-
-ANI_CLI_COMPATIBILITY: Boolean. If true, use media title instead of file path for ani-cli compatibility. Ignores directory settings. Default is false.
-
-KEYBIND_UPDATE_ANILIST: String. The keybind to manually update AniList. Default is "ctrl+a".
-
-KEYBIND_LAUNCH_ANILIST: String. The keybind to open AniList page in browser. Default is "ctrl+b".
-
-KEYBIND_OPEN_FOLDER: String. The keybind to open the folder containing the current video. Default is "ctrl+d".
 ]]
 
 local utils = require 'mp.utils'
@@ -70,11 +62,7 @@ local default_options = {
     {key = "UPDATE_PROGRESS_WHEN_REWATCHING", value = true, config_value = "yes"},
     {key = "SET_TO_COMPLETED_AFTER_LAST_EPISODE_CURRENT", value = true, config_value = "yes"},
     {key = "SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING", value = true, config_value = "yes"},
-    {key = "ADD_ENTRY_IF_MISSING", value = false, config_value = "no"},
-    {key = "ANI_CLI_COMPATIBILITY", value = false, config_value = "no"},
-    {key = "KEYBIND_UPDATE_ANILIST", value = "ctrl+a", config_value = "ctrl+a"},
-    {key = "KEYBIND_LAUNCH_ANILIST", value = "ctrl+b", config_value = "ctrl+b"},
-    {key = "KEYBIND_OPEN_FOLDER", value = "ctrl+d", config_value = "ctrl+d"}
+    {key = "ADD_ENTRY_IF_MISSING", value = false, config_value = "no"}
 }
 
 -- Generate default config content
@@ -92,10 +80,6 @@ UPDATE_PROGRESS_WHEN_REWATCHING=yes
 SET_TO_COMPLETED_AFTER_LAST_EPISODE_CURRENT=yes
 SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING=yes
 ADD_ENTRY_IF_MISSING=no
-ANI_CLI_COMPATIBILITY=no
-KEYBIND_UPDATE_ANILIST=ctrl+a
-KEYBIND_LAUNCH_ANILIST=ctrl+b
-KEYBIND_OPEN_FOLDER=ctrl+d
 ]]
 end
 
@@ -240,21 +224,31 @@ local function get_python_command()
     end
 end
 
-local function get_path()
-    -- If ani-cli compatibility is enabled, use media title instead of file path
-    if options.ANI_CLI_COMPATIBILITY then
-        local media_title = mp.get_property("media-title")
-        if media_title and media_title ~= "" then
-            return media_title
-        end
-    end
+-- Helper function to detect ani-cli compatibility
+local function is_ani_cli_compatible()
+    local directory = mp.get_property("working-directory") or ""
+    local file_path = mp.get_property("path") or ""
+    local full_path = utils.join_path(directory, file_path)
     
+    -- Auto-detect ani-cli compatibility by checking for http:// or https:// anywhere in the path
+    return full_path:match("https?://") ~= nil
+end
+
+local function get_path()
     local directory = mp.get_property("working-directory")
     -- It seems like in Linux working-directory sometimes returns it without a "/" at the end
     directory = (directory:sub(-1) == '/' or directory:sub(-1) == '\\') and directory or directory .. '/'
     -- For some reason, "path" sometimes returns the absolute path, sometimes it doesn't.
     local file_path = mp.get_property("path")
     local path = utils.join_path(directory, file_path)
+
+    -- Auto-detect ani-cli compatibility by checking for http:// or https:// anywhere in the path
+    if path:match("https?://") then
+        local media_title = mp.get_property("media-title")
+        if media_title and media_title ~= "" then
+            return media_title
+        end
+    end
 
     if path:match("([^/\\]+)$"):lower() == "file.mp4" then
         path = mp.get_property("media-title")
@@ -329,7 +323,7 @@ mp.register_event("file-loaded", function()
     triggered = false
     progress_timer:stop()
 
-    if not options.ANI_CLI_COMPATIBILITY and #DIRECTORIES > 0 then
+    if not is_ani_cli_compatible() and #DIRECTORIES > 0 then
         local path = get_path()
 
         if not path_starts_with_any(path, DIRECTORIES) then
@@ -350,12 +344,12 @@ mp.register_event("file-loaded", function()
     end
 end)
 
--- Keybinds (configurable via anilistUpdater.conf)
-mp.add_key_binding(options.KEYBIND_UPDATE_ANILIST, 'update_anilist', function()
+-- Default keybinds - can be customized in input.conf using script-binding commands
+mp.add_key_binding("ctrl+a", 'update_anilist', function()
     update_anilist("update")
 end)
 
-mp.add_key_binding(options.KEYBIND_LAUNCH_ANILIST, 'launch_anilist', function()
+mp.add_key_binding("ctrl+b", 'launch_anilist', function()
     update_anilist("launch")
 end)
 
@@ -397,4 +391,4 @@ function open_folder()
     })
 end
 
-mp.add_key_binding(options.KEYBIND_OPEN_FOLDER, 'open_folder', open_folder)
+mp.add_key_binding("ctrl+d", 'open_folder', open_folder)
