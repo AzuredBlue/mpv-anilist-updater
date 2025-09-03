@@ -181,9 +181,9 @@ function callback(success, result, error)
     local messages = {}
     if result and result.stdout then
         for line in result.stdout:gmatch("[^\r\n]+") do
-            local msg = line:match("^OSD:(.*)")
+            local msg = line:match("^OSD:%s*(.-)%s*$")
             if msg then
-                table.insert(messages, msg:gsub("^%s*(.-)%s*$", "%1"))
+                table.insert(messages, msg)
             else
                 print(line)
             end
