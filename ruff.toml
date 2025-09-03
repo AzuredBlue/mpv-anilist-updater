@@ -1,0 +1,44 @@
+line-length = 115
+
+[format]
+skip-magic-trailing-comma = false
+
+[lint]
+select = ["ALL"]
+preview = true
+ignore = [
+  "BLE001",  # Do not catch blind except: `Exception`
+  "C901",    # Function is too complex
+  "COM812",  # Trailing comma missing
+  "CPY001",  # Missing copyright notice at top of file
+  "D212",    # Multi-line docstring summary should start at the first line
+  "DOC201",  # `return` is not documented in docstring
+  "E501",    # Line too long
+  "EM101",   # Exception must not use a string literal, assign to variable first
+  "EM102",   # Exception must not use an f-string literal, assign to variable first
+  "FA100",   # Missing `from __future__ import annotations`, but uses PEP 585 collection
+  "FBT001",  # Boolean positional arg in function definition
+  "FURB101", # `open` and `read` should be replaced by `Path.read_text()`
+  "FURB103", # `open` and `write` should be replaced by `Path.write_text()`
+  "INP001",  # File is part of an implicit namespace package
+  "PGH003",  # Use specific rule codes when ignoring type issues
+  "PLR0912", # Too many branches
+  "PLR0915", # Too many statements
+  "PLR2004", # Magic value used in comparison
+  "PLR6301", # Method could be a function (no `self` access)
+  "PTH110",  # `os.path.exists()` should be replaced by `Path.exists()`
+  "PTH118",  # `os.path.join()` should be replaced by `Path` / operator
+  "PTH120",  # `os.path.dirname()` should be replaced by `Path.parent`
+  "PTH122",  # `os.path.splitext()` should be replaced by `Path.suffix`
+  "PTH123",  # `os.path.basename()` should be replaced by `Path.name`
+  "RET504",  # Unnecessary assignment before `return` statement
+  "S101",    # Use of `assert` detected
+  "T201",    # `print` found
+  "TRY002",  # Create your own exception
+  "TRY003",  # Avoid specifying long messages outside the exception class
+  "TRY300",  # Consider moving this statement to an `else` block
+]
+fixable = ["ALL"]
+
+[lint.pydocstyle]
+convention = "google"
