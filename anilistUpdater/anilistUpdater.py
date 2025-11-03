@@ -609,7 +609,7 @@ class AniListUpdater:
                     year = year or str(folder_guess.get("year", ""))
 
                     # If we got the name, its probable we already got season and part from the way folders are usually structured
-                    if not name:
+                    if name:
                         break
 
         # Haven't tested enough but seems to work fine
