@@ -16,6 +16,8 @@ SET_TO_COMPLETED_AFTER_LAST_EPISODE_CURRENT: Boolean. If true, set to COMPLETED 
 SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING: Boolean. If true, set to COMPLETED after last episode if status was REPEATING (rewatching).
 
 ADD_ENTRY_IF_MISSING: Boolean. If true, automatically add anime to your list if it's not found during search. Default is false.
+
+SILENT_MODE: Boolean. If true, won't show OSD messages.
 ]]
 
 local utils = require 'mp.utils'
@@ -71,6 +73,7 @@ UPDATE_PROGRESS_WHEN_REWATCHING=yes
 SET_TO_COMPLETED_AFTER_LAST_EPISODE_CURRENT=yes
 SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING=yes
 ADD_ENTRY_IF_MISSING=no
+SILENT_MODE=no
 ]]
 
 -- Try script-opts directory (sibling to scripts)
@@ -139,13 +142,12 @@ local options = {
     UPDATE_PROGRESS_WHEN_REWATCHING = true,
     SET_TO_COMPLETED_AFTER_LAST_EPISODE_CURRENT = true,
     SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING = true,
-    ADD_ENTRY_IF_MISSING = false
+    ADD_ENTRY_IF_MISSING = false,
+    SILENT_MODE = false
 }
 
 -- Override defaults with values from config file
-if conf_path then
-    mpoptions.read_options(options, "anilistUpdater")
-end
+mpoptions.read_options(options, "anilistUpdater")
 
 -- Parse DIRECTORIES and EXCLUDED_DIRECTORIES using helper function
 options.DIRECTORIES = parse_directory_string(options.DIRECTORIES)
@@ -177,6 +179,8 @@ end
 
 function callback(success, result, error)
 
+    if options.SILENT_MODE then return end
+    
     -- Can send multiple OSD messages to display
     local messages = {}
     if result and result.stdout then
@@ -292,7 +296,7 @@ end
 
 -- Function to launch the .py script
 function update_anilist(action)
-    if action == "launch" then
+    if action == "launch" and not options.SILENT_MODE then
         mp.osd_message("Launching AniList", 2)
     end
     local script_dir = debug.getinfo(1).source:match("@?(.*/)")
