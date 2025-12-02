@@ -500,11 +500,9 @@ class AniListUpdater:
             print(f"Couldn't find title in filename '{path_parts[-1]}'! Guess result: {guess}")
             return path_parts
 
-        # Only clean up titles for some series
-        cleanup_titles = ["Ranma", "Chi", "Bleach", "Link Click"]
-        if any(title in guess["title"] for title in cleanup_titles):
-            path_parts[title_depth] = re.sub(pattern, " ", path_parts[title_depth])
-            path_parts[title_depth] = " ".join(path_parts[title_depth].split())
+        # Attempt it for all titles
+        path_parts[title_depth] = re.sub(pattern, " ", path_parts[title_depth])
+        path_parts[title_depth] = " ".join(path_parts[title_depth].split())
 
         if guess["title"] == "Centimeters per Second" and guess.get("episode", 0) == 5:
             path_parts[title_depth] = path_parts[title_depth].replace(" 5 ", " Five ")
@@ -512,10 +510,7 @@ class AniListUpdater:
             path_parts[title_depth] = path_parts[title_depth].replace("per Second", "per Second 3")
 
         # Remove 'v2', 'v3'... from the title since it fucks up with episode detection
-        match = re.search(r"(E\d+)v\d", path_parts[title_depth])
-        if match:
-            episode = match.group(1)
-            path_parts[title_depth] = path_parts[title_depth].replace(match.group(0), episode)
+        path_parts[title_depth] = re.sub(r"[Ee]\d+v\d+", lambda m: m.group(0)[:-2], path_parts[title_depth])
 
         return path_parts
 
