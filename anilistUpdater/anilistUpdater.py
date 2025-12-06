@@ -17,6 +17,7 @@ Parses anime filenames, finds AniList entries, and updates progress/status.
 # IMPORTS
 # ═══════════════════════════════════════════════════════════════════════════════════════════════════════
 
+import difflib
 import hashlib
 import json
 import os
@@ -88,7 +89,7 @@ class AniListQueries:
             Page(page: $page) {
                 media (search: $search, type: ANIME, startDate_greater: $year, onList: $onList) {
                     id
-                    title { romaji }
+                    title { romaji, english }
                     season
                     seasonYear
                     episodes
@@ -631,17 +632,20 @@ class AniListUpdater:
     # ANIME INFO & PROGRESS UPDATES
     # ──────────────────────────────────────────────────────────────────────────────────────────────────
 
-    def filter_valid_seasons(self, seasons: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    def filter_valid_seasons(self, seasons: list[dict[str, Any]], guessed_name: str) -> list[dict[str, Any]]:
         """
-        Filter and sort valid TV seasons for absolute numbering.
+        Filter and sort valid seasons using fuzzy matching on titles.
 
         Args:
             seasons (list[dict[str, Any]]): Season dicts from AniList API.
+            guessed_name (str): The name guessed from the filename.
 
         Returns:
             list[dict[str, Any]]: Filtered and sorted seasons.
         """
-        # Filter only to those whose format is TV and duration > 21 OR those who have no duration and are releasing.
+        FUZZY_MATCH_THRESHOLD = 0.6
+
+        # Filter only to those whose duration > 21 OR those who have no duration and are releasing.
         # This is due to newly added anime having duration as null
         seasons = [
             season
@@ -649,21 +653,44 @@ class AniListUpdater:
             if (
                 (season["duration"] is None and season["status"] == "RELEASING")
                 or (season["duration"] is not None and season["duration"] > 21)
+                and (season["format"] == "TV" or season["format"] == "ONA")
             )
-            and season["format"] == "TV"
         ]
-        # One of the problems with this filter is needing the format to be 'TV'
-        # But if accepted any format, it would also include many ONA's which arent included in absolute numbering.
+
+        # Fuzzy match filtering
+        valid_seasons = []
+        for season in seasons:
+            romaji = season["title"]["romaji"] or ""
+            english = season["title"]["english"] or ""
+
+            is_substring = (
+                guessed_name.lower() in romaji.lower()
+                or (english and guessed_name.lower() in english.lower())
+                or romaji.lower() in guessed_name.lower()
+                or (english and english.lower() in guessed_name.lower())
+            )
+
+            # Check fuzzy match ratio
+            ratio_romaji = difflib.SequenceMatcher(None, guessed_name.lower(), romaji.lower()).ratio()
+            ratio_english = (
+                difflib.SequenceMatcher(None, guessed_name.lower(), english.lower()).ratio() if english else 0
+            )
+
+            if is_substring or ratio_romaji > FUZZY_MATCH_THRESHOLD or ratio_english > FUZZY_MATCH_THRESHOLD:
+                print(
+                    f"Found valid season ({romaji}|{english}) with ratio: {ratio_romaji:.2f} (romaji) or {ratio_english:.2f} (english)"
+                )
+                valid_seasons.append(season)
 
         # Sort them based on release date
-        seasons = sorted(
-            seasons,
+        valid_seasons = sorted(
+            valid_seasons,
             key=lambda x: (
                 x["seasonYear"] or float("inf"),
                 self.season_order(x["season"]),
             ),
         )
-        return seasons
+        return valid_seasons
 
     def get_anime_info_and_progress(self, name: str, file_progress: int, year: str) -> AnimeInfo:
         """
@@ -733,10 +760,10 @@ class AniListUpdater:
         # Then they are using absolute numbering format for episodes
         # Try to guess season and episode.
         if seasons[0]["episodes"] is not None and file_progress > seasons[0]["episodes"]:
-            seasons = self.filter_valid_seasons(seasons)
-            print("Related shows:", ", ".join(season["title"]["romaji"] for season in seasons))
+            seasons = self.filter_valid_seasons(seasons, name)
+            # print("Related shows:", ", ".join(season["title"]["romaji"] for season in seasons))
             season_episode_info = self.find_season_and_episode(seasons, file_progress)
-            print(season_episode_info)
+            # print(season_episode_info)
             found_season = next(
                 (season for season in seasons if season["id"] == season_episode_info.season_id), None
             )
