@@ -17,7 +17,6 @@ Parses anime filenames, finds AniList entries, and updates progress/status.
 # IMPORTS
 # ═══════════════════════════════════════════════════════════════════════════════════════════════════════
 
-import difflib
 import hashlib
 import json
 import os
@@ -102,6 +101,17 @@ class AniListQueries:
                         media {
                             episodes
                         }
+                    }
+                    relations {
+                      edges {
+                        relationType
+                        node {
+                          id
+                          title {
+                            romaji
+                          }
+                        }
+                      }
                     }
                 }
             }
@@ -632,65 +642,61 @@ class AniListUpdater:
     # ANIME INFO & PROGRESS UPDATES
     # ──────────────────────────────────────────────────────────────────────────────────────────────────
 
-    def filter_valid_seasons(self, seasons: list[dict[str, Any]], guessed_name: str) -> list[dict[str, Any]]:
+    def filter_valid_seasons(self, seasons: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """
-        Filter and sort valid seasons using fuzzy matching on titles.
+        Filter and sort valid seasons.
 
         Args:
             seasons (list[dict[str, Any]]): Season dicts from AniList API.
-            guessed_name (str): The name guessed from the filename.
 
         Returns:
             list[dict[str, Any]]: Filtered and sorted seasons.
         """
-        FUZZY_MATCH_THRESHOLD = 0.6
-
         # Filter only to those whose duration > 21 OR those who have no duration and are releasing.
         # This is due to newly added anime having duration as null
         seasons = [
             season
             for season in seasons
             if (
-                (season["duration"] is None and season["status"] == "RELEASING")
-                or (season["duration"] is not None and season["duration"] > 21)
-                and (season["format"] == "TV" or season["format"] == "ONA")
+                ((season["duration"] is None and season["status"] == "RELEASING")
+                or (season["duration"] is not None and season["duration"] > 21))
+                and (season["format"] in {"TV", "ONA"})
             )
         ]
 
-        # Fuzzy match filtering
-        valid_seasons = []
-        for season in seasons:
-            romaji = season["title"]["romaji"] or ""
-            english = season["title"]["english"] or ""
+        # Build a list of the main series using relationType, assuming [0] is the correct series
+        season_map = {s["id"]: s for s in seasons}
 
-            is_substring = (
-                guessed_name.lower() in romaji.lower()
-                or (english and guessed_name.lower() in english.lower())
-                or romaji.lower() in guessed_name.lower()
-                or (english and english.lower() in guessed_name.lower())
-            )
+        current_node = seasons[0]
+        main_series = [current_node]
 
-            # Check fuzzy match ratio
-            ratio_romaji = difflib.SequenceMatcher(None, guessed_name.lower(), romaji.lower()).ratio()
-            ratio_english = (
-                difflib.SequenceMatcher(None, guessed_name.lower(), english.lower()).ratio() if english else 0
-            )
+        visited_ids = {current_node["id"]}
 
-            if is_substring or ratio_romaji > FUZZY_MATCH_THRESHOLD or ratio_english > FUZZY_MATCH_THRESHOLD:
-                print(
-                    f"Found valid season ({romaji}|{english}) with ratio: {ratio_romaji:.2f} (romaji) or {ratio_english:.2f} (english)"
-                )
-                valid_seasons.append(season)
+        while True:
+            next_id = None
+
+            edges = current_node.get("relations", {}).get("edges", [])
+            for edge in edges:
+                if edge["relationType"] == "SEQUEL":
+                    next_id = edge["node"]["id"]
+                    break
+
+            if next_id and next_id in season_map and next_id not in visited_ids:
+                current_node = season_map[next_id]
+                main_series.append(current_node)
+                visited_ids.add(next_id)
+            else:
+                break
 
         # Sort them based on release date
-        valid_seasons = sorted(
-            valid_seasons,
+        main_series = sorted(
+            main_series,
             key=lambda x: (
                 x["seasonYear"] or float("inf"),
                 self.season_order(x["season"]),
             ),
         )
-        return valid_seasons
+        return main_series
 
     def get_anime_info_and_progress(self, name: str, file_progress: int, year: str) -> AnimeInfo:
         """
@@ -707,7 +713,8 @@ class AniListUpdater:
         Raises:
             Exception: If the update fails.
         """
-        # Only those that are in the user's list
+        # We first need to make sure if we should search ALL of anime or only the user's list
+        # Only those that are in the user's list at first
         query = AniListQueries.SEARCH_ANIME
         variables = {"search": name, "year": year or 1, "page": 1, "onList": True}
 
@@ -718,14 +725,15 @@ class AniListUpdater:
 
         seasons = response["data"]["Page"]["media"]
 
-        # No results from the API request
-        if not seasons:
-            # For launch action or ADD_ENTRY_IF_MISSING, search all anime (not just user's list)
+        # Case 1: No results from the API request, or the season needs to be added (using absolute numbering)
+        if not seasons or (seasons[0]["episodes"] and file_progress > seasons[0]["episodes"] and self.find_season_and_episode(seasons, file_progress).season_id is None):
+            # 1. For launch action or ADD_ENTRY_IF_MISSING, search all AniList, not just the user's list
             if self.ACTION == "launch" or self.options.get("ADD_ENTRY_IF_MISSING", False):
                 print(f"Anime '{name}' not found in your list. Searching all anime...")
                 variables["onList"] = False
                 response = self.make_api_request(query, variables, self.access_token)
 
+                # If no response again, it does not exist.
                 if not response or "data" not in response:
                     return AnimeInfo(None, None, None, None, None, None)
 
@@ -733,19 +741,13 @@ class AniListUpdater:
                 if not seasons:
                     raise Exception(f"Couldn't find an anime from this title! ({name})")
 
-                # If this is an ADD_ENTRY_IF_MISSING request, prepare anime data for potential addition
-                if self.ACTION != "launch" and self.options.get("ADD_ENTRY_IF_MISSING", False):
-                    anime_to_add = seasons[0]
-                    anime_id = anime_to_add["id"]
-                    anime_title = anime_to_add["title"]["romaji"]
+                # If theres a response and it needs to get added, it will get added after the result is returned
+                # Will be added after its returned
 
-                    # Return AnimeInfo with None progress to indicate it needs to be added to list
-                    # The addition will happen in update_episode_count when update is actually triggered
-                    return AnimeInfo(anime_id, anime_title, None, anime_to_add["episodes"], file_progress, None)
             else:
                 raise Exception(f"Couldn't find an anime from this title! ({name}). Is it in your list?")
 
-        # This is the first element, which is the same as Media(search: $search)
+        # Case 2: Results from the API request form the user's list, or we already have them from searching all of AniList
         entry = seasons[0]["mediaListEntry"]
         anime_data = AnimeInfo(
             seasons[0]["id"],
@@ -756,14 +758,13 @@ class AniListUpdater:
             entry["status"] if entry is not None else None,
         )
 
-        # If the episode in the file name is larger than the total amount of episodes
-        # Then they are using absolute numbering format for episodes
-        # Try to guess season and episode.
+        # At this point, [0] is most likely the anime we are looking for unless it is in absolute numbering
+        # If they are using absolute numbering, we need to guess the season and episode
         if seasons[0]["episodes"] is not None and file_progress > seasons[0]["episodes"]:
-            seasons = self.filter_valid_seasons(seasons, name)
-            # print("Related shows:", ", ".join(season["title"]["romaji"] for season in seasons))
+            # Get seasons from the main series only, filtering others out
+            seasons = self.filter_valid_seasons(seasons)
+
             season_episode_info = self.find_season_and_episode(seasons, file_progress)
-            # print(season_episode_info)
             found_season = next(
                 (season for season in seasons if season["id"] == season_episode_info.season_id), None
             )
