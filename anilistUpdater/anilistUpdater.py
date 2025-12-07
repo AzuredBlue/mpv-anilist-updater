@@ -84,43 +84,8 @@ class AniListQueries:
     # Query to search for anime with optional filters
     # Variables: search (String), year (FuzzyDateInt), page (Int), onList (Boolean)
     SEARCH_ANIME = """
-        query($search: String, $year: FuzzyDateInt, $page: Int, $onList: Boolean) {
-            Page(page: $page) {
-                media (search: $search, type: ANIME, startDate_greater: $year, onList: $onList) {
-                    id
-                    title { romaji, english }
-                    season
-                    seasonYear
-                    episodes
-                    duration
-                    format
-                    status
-                    mediaListEntry {
-                        status
-                        progress
-                        media {
-                            episodes
-                        }
-                    }
-                    relations {
-                      edges {
-                        relationType
-                        node {
-                          id
-                          format
-                          title {
-                            romaji
-                          }
-                        }
-                      }
-                    }
-                }
-            }
-        }
-    """
-    SEARCH_ALL_ANIME = """
         query($search: String, $year: FuzzyDateInt, $page: Int) {
-            Page(page: $page) {
+            GlobalSearch: Page(page: $page) {
                 media (search: $search, type: ANIME, startDate_greater: $year) {
                     id
                     title { romaji, english }
@@ -138,16 +103,49 @@ class AniListQueries:
                         }
                     }
                     relations {
-                      edges {
-                        relationType
-                        node {
-                          id
-                          format
-                          title {
-                            romaji
-                          }
+                        edges {
+                            relationType
+                            node {
+                                id
+                                format
+                                title {
+                                    romaji
+                                }
+                            }
                         }
-                      }
+                    }
+                }
+            }
+
+            UserSearch: Page(page: $page) {
+                media (search: $search, type: ANIME, startDate_greater: $year, onList: true) {
+                    id
+                    title { romaji, english }
+                    season
+                    seasonYear
+                    episodes
+                    duration
+                    format
+                    status
+                    startDate { year month day }
+                    mediaListEntry {
+                        status
+                        progress
+                        media {
+                            episodes
+                        }
+                    }
+                    relations {
+                        edges {
+                            relationType
+                            node {
+                                id
+                                format
+                                title {
+                                    romaji
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -753,39 +751,24 @@ class AniListUpdater:
         # We first need to make sure if we should search ALL of anime or only the user's list
         # Only those that are in the user's list at first
         query = AniListQueries.SEARCH_ANIME
-        variables = {"search": name, "year": year or 1, "page": 1, "onList": True}
+        variables = {"search": name, "year": year or 1, "page": 1}
 
         response = self.make_api_request(query, variables, self.access_token)
 
         if not response or "data" not in response:
             return AnimeInfo(None, None, None, None, None, None)
 
-        seasons = response["data"]["Page"]["media"]
+        user_list_seasons = response["data"]["UserSearch"]["media"]
+        global_search_seasons = response["data"]["GlobalSearch"]["media"]
 
-        # Case 1: No results from the API request
-        if not seasons:
-            # 1. For launch action or ADD_ENTRY_IF_MISSING, search all AniList, not just the user's list
-            if self.ACTION == "launch" or self.options.get("ADD_ENTRY_IF_MISSING", False):
-                print(f"Anime '{name}' not found in your list. Searching all anime...")
-                query = AniListQueries.SEARCH_ALL_ANIME
-                variables = {"search": name, "year": year or 1, "page": 1}
-                response = self.make_api_request(query, variables, self.access_token)
+        # If no results for both, raise exception
+        if not user_list_seasons and not global_search_seasons:
+            raise Exception(f"Couldn't find an anime from this title! ({name}). Is it in your list?")
 
-                # If no response again, it does not exist.
-                if not response or "data" not in response:
-                    return AnimeInfo(None, None, None, None, None, None)
+        seasons = user_list_seasons if user_list_seasons is not None else global_search_seasons # Priority to the user list
 
-                seasons = response["data"]["Page"]["media"]
-                if not seasons:
-                    raise Exception(f"Couldn't find an anime from this title! ({name})")
-
-                # If theres a response and it needs to get added, it will get added after the result is returned
-                # Will be added after its returned
-
-            else:
-                raise Exception(f"Couldn't find an anime from this title! ({name}). Is it in your list?")
-
-        # Case 2: Results from the API request form the user's list, or we already have them from searching all of AniList
+        # Results from the API request from the user's list or from global search.
+        # If from global search then entry will be None, and the anime will be added if ADD_ENTRY_IF_MISSING
         entry = seasons[0]["mediaListEntry"]
         anime_data = AnimeInfo(
             seasons[0]["id"],
@@ -804,18 +787,9 @@ class AniListUpdater:
             filtered_seasons = self.filter_valid_seasons(seasons)
             season_episode_info = self.find_season_and_episode(filtered_seasons, file_progress)
 
-            # If is None, needs to search all of anime to find out the series exact episode
+            # If is None, needs to use global searchto find out the series exact episode
             if filtered_seasons is None or season_episode_info.season_id is None:
-                query = AniListQueries.SEARCH_ALL_ANIME
-                variables = {"search": name, "year": year or 1, "page": 1}
-                response = self.make_api_request(query, variables, self.access_token)
-                # If no response again, it does not exist.
-                if not response or "data" not in response:
-                    return AnimeInfo(None, None, None, None, None, None)
-
-                seasons = response["data"]["Page"]["media"]
-                if not seasons:
-                    raise Exception(f"Couldn't find an anime from this title! ({name})")
+                seasons = global_search_seasons
 
                 # At this point it should have the correct main series
                 # Recalculate both
