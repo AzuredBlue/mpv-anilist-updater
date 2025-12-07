@@ -29,7 +29,6 @@ from dataclasses import dataclass
 from typing import Any, Optional
 from guessit import guessit  # type: ignore
 
-
 # ═══════════════════════════════════════════════════════════════════════════════════════════════════════
 # DATA CLASSES
 # ═══════════════════════════════════════════════════════════════════════════════════════════════════════
@@ -176,8 +175,11 @@ class AniListUpdater:
     ANILIST_API_URL: str = "https://graphql.anilist.co"
     TOKEN_PATH: str = os.path.join(os.path.dirname(__file__), "anilistToken.txt")
     CACHE_PATH: str = os.path.join(os.path.dirname(__file__), "cache.json")
-    OPTIONS: str = "--excludes country --excludes language --type episode"
+    OPTIONS: dict[str, Any] = {"excludes": ["country", "language"], "type": "episode"}
     CACHE_REFRESH_RATE: int = 24 * 60 * 60
+
+    FILENAME_TRANS_TABLE = str.maketrans("", "", r'\\\/:!\*\?"<>\|\._-')
+    VERSION_REGEX = re.compile(r"(E\d+)v\d")
 
     # ──────────────────────────────────────────────────────────────────────────────────────────────────
     # INITIALIZATION & TOKEN HANDLING
@@ -518,21 +520,23 @@ class AniListUpdater:
     # Hardcoded exceptions to fix detection
     # Easier than just renaming my files 1 by 1 on Qbit
     # Every exception I find will be added here
-    def fix_filename(self, path_parts: list[str]) -> list[str]:
+    def fix_filename(self, path_parts: list[str]) -> tuple[list[str], Optional[dict[str, Any]]]:
         """
         Apply hardcoded fixes to filename/folder structure for better detection.
 
         Args:
             path_parts (list[str]): Path components.
 
+        Raises:
+            Exception: If no title is found from file name and the folders it is in.
+
         Returns:
-            list[str]: Modified path components.
+            tuple[list[str], Optional[dict[str, Any]]]: Modified path components and optional guess dict if already calculated.
         """
         # Simply easier for fixing the filename if we have what it is detecting.
         guess = guessit(path_parts[-1], self.OPTIONS)
 
         path_parts[-1] = os.path.splitext(path_parts[-1])[0]
-        pattern = r'[\\\/:!\*\?"<>\|\._-]'
 
         title_depth = -1
 
@@ -545,28 +549,34 @@ class AniListUpdater:
                     title_depth = -depth
                     break
 
+        # If we still don't have a title after searching folders, raise an exception
         if "title" not in guess:
-            print(f"Couldn't find title in filename '{path_parts[-1]}'! Guess result: {guess}")
-            return path_parts
+            raise Exception(f"Couldn't find title in filename '{path_parts}'! Guess result: {guess}")
 
         # Only clean up titles for some series
         cleanup_titles = ["Ranma", "Chi", "Bleach", "Link Click"]
         if any(title in guess["title"] for title in cleanup_titles):
-            path_parts[title_depth] = re.sub(pattern, " ", path_parts[title_depth])
+            path_parts[title_depth] = path_parts[title_depth].translate(self.FILENAME_TRANS_TABLE)
             path_parts[title_depth] = " ".join(path_parts[title_depth].split())
+
+            # If we modified the title, the guess is invalid
+            return path_parts, None
 
         if guess["title"] == "Centimeters per Second" and guess.get("episode", 0) == 5:
             path_parts[title_depth] = path_parts[title_depth].replace(" 5 ", " Five ")
             # For some reason AniList has this film in 3 parts.
             path_parts[title_depth] = path_parts[title_depth].replace("per Second", "per Second 3")
 
+            return path_parts, None
+
         # Remove 'v2', 'v3'... from the title since it fucks up with episode detection
-        match = re.search(r"(E\d+)v\d", path_parts[title_depth])
+        match = self.VERSION_REGEX.search(path_parts[title_depth])
         if match:
             episode = match.group(1)
             path_parts[title_depth] = path_parts[title_depth].replace(match.group(0), episode)
+            return path_parts, None
 
-        return path_parts
+        return path_parts, guess
 
     # Parse the file name using guessit
     def parse_filename(self, filepath: str) -> FileInfo:
@@ -579,13 +589,15 @@ class AniListUpdater:
         Returns:
             FileInfo: Parsed info with name, episode, year.
         """
-        path_parts = self.fix_filename(filepath.replace("\\", "/").split("/"))
+        path_parts, guess = self.fix_filename(filepath.replace("\\", "/").split("/"))
         filename = path_parts[-1]
         name, season, part, year = "", "", "", ""
         remaining: list[int] = []
         episode = 1
         # First, try to guess from the filename
-        guess = guessit(filename, self.OPTIONS)
+        if guess is None:
+            guess = guessit(filename, self.OPTIONS)
+
         print(f"File name guess: {filename} -> {dict(guess)}")
 
         # Episode guess from the title.
