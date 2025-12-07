@@ -27,9 +27,8 @@ import webbrowser
 from collections.abc import Iterator
 from dataclasses import dataclass
 from typing import Any, Optional
-
-import requests
 from guessit import guessit  # type: ignore
+
 
 # ═══════════════════════════════════════════════════════════════════════════════════════════════════════
 # DATA CLASSES
@@ -85,7 +84,7 @@ class AniListQueries:
     # Variables: search (String), year (FuzzyDateInt), page (Int), onList (Boolean)
     SEARCH_ANIME = """
         query($search: String, $year: FuzzyDateInt, $page: Int) {
-            GlobalSearch: Page(page: $page) {
+            GlobalSearch: Page(page: $page, perPage: 20) {
                 media (search: $search, type: ANIME, startDate_greater: $year) {
                     id
                     title { romaji, english }
@@ -117,7 +116,7 @@ class AniListQueries:
                 }
             }
 
-            UserSearch: Page(page: $page) {
+            UserSearch: Page(page: $page, perPage: 20) {
                 media (search: $search, type: ANIME, startDate_greater: $year, onList: true) {
                     id
                     title { romaji, english }
@@ -397,6 +396,8 @@ class AniListUpdater:
             Optional[dict[str, Any]]: API response or None on error.
         """
         headers = {"Content-Type": "application/json", "Accept": "application/json"}
+
+        import requests
 
         if access_token:
             headers["Authorization"] = f"Bearer {access_token}"
@@ -695,9 +696,14 @@ class AniListUpdater:
         season_map = {s["id"]: s for s in seasons}
 
         # Use the first TV | ONA, with duration > 21 as a starting point
-        current_node = next((s for s in seasons if ((s["duration"] is None and s["status"] == "RELEASING")
-                or (s["duration"] is not None and s["duration"] > 21))
-                and (s["format"] in valid_formats)), None)
+        current_node = None
+        for s in seasons:
+            if s["format"] in valid_formats and (
+                (s["duration"] is None and s["status"] == "RELEASING")
+                or (s["duration"] is not None and s["duration"] > 21)
+            ):
+                current_node = s
+                break
 
         if current_node is None:
             return None
@@ -711,7 +717,8 @@ class AniListUpdater:
             # It might have more than 1 sequel, check for the ones in "season".
             # As "season" might be the user's list, a sequel might not be in season_map
             candidate_sequels = [
-                edge["node"] for edge in edges
+                edge["node"]
+                for edge in edges
                 if edge["relationType"] == "SEQUEL" and edge["node"]["id"] in season_map
             ]
 
@@ -765,7 +772,9 @@ class AniListUpdater:
         if not user_list_seasons and not global_search_seasons:
             raise Exception(f"Couldn't find an anime from this title! ({name}). Is it in your list?")
 
-        seasons = user_list_seasons if user_list_seasons is not None else global_search_seasons # Priority to the user list
+        seasons = (
+            user_list_seasons if user_list_seasons is not None else global_search_seasons
+        )  # Priority to the user list
 
         # Results from the API request from the user's list or from global search.
         # If from global search then entry will be None, and the anime will be added if ADD_ENTRY_IF_MISSING
@@ -812,10 +821,8 @@ class AniListUpdater:
                 season_episode_info.relative_episode,
                 found_entry["status"] if found_entry else None,
             )
-            print(f"Final guessed anime: {found_season}")
-            print(
-                f"Absolute episode {file_progress} corresponds to Anime: {anime_data.anime_name}, Episode: {anime_data.file_progress}"
-            )
+            print(f"Final guessed anime: {anime_data.anime_name}")
+            print(f"Absolute episode {file_progress} corresponds to episode: {anime_data.file_progress}")
         else:
             print(f"Final guessed anime: {seasons[0]}")
         return anime_data
