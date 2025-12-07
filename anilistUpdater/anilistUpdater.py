@@ -118,6 +118,41 @@ class AniListQueries:
             }
         }
     """
+    SEARCH_ALL_ANIME = """
+        query($search: String, $year: FuzzyDateInt, $page: Int) {
+            Page(page: $page) {
+                media (search: $search, type: ANIME, startDate_greater: $year) {
+                    id
+                    title { romaji, english }
+                    season
+                    seasonYear
+                    episodes
+                    duration
+                    format
+                    status
+                    mediaListEntry {
+                        status
+                        progress
+                        media {
+                            episodes
+                        }
+                    }
+                    relations {
+                      edges {
+                        relationType
+                        node {
+                          id
+                          format
+                          title {
+                            romaji
+                          }
+                        }
+                      }
+                    }
+                }
+            }
+        }
+    """
 
     # Mutation to save/update media list entry (works for both adding and updating)
     # Variables: mediaId (Int), progress (Int), status (MediaListStatus)
@@ -407,6 +442,9 @@ class AniListUpdater:
         Returns:
             SeasonEpisodeInfo: Season and episode information.
         """
+        if seasons is None:
+            return SeasonEpisodeInfo(None, None, None, None, None)
+
         accumulated_episodes = 0
         for season in seasons:
             season_episodes = season.get("episodes", 12) if season.get("episodes") else 12
@@ -659,9 +697,12 @@ class AniListUpdater:
         season_map = {s["id"]: s for s in seasons}
 
         # Use the first TV | ONA, with duration > 21 as a starting point
-        current_node = next(s for s in seasons if ((s["duration"] is None and s["status"] == "RELEASING")
+        current_node = next((s for s in seasons if ((s["duration"] is None and s["status"] == "RELEASING")
                 or (s["duration"] is not None and s["duration"] > 21))
-                and (s["format"] in valid_formats))
+                and (s["format"] in valid_formats)), None)
+
+        if current_node is None:
+            return None
 
         main_series = [current_node]
         visited_ids = {current_node["id"]}
@@ -721,12 +762,13 @@ class AniListUpdater:
 
         seasons = response["data"]["Page"]["media"]
 
-        # Case 1: No results from the API request, or the season needs to be added (using absolute numbering)
-        if not seasons or (seasons[0]["episodes"] and file_progress > seasons[0]["episodes"] and self.find_season_and_episode(seasons, file_progress).season_id is None):
+        # Case 1: No results from the API request
+        if not seasons:
             # 1. For launch action or ADD_ENTRY_IF_MISSING, search all AniList, not just the user's list
             if self.ACTION == "launch" or self.options.get("ADD_ENTRY_IF_MISSING", False):
                 print(f"Anime '{name}' not found in your list. Searching all anime...")
-                variables["onList"] = False
+                query = AniListQueries.SEARCH_ALL_ANIME
+                variables = {"search": name, "year": year or 1, "page": 1}
                 response = self.make_api_request(query, variables, self.access_token)
 
                 # If no response again, it does not exist.
@@ -754,13 +796,34 @@ class AniListUpdater:
             entry["status"] if entry is not None else None,
         )
 
-        # At this point, [0] is most likely the anime we are looking for unless it is in absolute numbering
-        # If they are using absolute numbering, we need to guess the season and episode
-        if seasons[0]["episodes"] is not None and file_progress > seasons[0]["episodes"]:
-            # Get seasons from the main series only, filtering others out
-            seasons = self.filter_valid_seasons(seasons)
+        is_absolute_numbering = seasons and seasons[0]["episodes"] and file_progress > seasons[0]["episodes"]
+        filtered_seasons = []
 
-            season_episode_info = self.find_season_and_episode(seasons, file_progress)
+        # Check if it's using absolute numbering, if so, find out the main series and all sequels
+        if is_absolute_numbering:
+            filtered_seasons = self.filter_valid_seasons(seasons)
+            season_episode_info = self.find_season_and_episode(filtered_seasons, file_progress)
+
+            # If is None, needs to search all of anime to find out the series exact episode
+            if filtered_seasons is None or season_episode_info.season_id is None:
+                query = AniListQueries.SEARCH_ALL_ANIME
+                variables = {"search": name, "year": year or 1, "page": 1}
+                response = self.make_api_request(query, variables, self.access_token)
+                # If no response again, it does not exist.
+                if not response or "data" not in response:
+                    return AnimeInfo(None, None, None, None, None, None)
+
+                seasons = response["data"]["Page"]["media"]
+                if not seasons:
+                    raise Exception(f"Couldn't find an anime from this title! ({name})")
+
+                # At this point it should have the correct main series
+                # Recalculate both
+                filtered_seasons = self.filter_valid_seasons(seasons)
+                season_episode_info = self.find_season_and_episode(filtered_seasons, file_progress)
+
+            seasons = filtered_seasons
+
             found_season = next(
                 (season for season in seasons if season["id"] == season_episode_info.season_id), None
             )
