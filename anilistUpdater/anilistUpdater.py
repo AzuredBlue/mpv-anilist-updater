@@ -107,6 +107,7 @@ class AniListQueries:
                         relationType
                         node {
                           id
+                          format
                           title {
                             romaji
                           }
@@ -449,7 +450,7 @@ class AniListUpdater:
 
             left, right = cache_entry.get("relative_progress", "0->0").split("->")
             # For example, if 19->7, that means that 19 absolute is equivalent to 7 relative to this season
-            # File episode 20: 18 - 19 + 7 = 8 relative to this season
+            # File episode 20: 20 - 19 + 7 = 8 relative to this season
             offset = int(left) - int(right)
 
             relative_episode = file_info.episode - offset
@@ -652,50 +653,45 @@ class AniListUpdater:
         Returns:
             list[dict[str, Any]]: Filtered and sorted seasons.
         """
-        # Filter only to those whose duration > 21 OR those who have no duration and are releasing.
-        # This is due to newly added anime having duration as null
-        seasons = [
-            season
-            for season in seasons
-            if (
-                ((season["duration"] is None and season["status"] == "RELEASING")
-                or (season["duration"] is not None and season["duration"] > 21))
-                and (season["format"] in {"TV", "ONA"})
-            )
-        ]
+        valid_formats = {"TV", "ONA"}
 
         # Build a list of the main series using relationType, assuming [0] is the correct series
         season_map = {s["id"]: s for s in seasons}
 
-        current_node = seasons[0]
-        main_series = [current_node]
+        # Use the first TV | ONA, with duration > 21 as a starting point
+        current_node = next(s for s in seasons if ((s["duration"] is None and s["status"] == "RELEASING")
+                or (s["duration"] is not None and s["duration"] > 21))
+                and (s["format"] in valid_formats))
 
+        main_series = [current_node]
         visited_ids = {current_node["id"]}
 
         while True:
-            next_id = None
-
             edges = current_node.get("relations", {}).get("edges", [])
-            for edge in edges:
-                if edge["relationType"] == "SEQUEL":
-                    next_id = edge["node"]["id"]
-                    break
 
-            if next_id and next_id in season_map and next_id not in visited_ids:
-                current_node = season_map[next_id]
-                main_series.append(current_node)
-                visited_ids.add(next_id)
-            else:
+            # It might have more than 1 sequel, check for the ones in "season".
+            # As "season" might be the user's list, a sequel might not be in season_map
+            candidate_sequels = [
+                edge["node"] for edge in edges
+                if edge["relationType"] == "SEQUEL" and edge["node"]["id"] in season_map
+            ]
+
+            if not candidate_sequels:
                 break
 
-        # Sort them based on release date
-        main_series = sorted(
-            main_series,
-            key=lambda x: (
-                x["seasonYear"] or float("inf"),
-                self.season_order(x["season"]),
-            ),
-        )
+            # At this point, candidate_sequels contain sequels in season_map. Prioritise those that are "TV" or "ONA"
+            next_sequel = max(candidate_sequels, key=lambda x: x["format"] in valid_formats)
+            next_id = next_sequel["id"]
+
+            if next_id in visited_ids:
+                break
+
+            visited_ids.add(next_id)
+            current_node = season_map[next_id]
+
+            if current_node["format"] in valid_formats:
+                main_series.append(current_node)
+
         return main_series
 
     def get_anime_info_and_progress(self, name: str, file_progress: int, year: str) -> AnimeInfo:
