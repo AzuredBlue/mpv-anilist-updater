@@ -785,9 +785,7 @@ class AniListUpdater:
         if not user_list_seasons and not global_search_seasons:
             raise Exception(f"Couldn't find an anime from this title! ({name}). Is it in your list?")
 
-        seasons = (
-            user_list_seasons if user_list_seasons is not None else global_search_seasons
-        )  # Priority to the user list
+        seasons = user_list_seasons or global_search_seasons  # Priority to the user list
 
         # Results from the API request from the user's list or from global search.
         # If from global search then entry will be None, and the anime will be added if ADD_ENTRY_IF_MISSING
