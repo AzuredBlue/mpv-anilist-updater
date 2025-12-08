@@ -27,6 +27,8 @@ import webbrowser
 from collections.abc import Iterator
 from dataclasses import dataclass
 from typing import Any, Optional
+
+import requests
 from guessit import guessit  # type: ignore
 
 # ═══════════════════════════════════════════════════════════════════════════════════════════════════════
@@ -178,8 +180,9 @@ class AniListUpdater:
     OPTIONS: dict[str, Any] = {"excludes": ["country", "language"], "type": "episode"}
     CACHE_REFRESH_RATE: int = 24 * 60 * 60
 
-    FILENAME_TRANS_TABLE = str.maketrans("", "", r'\\\/:!\*\?"<>\|\._-')
-    VERSION_REGEX = re.compile(r"(E\d+)v\d")
+    _CHARS_TO_REPLACE: str = r'\/:!*?"<>|._-'
+    FILENAME_TRANS_TABLE: dict[int, str] = str.maketrans(_CHARS_TO_REPLACE, " " * len(_CHARS_TO_REPLACE))
+    VERSION_REGEX: re.Pattern[str] = re.compile(r"(E\d+)v\d")
 
     # ──────────────────────────────────────────────────────────────────────────────────────────────────
     # INITIALIZATION & TOKEN HANDLING
@@ -398,8 +401,6 @@ class AniListUpdater:
             Optional[dict[str, Any]]: API response or None on error.
         """
         headers = {"Content-Type": "application/json", "Accept": "application/json"}
-
-        import requests
 
         if access_token:
             headers["Authorization"] = f"Bearer {access_token}"
@@ -836,7 +837,7 @@ class AniListUpdater:
             print(f"Final guessed anime: {anime_data.anime_name}")
             print(f"Absolute episode {file_progress} corresponds to episode: {anime_data.file_progress}")
         else:
-            print(f"Final guessed anime: {seasons[0]}")
+            print(f"Final guessed anime: {seasons[0]['title']['romaji']}")
         return anime_data
 
     # Update the anime based on file progress
