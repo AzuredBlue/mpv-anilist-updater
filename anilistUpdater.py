@@ -181,7 +181,8 @@ class AniListUpdater:
     CACHE_REFRESH_RATE: int = 24 * 60 * 60
 
     _CHARS_TO_REPLACE: str = r'\/:!*?"<>|._-'
-    FILENAME_TRANS_TABLE: dict[int, str] = str.maketrans(_CHARS_TO_REPLACE, " " * len(_CHARS_TO_REPLACE))
+    # Matches any of the chars,only if not followed by a whitespace and a digit.
+    CLEAN_PATTERN: str = rf"[{re.escape(_CHARS_TO_REPLACE)}](?!\s*\d)"
     VERSION_REGEX: re.Pattern[str] = re.compile(r"(E\d+)v\d")
 
     # ──────────────────────────────────────────────────────────────────────────────────────────────────
@@ -518,9 +519,7 @@ class AniListUpdater:
             self.cache_to_file(filename, file_info.name, file_info.episode, result)
         return
 
-    # Hardcoded exceptions to fix detection
-    # Easier than just renaming my files 1 by 1 on Qbit
-    # Every exception I find will be added here
+    # Attempt to improve detection
     def fix_filename(self, path_parts: list[str]) -> tuple[list[str], Optional[dict[str, Any]]]:
         """
         Apply hardcoded fixes to filename/folder structure for better detection.
@@ -534,12 +533,18 @@ class AniListUpdater:
         Returns:
             tuple[list[str], Optional[dict[str, Any]]]: Modified path components and optional guess dict if already calculated.
         """
+        # Before using guessit, clean up the filename
+        path_parts[-1] = re.sub(self.CLEAN_PATTERN, " ", path_parts[-1])
+        path_parts[-1] = " ".join(path_parts[-1].split())
+
+        # Remove 'v2', 'v3'... from the title since it fucks up with episode detection
+        match = self.VERSION_REGEX.search(path_parts[-1])
+        if match:
+            episode = match.group(1)
+            path_parts[-1] = path_parts[-1].replace(match.group(0), episode)
+
         # Simply easier for fixing the filename if we have what it is detecting.
         guess = guessit(path_parts[-1], self.OPTIONS)
-
-        path_parts[-1] = os.path.splitext(path_parts[-1])[0]
-
-        title_depth = -1
 
         # Fix from folders if the everything is not in the filename
         if "title" not in guess:
@@ -547,35 +552,11 @@ class AniListUpdater:
                 folder_guess = guessit(path_parts[-depth], self.OPTIONS)
                 if "title" in folder_guess:
                     guess["title"] = folder_guess["title"]
-                    title_depth = -depth
                     break
 
         # If we still don't have a title after searching folders, raise an exception
         if "title" not in guess:
             raise Exception(f"Couldn't find title in filename '{path_parts}'! Guess result: {guess}")
-
-        # Only clean up titles for some series
-        cleanup_titles = ["Ranma", "Chi", "Bleach", "Link Click"]
-        if any(title in guess["title"] for title in cleanup_titles):
-            path_parts[title_depth] = path_parts[title_depth].translate(self.FILENAME_TRANS_TABLE)
-            path_parts[title_depth] = " ".join(path_parts[title_depth].split())
-
-            # If we modified the title, the guess is invalid
-            return path_parts, None
-
-        if guess["title"] == "Centimeters per Second" and guess.get("episode", 0) == 5:
-            path_parts[title_depth] = path_parts[title_depth].replace(" 5 ", " Five ")
-            # For some reason AniList has this film in 3 parts.
-            path_parts[title_depth] = path_parts[title_depth].replace("per Second", "per Second 3")
-
-            return path_parts, None
-
-        # Remove 'v2', 'v3'... from the title since it fucks up with episode detection
-        match = self.VERSION_REGEX.search(path_parts[title_depth])
-        if match:
-            episode = match.group(1)
-            path_parts[title_depth] = path_parts[title_depth].replace(match.group(0), episode)
-            return path_parts, None
 
         return path_parts, guess
 
@@ -805,6 +786,10 @@ class AniListUpdater:
         # Check if it's using absolute numbering, if so, find out the main series and all sequels
         if is_absolute_numbering:
             filtered_seasons = self.filter_valid_seasons(seasons)
+
+            if not filtered_seasons:
+                raise Exception(f"No valid seasons found for '{name}'.")
+
             season_episode_info = self.find_season_and_episode(filtered_seasons, file_progress)
 
             # If is None, needs to use global searchto find out the series exact episode

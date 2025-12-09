@@ -120,15 +120,15 @@ The script uses Guessit to try to get as much information as possible from the f
 
 If the "episode" and "season" guess are before the title, it will consider that title wrong and try to get the title from the name of the folder it is in.
 
+After that, it searches for the show both in your AniList and globally.
+
 If the torrent file has absolute numbering (only episode number), it will try to guess the season and episode by:
 
-1. Searching for the anime name on the AniList API.
-2. Get all results with a similar name, whose format are `TV` and the duration greater than 21 minutes.
-3. Sort them based on release date.
-4. Get the season based on the absolute episode number
+1. From the first TV or ONA with duration > 21, attempt to build a list of sequels from the main series using relations from the API
+2. If the episode number is greater than all of those combined, it could've made a mistake or maybe the user doesn't have all necessary entries in the list, so it repeats this process with the global search from before.
+3. Once we have a filtered list of seasons in order, finding the episode is trivial.
 
-It is not a flawless method. It won't work properly if the anime has seasons as ONA's. If it doesn't work properly, consider
-changing the episode number to the normal format yourself, or simply give up on that series.
+If it doesn't work properly, consider manually changing the episode number to the normal format, or updating that series manually.
 
 ## FAQ (Probably)
 
