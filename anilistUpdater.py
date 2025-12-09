@@ -26,7 +26,7 @@ import time
 import webbrowser
 from collections.abc import Iterator
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any, ClassVar
 
 import requests
 from guessit import guessit  # type: ignore
@@ -40,23 +40,23 @@ from guessit import guessit  # type: ignore
 class SeasonEpisodeInfo:
     """Season and episode info for absolute numbering."""
 
-    season_id: Optional[int]
-    season_title: Optional[str]
-    progress: Optional[int]
-    episodes: Optional[int]
-    relative_episode: Optional[int]
+    season_id: int | None
+    season_title: str | None
+    progress: int | None
+    episodes: int | None
+    relative_episode: int | None
 
 
 @dataclass
 class AnimeInfo:
     """Anime information including progress and status."""
 
-    anime_id: Optional[int]
-    anime_name: Optional[str]
-    current_progress: Optional[int]
-    total_episodes: Optional[int]
-    file_progress: Optional[int]
-    current_status: Optional[str]
+    anime_id: int | None
+    anime_name: str | None
+    current_progress: int | None
+    total_episodes: int | None
+    file_progress: int | None
+    current_status: str | None
 
     # Can not specify the type further. Causes some of the the variables type checking to be unhappy.
     def __iter__(self) -> Iterator[Any]:  # fmt: off
@@ -177,7 +177,7 @@ class AniListUpdater:
     ANILIST_API_URL: str = "https://graphql.anilist.co"
     TOKEN_PATH: str = os.path.join(os.path.dirname(__file__), "anilistToken.txt")
     CACHE_PATH: str = os.path.join(os.path.dirname(__file__), "cache.json")
-    OPTIONS: dict[str, Any] = {"excludes": ["country", "language"], "type": "episode"}
+    OPTIONS: ClassVar[dict[str, Any]] = {"excludes": ["country", "language"], "type": "episode"}
     CACHE_REFRESH_RATE: int = 24 * 60 * 60
 
     _CHARS_TO_REPLACE: str = r'\/:!*?"<>|._-'
@@ -198,13 +198,13 @@ class AniListUpdater:
             options (dict[str, Any]): Configuration options.
             action (str): Action to perform ('update' or 'launch').
         """
-        self.access_token: Optional[str] = self.load_access_token()
+        self.access_token: str | None = self.load_access_token()
         self.options: dict[str, Any] = options
         self.ACTION: str = action
-        self._cache: Optional[dict[str, Any]] = None
+        self._cache: dict[str, Any] | None = None
 
     # Load token from anilistToken.txt
-    def load_access_token(self) -> Optional[str]:
+    def load_access_token(self) -> str | None:
         """
         Load access token from file, supporting legacy formats.
 
@@ -313,7 +313,7 @@ class AniListUpdater:
         """
         return hashlib.sha256(path.encode("utf-8")).hexdigest()
 
-    def check_and_clean_cache(self, path: str, guessed_name: str) -> Optional[dict[str, Any]]:
+    def check_and_clean_cache(self, path: str, guessed_name: str) -> dict[str, Any] | None:
         """
         Get valid cache entry and clean expired entries.
 
@@ -388,8 +388,8 @@ class AniListUpdater:
 
     # Function to make an api request to AniList's api
     def make_api_request(
-        self, query: str, variables: Optional[dict[str, Any]] = None, access_token: Optional[str] = None
-    ) -> Optional[dict[str, Any]]:
+        self, query: str, variables: dict[str, Any] | None = None, access_token: str | None = None
+    ) -> dict[str, Any] | None:
         """
         Make POST request to AniList GraphQL API.
 
@@ -421,7 +421,7 @@ class AniListUpdater:
     # ──────────────────────────────────────────────────────────────────────────────────────────────────
 
     @staticmethod
-    def season_order(season: Optional[str]) -> int:
+    def season_order(season: str | None) -> int:
         """
         Get numeric order for season sorting.
 
@@ -520,7 +520,7 @@ class AniListUpdater:
         return
 
     # Attempt to improve detection
-    def fix_filename(self, path_parts: list[str]) -> tuple[list[str], Optional[dict[str, Any]]]:
+    def fix_filename(self, path_parts: list[str]) -> tuple[list[str], dict[str, Any] | None]:
         """
         Apply hardcoded fixes to filename/folder structure for better detection.
 
