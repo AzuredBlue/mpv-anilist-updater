@@ -177,11 +177,11 @@ class AniListUpdater:
     ANILIST_API_URL: str = "https://graphql.anilist.co"
     TOKEN_PATH: str = os.path.join(os.path.dirname(__file__), "anilistToken.txt")
     CACHE_PATH: str = os.path.join(os.path.dirname(__file__), "cache.json")
-    OPTIONS: ClassVar[dict[str, Any]] = {"excludes": ["country", "language"], "type": "episode"}
+    EPISODE_OPTIONS: ClassVar[dict[str, Any]] = {"excludes": ["country", "language"], "type": "episode"}
     CACHE_REFRESH_RATE: int = 24 * 60 * 60
 
     _CHARS_TO_REPLACE: str = r'\/:!*?"<>|._-'
-    # Matches any of the chars,only if not followed by a whitespace and a digit.
+    # Matches any of the chars, only if not followed by a whitespace and a digit.
     CLEAN_PATTERN: str = rf"[{re.escape(_CHARS_TO_REPLACE)}](?!\s*\d)"
     VERSION_REGEX: re.Pattern[str] = re.compile(r"(E\d+)v\d")
 
@@ -476,6 +476,7 @@ class AniListUpdater:
         """
         file_info = self.parse_filename(filename)
         cache_entry = self.check_and_clean_cache(filename, file_info.name)
+        result = None
 
         # If launching and cache has anime_id, we can skip search and open directly.
         if self.ACTION == "launch" and cache_entry and cache_entry.get("anime_id"):
@@ -506,10 +507,9 @@ class AniListUpdater:
                     relative_episode,
                     cache_entry["current_status"],
                 )
-            else:
-                result = self.get_anime_info_and_progress(file_info.name, file_info.episode, file_info.year)
 
-        else:
+        # At this point, we guess using the guessed name and other information
+        if result is None:
             result = self.get_anime_info_and_progress(file_info.name, file_info.episode, file_info.year)
 
         result = self.update_episode_count(result)
@@ -520,18 +520,15 @@ class AniListUpdater:
         return
 
     # Attempt to improve detection
-    def fix_filename(self, path_parts: list[str]) -> tuple[list[str], dict[str, Any] | None]:
+    def fix_filename(self, path_parts: list[str]) -> list[str]:
         """
         Apply hardcoded fixes to filename/folder structure for better detection.
 
         Args:
             path_parts (list[str]): Path components.
 
-        Raises:
-            Exception: If no title is found from file name and the folders it is in.
-
         Returns:
-            tuple[list[str], Optional[dict[str, Any]]]: Modified path components and optional guess dict if already calculated.
+            list[str]: Modified path components.
         """
         # Before using guessit, clean up the filename
         path_parts[-1] = re.sub(self.CLEAN_PATTERN, " ", path_parts[-1])
@@ -543,22 +540,7 @@ class AniListUpdater:
             episode = match.group(1)
             path_parts[-1] = path_parts[-1].replace(match.group(0), episode)
 
-        # Simply easier for fixing the filename if we have what it is detecting.
-        guess = guessit(path_parts[-1], self.OPTIONS)
-
-        # Fix from folders if the everything is not in the filename
-        if "title" not in guess:
-            for depth in range(2, min(4, len(path_parts))):
-                folder_guess = guessit(path_parts[-depth], self.OPTIONS)
-                if "title" in folder_guess:
-                    guess["title"] = folder_guess["title"]
-                    break
-
-        # If we still don't have a title after searching folders, raise an exception
-        if "title" not in guess:
-            raise Exception(f"Couldn't find title in filename '{path_parts}'! Guess result: {guess}")
-
-        return path_parts, guess
+        return path_parts
 
     # Parse the file name using guessit
     def parse_filename(self, filepath: str) -> FileInfo:
@@ -568,17 +550,18 @@ class AniListUpdater:
         Args:
             filepath (str): Path to video file.
 
+        Raises:
+            Exception: If no title is found from file name and the folders it is in.
+
         Returns:
             FileInfo: Parsed info with name, episode, year.
         """
-        path_parts, guess = self.fix_filename(filepath.replace("\\", "/").split("/"))
+        path_parts = self.fix_filename(filepath.replace("\\", "/").split("/"))
         filename = path_parts[-1]
-        name, season, part, year = "", "", "", ""
+        guessed_name, season, part, year = "", "", "", ""
         remaining: list[int] = []
-        episode = 1
         # First, try to guess from the filename
-        if guess is None:
-            guess = guessit(filename, self.OPTIONS)
+        guess = guessit(filename, self.EPISODE_OPTIONS)
 
         print(f"File name guess: {filename} -> {dict(guess)}")
 
@@ -629,46 +612,53 @@ class AniListUpdater:
         episode_index = keys.index("episode") if "episode" in guess else 1
         season_index = keys.index("season") if "season" in guess else -1
         title_in_filename = "title" in guess and (episode_index > 0 and (season_index > 0 or season_index == -1))
+        found_title = title_in_filename
 
         # If the title is not in the filename or episode index is 0, try the folder name
         # If the episode index > 0 and season index > 0, its safe to assume that the title is in the file name
 
         if title_in_filename:
-            name = guess["title"]
+            guessed_name = guess["title"]
         else:
             # If it isnt in the name of the file, try to guess using the name of the folder it is stored in
 
             # Depth=2 folders
             for depth in [2, 3]:
-                folder_guess = guessit(path_parts[-depth], self.OPTIONS) if len(path_parts) > depth - 1 else None
+                folder_guess = (
+                    guessit(path_parts[-depth], self.EPISODE_OPTIONS) if len(path_parts) > depth - 1 else None
+                )
                 if folder_guess:
                     print(
                         f"{depth - 1}{'st' if depth - 1 == 1 else 'nd'} Folder guess:\n{path_parts[-depth]} -> {dict(folder_guess)}"
                     )
 
-                    name = str(folder_guess.get("title", ""))
+                    guessed_name = str(folder_guess.get("title", ""))
                     season = season or str(folder_guess.get("season", ""))
                     part = part or str(folder_guess.get("part", ""))
                     year = year or str(folder_guess.get("year", ""))
 
                     # If we got the name, its probable we already got season and part from the way folders are usually structured
-                    if name:
+                    if guessed_name:
+                        found_title = True
                         break
+
+        if not found_title:
+            raise Exception(f"Couldn't find title in filename '{filename}'! Guess result: {guess}")
 
         # Haven't tested enough but seems to work fine
         if remaining:
             # If there are remaining episodes, append them to the name
-            name += " " + " ".join(str(ep) for ep in remaining)
+            guessed_name += " " + " ".join(str(ep) for ep in remaining)
 
         # Add season and part if there are
         if season and (int(season) > 1 or part):
-            name += f" Season {season}"
+            guessed_name += f" Season {season}"
 
         if part:
-            name += f" Part {part}"
+            guessed_name += f" Part {part}"
 
-        print("Guessed name: " + name)
-        return FileInfo(name, episode, year)
+        print("Guessed name: " + guessed_name)
+        return FileInfo(guessed_name, episode, year)
 
     # ──────────────────────────────────────────────────────────────────────────────────────────────────
     # ANIME INFO & PROGRESS UPDATES
@@ -747,7 +737,7 @@ class AniListUpdater:
             AnimeInfo: Complete anime information.
 
         Raises:
-            Exception: If the update fails.
+            Exception: If it could not find the anime.
         """
         # We first need to make sure if we should search ALL of anime or only the user's list
         # Only those that are in the user's list at first
