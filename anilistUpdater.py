@@ -209,7 +209,7 @@ class AniListUpdater:
         Load access token from file, supporting legacy formats.
 
         Returns:
-            Optional[str]: Access token or None if not found.
+            str | None: Access token or None if not found.
         """
         try:
             if not os.path.exists(self.TOKEN_PATH):
@@ -322,7 +322,7 @@ class AniListUpdater:
             guessed_name (str): Guessed anime name.
 
         Returns:
-            Optional[dict[str, Any]]: Cache entry or None if not found/valid.
+            dict[str, Any] | None: Cache entry or None if not found/valid.
         """
         try:
             cache = self.load_cache()
@@ -395,11 +395,11 @@ class AniListUpdater:
 
         Args:
             query (str): GraphQL query string.
-            variables (Optional[dict[str, Any]]): Query variables.
-            access_token (Optional[str]): AniList access token.
+            variables (dict[str, Any] | None): Query variables.
+            access_token (str | None): AniList access token.
 
         Returns:
-            Optional[dict[str, Any]]: API response or None on error.
+            dict[str, Any] | None: API response or None on error.
         """
         headers = {"Content-Type": "application/json", "Accept": "application/json"}
 
@@ -426,7 +426,7 @@ class AniListUpdater:
         Get numeric order for season sorting.
 
         Args:
-            season (Optional[str]): Season name (WINTER, SPRING, SUMMER, FALL).
+            season (str | None): Season name (WINTER, SPRING, SUMMER, FALL).
 
         Returns:
             int: Order value.
@@ -434,7 +434,9 @@ class AniListUpdater:
         return {"WINTER": 1, "SPRING": 2, "SUMMER": 3, "FALL": 4}.get(season, 5)  # type: ignore
 
     # Finds the season and episode of an anime with absolute numbering
-    def find_season_and_episode(self, seasons: list[dict[str, Any]], absolute_episode: int) -> SeasonEpisodeInfo:
+    def find_season_and_episode(
+        self, seasons: list[dict[str, Any]] | None, absolute_episode: int
+    ) -> SeasonEpisodeInfo:
         """
         Find correct season and relative episode for absolute episode number.
 
@@ -664,7 +666,7 @@ class AniListUpdater:
     # ANIME INFO & PROGRESS UPDATES
     # ──────────────────────────────────────────────────────────────────────────────────────────────────
 
-    def filter_valid_seasons(self, seasons: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    def filter_valid_seasons(self, seasons: list[dict[str, Any]]) -> list[dict[str, Any]] | None:
         """
         Filter and sort valid seasons.
 
@@ -672,7 +674,7 @@ class AniListUpdater:
             seasons (list[dict[str, Any]]): Season dicts from AniList API.
 
         Returns:
-            list[dict[str, Any]]: Filtered and sorted seasons.
+            list[dict[str, Any]] | None: Filtered and sorted seasons or None if no seasons could be found.
         """
         valid_formats = {"TV", "ONA"}
 
@@ -776,20 +778,19 @@ class AniListUpdater:
         # Check if it's using absolute numbering, if so, find out the main series and all sequels
         if is_absolute_numbering:
             filtered_seasons = self.filter_valid_seasons(seasons)
-
-            if not filtered_seasons:
-                raise Exception(f"No valid seasons found for '{name}'.")
-
             season_episode_info = self.find_season_and_episode(filtered_seasons, file_progress)
 
-            # If is None, needs to use global searchto find out the series exact episode
-            if filtered_seasons is None or season_episode_info.season_id is None:
+            # If it is None, needs to use global searchto find out the series exact episode
+            if not filtered_seasons or season_episode_info.season_id is None:
                 seasons = global_search_seasons
 
-                # At this point it should have the correct main series
+                # At this point it should either have the correct main series or it failed
                 # Recalculate both
                 filtered_seasons = self.filter_valid_seasons(seasons)
                 season_episode_info = self.find_season_and_episode(filtered_seasons, file_progress)
+
+                if filtered_seasons is None or season_episode_info.season_id is None:
+                    raise Exception(f"No valid seasons found for '{name}'.")
 
             seasons = filtered_seasons
 
