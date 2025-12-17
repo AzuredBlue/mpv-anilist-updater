@@ -656,7 +656,11 @@ class AniListUpdater:
         if season and (int(season) > 1 or part):
             guessed_name += f" Season {season}"
 
-        if part:
+        # Rare case where "Part" is in the episode title: "My Hero Academia S06E06 Encounter, Part 2"
+        # If episode_title is detected, part must be before it
+        episode_title_index = keys.index("episode_title") if "episode_title" in guess else 99
+
+        if part and keys.index("part") < episode_title_index:
             guessed_name += f" Part {part}"
 
         print("Guessed name: " + guessed_name)
