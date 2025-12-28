@@ -71,6 +71,11 @@ class FileInfo:
     name: str
     episode: int
     year: str
+    file_format: str | None
+
+    def __iter__(self) -> Iterator[Any]:
+        """Allow tuple unpacking of FileInfo."""
+        return iter((self.name, self.episode, self.year, self.file_format))
 
 
 # ═══════════════════════════════════════════════════════════════════════════════════════════════════════
@@ -82,11 +87,11 @@ class AniListQueries:
     """GraphQL queries for AniList API operations."""
 
     # Query to search for anime with optional filters
-    # Variables: search (String), year (FuzzyDateInt), page (Int), onList (Boolean)
+    # Variables: search (String), year (FuzzyDateInt), page (Int), format (MediaFormat)
     SEARCH_ANIME = """
-        query($search: String, $year: FuzzyDateInt, $page: Int) {
+        query($search: String, $year: FuzzyDateInt, $page: Int, $format_in: [MediaFormat]) {
             GlobalSearch: Page(page: $page, perPage: 20) {
-                media (search: $search, type: ANIME, startDate_greater: $year) {
+                media (search: $search, type: ANIME, startDate_greater: $year, format_in: $format_in) {
                     id
                     title { romaji, english }
                     season
@@ -118,7 +123,7 @@ class AniListQueries:
             }
 
             UserSearch: Page(page: $page, perPage: 20) {
-                media (search: $search, type: ANIME, startDate_greater: $year, onList: true) {
+                media (search: $search, type: ANIME, startDate_greater: $year, format_in: $format_in, onList: true) {
                     id
                     title { romaji, english }
                     season
@@ -512,7 +517,7 @@ class AniListUpdater:
 
         # At this point, we guess using the guessed name and other information
         if result is None:
-            result = self.get_anime_info_and_progress(file_info.name, file_info.episode, file_info.year)
+            result = self.get_anime_info_and_progress(file_info)
 
         result = self.update_episode_count(result)
 
@@ -582,6 +587,14 @@ class AniListUpdater:
         season = guess.get("season", "")
         part = str(guess.get("part", ""))
         year = str(guess.get("year", ""))
+        file_format = None
+
+        # Right now, only detect both these formats
+        other = guess.get("other", "")
+        if other == "Original Animated Video":
+            file_format = "OVA"
+        elif other == "Original Net Animation":
+            file_format = "ONA"
 
         # Quick fixes assuming season before episode
         # 'episode_title': '02' in 'S2 02'
@@ -648,8 +661,8 @@ class AniListUpdater:
             raise Exception(f"Couldn't find title in filename '{filename}'! Guess result: {guess}")
 
         # Haven't tested enough but seems to work fine
+        # If there are remaining episodes, append them to the name
         if remaining:
-            # If there are remaining episodes, append them to the name
             guessed_name += " " + " ".join(str(ep) for ep in remaining)
 
         # Add season and part if there are
@@ -663,8 +676,8 @@ class AniListUpdater:
         if part and keys.index("part") < episode_title_index:
             guessed_name += f" Part {part}"
 
-        print("Guessed name: " + guessed_name)
-        return FileInfo(guessed_name, episode, year)
+        print(f"Guessed: {guessed_name}{f' {file_format}' if file_format else ''} - E{episode} {year}")
+        return FileInfo(guessed_name, episode, year, file_format)
 
     # ──────────────────────────────────────────────────────────────────────────────────────────────────
     # ANIME INFO & PROGRESS UPDATES
@@ -730,14 +743,12 @@ class AniListUpdater:
 
         return main_series
 
-    def get_anime_info_and_progress(self, name: str, file_progress: int, year: str) -> AnimeInfo:
+    def get_anime_info_and_progress(self, file_info: FileInfo) -> AnimeInfo:
         """
         Query AniList for anime info and user progress.
 
         Args:
-            name (str): Anime title.
-            file_progress (int): Episode number from file.
-            year (str): Year string (may be empty).
+            file_info (FileInfo): Anime file information.
 
         Returns:
             AnimeInfo: Complete anime information.
@@ -745,10 +756,16 @@ class AniListUpdater:
         Raises:
             Exception: If it could not find the anime.
         """
+        # Unpack file info
+        name, file_progress, year, file_format = file_info
+
+        # If theres a format specified, search only for that format.
+        format_in = [file_format] if file_format else ["TV", "TV_SHORT", "MOVIE", "SPECIAL", "OVA", "ONA"]
+
         # We first need to make sure if we should search ALL of anime or only the user's list
         # Only those that are in the user's list at first
         query = AniListQueries.SEARCH_ANIME
-        variables = {"search": name, "year": year or 1, "page": 1}
+        variables = {"search": name, "year": year or 1, "page": 1, "format_in": format_in}
 
         response = self.make_api_request(query, variables, self.access_token)
 

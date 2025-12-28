@@ -23,6 +23,7 @@ ignore = [
   "INP001",  # File is part of an implicit namespace package
   "PGH003",  # Use specific rule codes when ignoring type issues
   "PLR0912", # Too many branches
+  "PLR0914", # Too many local variables
   "PLR0915", # Too many statements
   "PLR2004", # Magic value used in comparison
   "PLR6301", # Method could be a function (no `self` access)
