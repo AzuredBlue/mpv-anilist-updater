@@ -934,7 +934,10 @@ class AniListUpdater:
 
         # Set to COMPLETED if last episode and the option is enabled
         if file_progress == total_episodes and (
-            (current_status == "CURRENT" and self.options["SET_TO_COMPLETED_AFTER_LAST_EPISODE_CURRENT"])
+            (
+                current_status in {"CURRENT", "PLANNING"}
+                and self.options["SET_TO_COMPLETED_AFTER_LAST_EPISODE_CURRENT"]
+            )
             or (current_status == "REPEATING" and self.options["SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING"])
         ):
             status_to_set = "COMPLETED"
