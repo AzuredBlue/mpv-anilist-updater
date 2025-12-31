@@ -187,7 +187,7 @@ class AniListUpdater:
 
     _CHARS_TO_REPLACE: str = r'\/:!*?"<>|._-'
     # Matches any of the chars, only if not followed by a whitespace and a digit.
-    CLEAN_PATTERN: str = rf"[{re.escape(_CHARS_TO_REPLACE)}](?!\s*\d)"
+    CLEAN_PATTERN: str = rf"(?: - Movie)|[{re.escape(_CHARS_TO_REPLACE)}](?!\s*\d)"
     VERSION_REGEX: re.Pattern[str] = re.compile(r"(E\d+)v\d")
 
     # ──────────────────────────────────────────────────────────────────────────────────────────────────
