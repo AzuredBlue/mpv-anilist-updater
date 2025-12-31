@@ -182,7 +182,7 @@ class AniListUpdater:
     ANILIST_API_URL: str = "https://graphql.anilist.co"
     TOKEN_PATH: str = os.path.join(os.path.dirname(__file__), "anilistToken.txt")
     CACHE_PATH: str = os.path.join(os.path.dirname(__file__), "cache.json")
-    EPISODE_OPTIONS: ClassVar[dict[str, Any]] = {"excludes": ["country", "language"], "type": "episode"}
+    OPTIONS: ClassVar[dict[str, Any]] = {"excludes": ["country", "language"]}
     CACHE_REFRESH_RATE: int = 24 * 60 * 60
 
     _CHARS_TO_REPLACE: str = r'\/:!*?"<>|._-'
@@ -568,7 +568,7 @@ class AniListUpdater:
         guessed_name, season, part, year = "", "", "", ""
         remaining: list[int] = []
         # First, try to guess from the filename
-        guess = guessit(filename, self.EPISODE_OPTIONS)
+        guess = guessit(filename, self.OPTIONS)
 
         print(f"File name guess: {filename} -> {dict(guess)}")
 
@@ -639,9 +639,7 @@ class AniListUpdater:
 
             # Depth=2 folders
             for depth in [2, 3]:
-                folder_guess = (
-                    guessit(path_parts[-depth], self.EPISODE_OPTIONS) if len(path_parts) > depth - 1 else None
-                )
+                folder_guess = guessit(path_parts[-depth], self.OPTIONS) if len(path_parts) > depth - 1 else None
                 if folder_guess:
                     print(
                         f"{depth - 1}{'st' if depth - 1 == 1 else 'nd'} Folder guess:\n{path_parts[-depth]} -> {dict(folder_guess)}"
