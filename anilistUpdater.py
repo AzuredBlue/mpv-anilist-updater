@@ -868,8 +868,14 @@ class AniListUpdater:
             if self.options.get("ADD_ENTRY_IF_MISSING", False):
                 print(f'Adding "{anime_name}" to your list since you\'re watching it...')
 
-                # Since user is actively watching this anime, always set to CURRENT
+                # Set to CURRENT by default
                 initial_status = "CURRENT"
+
+                # Set to COMPLETED if last episode (for example, movies)
+                if file_progress == total_episodes and self.options.get(
+                    "SET_TO_COMPLETED_AFTER_LAST_EPISODE_CURRENT", False
+                ):
+                    initial_status = "COMPLETED"
 
                 # Add to list
                 if self.add_anime_to_list(anime_id, anime_name, initial_status, file_progress):
