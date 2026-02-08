@@ -18,6 +18,8 @@ SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING: Boolean. If true, set to COMPLET
 ADD_ENTRY_IF_MISSING: Boolean. If true, automatically add anime to your list if it's not found during search. Default is false.
 
 SILENT_MODE: Boolean. If true, won't show OSD messages.
+
+UPDATE_IF_PAUSED: Boolean. If true, the script will still update AniList even if the player is paused. Default is false.
 ]]
 
 local utils = require 'mp.utils'
@@ -74,6 +76,7 @@ SET_TO_COMPLETED_AFTER_LAST_EPISODE_CURRENT=yes
 SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING=yes
 ADD_ENTRY_IF_MISSING=no
 SILENT_MODE=no
+UPDATE_IF_PAUSED=no
 ]]
 
 -- Try script-opts directory (sibling to scripts)
@@ -143,7 +146,8 @@ local options = {
     SET_TO_COMPLETED_AFTER_LAST_EPISODE_CURRENT = true,
     SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING = true,
     ADD_ENTRY_IF_MISSING = false,
-    SILENT_MODE = false
+    SILENT_MODE = false,
+    UPDATE_IF_PAUSED = false
 }
 
 -- Override defaults with values from config file
@@ -286,7 +290,9 @@ progress_timer:stop()
 function on_pause_change(name, value)
     isPaused = value
     if value then
-        progress_timer:stop()
+        if not options.UPDATE_IF_PAUSED then
+            progress_timer:stop()
+        end
     else
         if not triggered then
             progress_timer:resume()
@@ -333,7 +339,7 @@ mp.register_event("file-loaded", function()
     end
 
     -- Start timer for this file
-    if not isPaused then
+    if not isPaused or options.UPDATE_IF_PAUSED then
         progress_timer:resume()
     end
 end)
