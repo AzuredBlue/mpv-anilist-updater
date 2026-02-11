@@ -925,8 +925,8 @@ class AniListUpdater:
             print("Updating progress for anime set to REPEATING (rewatching).")
             status_to_set = "REPEATING"
 
-        # Only update if status is CURRENT or PLANNING
-        elif current_status in {"CURRENT", "PLANNING"}:
+        # Only update if status is CURRENT, PLANNING, or PAUSED
+        elif current_status in {"CURRENT", "PLANNING", "PAUSED"}:
             # If its lower than the current progress, dont update.
             if file_progress and current_progress is not None and file_progress <= current_progress:
                 raise Exception(f"Episode was not new. Not updating ({file_progress} <= {current_progress})")
@@ -939,7 +939,7 @@ class AniListUpdater:
         # Set to COMPLETED if last episode and the option is enabled
         if file_progress == total_episodes and (
             (
-                current_status in {"CURRENT", "PLANNING"}
+                current_status in {"CURRENT", "PLANNING", "PAUSED"}
                 and self.options["SET_TO_COMPLETED_AFTER_LAST_EPISODE_CURRENT"]
             )
             or (current_status == "REPEATING" and self.options["SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING"])
