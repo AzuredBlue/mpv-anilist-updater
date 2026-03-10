@@ -90,8 +90,6 @@ SILENT_MODE=no
 - **SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING**: `yes`/`no`. If `yes`, set to COMPLETED after last episode if status was REPEATING (rewatching). Default is `yes`.
 - **ADD_ENTRY_IF_MISSING**: `yes`/`no`. If `yes`, automatically add anime to your list if it's not found in your list during search. Default is `no`. **⚠️ Warning: This can add incorrect anime to your list if the detection is inaccurate.**
 - **SILENT_MODE**: `yes`/`no`. If `yes`, won't show OSD messages. Default is `no`.
-- **UPDATE_IF_PAUSED**: `yes`/`no`. If `yes`, the script will still update AniList even if the player is paused. Default is `no`.
-
 
 > [!NOTE]
 > All boolean options must be `yes` or `no` (not `true`/`false`).
