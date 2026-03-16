@@ -57,11 +57,12 @@ class AnimeInfo:
     total_episodes: int | None
     file_progress: int | None
     current_status: str | None
+    mal_id: int | None = None
 
     # Can not specify the type further. Causes some of the the variables type checking to be unhappy.
     def __iter__(self) -> Iterator[Any]:  # fmt: off
         """Allow tuple unpacking of AnimeInfo."""
-        return iter((self.anime_id, self.anime_name, self.current_progress, self.total_episodes, self.file_progress, self.current_status))  # fmt: off
+        return iter((self.anime_id, self.anime_name, self.current_progress, self.total_episodes, self.file_progress, self.current_status, self.mal_id))  # fmt: off
 
 
 @dataclass
@@ -93,6 +94,7 @@ class AniListQueries:
             GlobalSearch: Page(page: $page, perPage: 20) {
                 media (search: $search, type: ANIME, startDate_greater: $year, format_in: $format_in) {
                     id
+                    idMal
                     title { romaji, english }
                     season
                     seasonYear
@@ -125,6 +127,7 @@ class AniListQueries:
             UserSearch: Page(page: $page, perPage: 20) {
                 media (search: $search, type: ANIME, startDate_greater: $year, format_in: $format_in, onList: true) {
                     id
+                    idMal
                     title { romaji, english }
                     season
                     seasonYear
@@ -288,13 +291,14 @@ class AniListUpdater:
             dir_hash = self.hash_path(os.path.dirname(path))
             cache = self.load_cache()
 
-            anime_id, _, current_progress, total_episodes, relative_progress, current_status = result
+            anime_id, _, current_progress, total_episodes, relative_progress, current_status, mal_id = result
 
             now = time.time()
 
             cache[dir_hash] = {
                 "guessed_name": guessed_name,
                 "anime_id": anime_id,
+                "mal_id": mal_id,
                 "current_progress": current_progress,
                 "relative_progress": f"{absolute_progress}->{relative_progress}",
                 "total_episodes": total_episodes,
@@ -407,7 +411,6 @@ class AniListUpdater:
             dict[str, Any] | None: API response or None on error.
         """
         headers = {"Content-Type": "application/json", "Accept": "application/json"}
-
         if access_token:
             headers["Authorization"] = f"Bearer {access_token}"
 
@@ -493,6 +496,29 @@ class AniListUpdater:
             webbrowser.open_new_tab(f"https://anilist.co/anime/{anime_id}")
             return
 
+        # If getting info and cache has all needed data, return early with JSON.
+        if self.ACTION == "info" and cache_entry and cache_entry.get("anime_id"):
+            left, right = cache_entry.get("relative_progress", "0->0").split("->")
+            offset = int(left) - int(right)
+            relative_episode = file_info.episode - offset
+            if 1 <= relative_episode <= (cache_entry.get("total_episodes") or 0):
+                print(
+                    f"INFO:{
+                        json.dumps(
+                            {
+                                'anime_id': cache_entry.get('anime_id'),
+                                'mal_id': cache_entry.get('mal_id'),
+                                'anime_name': cache_entry.get('guessed_name'),
+                                'episode': relative_episode,
+                                'current_progress': cache_entry.get('current_progress'),
+                                'total_episodes': cache_entry.get('total_episodes'),
+                                'current_status': cache_entry.get('current_status'),
+                            }
+                        )
+                    }"
+                )
+                return
+
         # Use cached data if available, otherwise fetch fresh info
         if cache_entry:
             print(f'Using cached data for "{file_info.name}"')
@@ -513,11 +539,34 @@ class AniListUpdater:
                     cache_entry["total_episodes"],
                     relative_episode,
                     cache_entry["current_status"],
+                    cache_entry.get("mal_id"),
                 )
 
         # At this point, we guess using the guessed name and other information
         if result is None:
             result = self.get_anime_info_and_progress(file_info)
+
+        # For "info" action, dumps the JSON with the anime information, save it to cache and return without updating AniList.
+        if self.ACTION == "info":
+            if result:
+                print(
+                    f"INFO:{
+                        json.dumps(
+                            {
+                                'anime_id': result.anime_id,
+                                'mal_id': result.mal_id,
+                                'anime_name': result.anime_name,
+                                'episode': result.file_progress,
+                                'current_progress': result.current_progress,
+                                'total_episodes': result.total_episodes,
+                                'current_status': result.current_status,
+                            }
+                        )
+                    }"
+                )
+                if result.current_progress is not None:
+                    self.cache_to_file(filename, file_info.name, file_info.episode, result)
+            return
 
         result = self.update_episode_count(result)
 
@@ -768,7 +817,7 @@ class AniListUpdater:
         response = self.make_api_request(query, variables, self.access_token)
 
         if not response or "data" not in response:
-            return AnimeInfo(None, None, None, None, None, None)
+            return AnimeInfo(None, None, None, None, None, None, None)
 
         user_list_seasons = response["data"]["UserSearch"]["media"]
         global_search_seasons = response["data"]["GlobalSearch"]["media"]
@@ -789,6 +838,7 @@ class AniListUpdater:
             seasons[0]["episodes"],
             file_progress,
             entry["status"] if entry is not None else None,
+            seasons[0]["idMal"],
         )
 
         is_absolute_numbering = seasons and seasons[0]["episodes"] and file_progress > seasons[0]["episodes"]
@@ -826,6 +876,7 @@ class AniListUpdater:
                 season_episode_info.episodes,
                 season_episode_info.relative_episode,
                 found_entry["status"] if found_entry else None,
+                found_season.get("idMal") if found_season else None,
             )
             print(f"Final guessed anime: {anime_data.anime_name}")
             print(f"Absolute episode {file_progress} corresponds to episode: {anime_data.file_progress}")
@@ -850,7 +901,7 @@ class AniListUpdater:
         if result is None:
             raise Exception("Parameter in update_episode_count is null.")
 
-        anime_id, anime_name, current_progress, total_episodes, file_progress, current_status = result
+        anime_id, anime_name, current_progress, total_episodes, file_progress, current_status, mal_id = result
 
         if anime_id is None:
             raise Exception("Couldn't find that anime! Make sure it is on your list and the title is correct.")
@@ -883,7 +934,7 @@ class AniListUpdater:
                     print(f'Successfully added "{anime_name}" to your list with progress: {file_progress}')
                     # Return updated result
                     return AnimeInfo(
-                        anime_id, anime_name, file_progress, total_episodes, file_progress, initial_status
+                        anime_id, anime_name, file_progress, total_episodes, file_progress, initial_status, mal_id
                     )
                 raise Exception(f"Failed to add '{anime_name}' to your list.")
             raise Exception("Failed to get current episode count. Is it on your list?")
@@ -916,7 +967,7 @@ class AniListUpdater:
                 osd_message(f'Updated "{anime_name}" to REPEATING with progress: {updated_progress}')
                 print(f"Episode count updated successfully! New progress: {updated_progress}")
 
-                return AnimeInfo(anime_id, anime_name, updated_progress, total_episodes, 1, "REPEATING")
+                return AnimeInfo(anime_id, anime_name, updated_progress, total_episodes, 1, "REPEATING", mal_id)
             print("Failed to update episode count.")
             raise Exception("Failed to update episode count.")
 
@@ -959,7 +1010,9 @@ class AniListUpdater:
             print(f"Episode count updated successfully! New progress: {updated_progress}")
             updated_status = response["data"]["SaveMediaListEntry"]["status"]
 
-            return AnimeInfo(anime_id, anime_name, updated_progress, total_episodes, file_progress, updated_status)
+            return AnimeInfo(
+                anime_id, anime_name, updated_progress, total_episodes, file_progress, updated_status, mal_id
+            )
         print("Failed to update episode count.")
         raise Exception("Failed to update episode count.")
 
