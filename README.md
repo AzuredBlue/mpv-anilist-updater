@@ -76,6 +76,7 @@ SET_TO_COMPLETED_AFTER_LAST_EPISODE_CURRENT=yes
 SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING=yes
 ADD_ENTRY_IF_MISSING=no
 SILENT_MODE=no
+ENABLE_AUTOMATIC_UPDATES=yes
 ```
 
 #### Option Descriptions
@@ -90,6 +91,7 @@ SILENT_MODE=no
 - **SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING**: `yes`/`no`. If `yes`, set to COMPLETED after last episode if status was REPEATING (rewatching). Default is `yes`.
 - **ADD_ENTRY_IF_MISSING**: `yes`/`no`. If `yes`, automatically add anime to your list if it's not found in your list during search. Default is `no`. **⚠️ Warning: This can add incorrect anime to your list if the detection is inaccurate.**
 - **SILENT_MODE**: `yes`/`no`. If `yes`, won't show OSD messages. Default is `no`.
+- **ENABLE_AUTOMATIC_UPDATES**: `yes`/`no`. If yes, automatically updates anime progress on Anilist after reaching the configured completion percentage (e.g., 85%). If no, disables automatic updates and only allows manual updates via keybindings. Default is yes.
 
 > [!NOTE]
 > All boolean options must be `yes` or `no` (not `true`/`false`).

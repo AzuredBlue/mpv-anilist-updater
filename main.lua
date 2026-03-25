@@ -18,6 +18,8 @@ SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING: Boolean. If true, set to COMPLET
 ADD_ENTRY_IF_MISSING: Boolean. If true, automatically add anime to your list if it's not found during search. Default is false.
 
 SILENT_MODE: Boolean. If true, won't show OSD messages.
+
+ENABLE_AUTOMATIC_UPDATES: Boolean. If false, automatic updates are disabled and only manual updates via keybindings work. Default is true.
 ]]
 
 local utils = require 'mp.utils'
@@ -74,6 +76,7 @@ SET_TO_COMPLETED_AFTER_LAST_EPISODE_CURRENT=yes
 SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING=yes
 ADD_ENTRY_IF_MISSING=no
 SILENT_MODE=no
+ENABLE_AUTOMATIC_UPDATES=yes
 ]]
 
 -- Try script-opts directory (sibling to scripts)
@@ -143,7 +146,8 @@ local options = {
     SET_TO_COMPLETED_AFTER_LAST_EPISODE_CURRENT = true,
     SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING = true,
     ADD_ENTRY_IF_MISSING = false,
-    SILENT_MODE = false
+    SILENT_MODE = false,
+    ENABLE_AUTOMATIC_UPDATES = true
 }
 
 -- Override defaults with values from config file
@@ -285,11 +289,13 @@ progress_timer:stop()
 -- Handle pause/unpause events to control the timer
 function on_pause_change(name, value)
     isPaused = value
-    if value then
-        progress_timer:stop()
-    else
-        if not triggered then
-            progress_timer:resume()
+    if options.ENABLE_AUTOMATIC_UPDATES then
+        if value then
+            progress_timer:stop()
+        else
+            if not triggered then
+                progress_timer:resume()
+            end
         end
     end
 end
@@ -316,6 +322,10 @@ mp.observe_property("pause", "bool", on_pause_change)
 mp.register_event("file-loaded", function()
     triggered = false
     progress_timer:stop()
+
+    if not options.ENABLE_AUTOMATIC_UPDATES then
+        return
+    end
 
     if not is_ani_cli_compatible() and #DIRECTORIES > 0 then
         local path = get_path()
