@@ -81,7 +81,7 @@ SILENT_MODE=no
 #### Option Descriptions
 
 - **DIRECTORIES**: Comma or semicolon separated list of directories. If empty, the script works for every video. Example: `DIRECTORIES=D:/Torrents,D:/Anime`
-  - Restricting directories only prevents the script from automatically updating AniList for files outside the specified directories. Manual actions using the keybinds (Ctrl+A, Ctrl+B, Ctrl+D) will still work for any file, regardless of its location.
+  - Restricting directories only prevents the script from automatically updating AniList for files outside the specified directories. Manual actions using the keybinds (Ctrl+A, Ctrl+B, Ctrl+D, C) will still work for any file, regardless of its location.
 - **EXCLUDED_DIRECTORIES**: Comma or semicolon separated list of directories. Useful for ignoring paths inside directories from above. Example: EXCLUDED_DIRECTORIES = {"D:/Torrents/Watched", "D:/Anime/Planned"}
 - **UPDATE_PERCENTAGE**: Number (0-100). The percentage of the video you need to watch before it updates AniList automatically. Default is `85`.
 - **SET_COMPLETED_TO_REWATCHING_ON_FIRST_EPISODE**: `yes`/`no`. If `yes`, when watching episode 1 of a completed anime, set it to rewatching and update progress. Default is `no`.
@@ -96,11 +96,12 @@ SILENT_MODE=no
 
 ## Usage
 
-This script has 3 keybinds:
+This script has 4 keybinds:
 
-- **Ctrl + A**: Manually updates your AniList with the current episode you are watching.
-- **Ctrl + B**: Opens the AniList page of the anime you are watching on your browser. Useful to see if it guessed the anime correctly.
-- **Ctrl + D**: Opens the folder where the current video is playing. Useful if you have "your own" anime library, and navigating through folders is a pain.
+- **Ctrl + a**: Manually updates your AniList with the current episode you are watching.
+- **Ctrl + b**: Opens the AniList page of the anime you are watching on your browser. Useful to see if it guessed the anime correctly.
+- **Ctrl + d**: Opens the folder where the current video is playing. Useful if you have "your own" anime library, and navigating through folders is a pain.
+- **c**: Opens a correction overlay for the current file. You can paste/type an AniList URL/ID and optionally override the mapped episode (relative progress). Use `Ctrl+v` to paste.
 
 The script will automatically update your AniList when the video you are watching reaches 85% completion (or the percentage you set in the config file).
 
@@ -112,7 +113,14 @@ You can change the keybinds in your `input.conf`:
 A script-binding update_anilist
 B script-binding launch_anilist
 D script-binding open_folder
+C script-binding correct_anime_id
 ```
+
+## Correction
+
+In the case the script gets it wrong, there is a menu pressing `c` where you can paste the anilist entry of the correct anime and the episode. 
+
+For example, if the file is "Attack On Titan - E48" you will need to paste the entry corresponding of that episode and the corresponding episode number for that season (Attack on Titan Third Season, Episode 11)
 
 ## How It Works
 
@@ -130,31 +138,15 @@ If the torrent file has absolute numbering (only episode number), it will try to
 
 If it doesn't work properly, consider manually changing the episode number to the normal format, or updating that series manually.
 
-## FAQ (Probably)
+---
 
-**Q: On what formats does it work?**
-
-A: It should work on most formats as long as the name is present in the file itself or the folder name.
+This script should work on most formats as long as the name is present in the file itself or the folder name:
 
 `Boku no Hero Academia - 152 (1080p).mkv` will be detected as S7 E14 and updated accordingly.
 
 `E12 - Welcome [F1119374].mkv` will work if the folder that it is in has `86` in the name. If it has `86 Part 2` then it should be `Episode 1`
 
-If it does not, try changing the name of the file / folder, so the search has a better chance at finding it
-
-**Q: Can I see which anime got detected before it updates?**
-
-A: Ctrl + B will launch the AniList page of the anime it detects. To see more debug info launch via command line with `mpv file.mkv` or press the `` ` `` keybind to open the console.
-
-**Q: Can it wrongfully update my anime?**
-
-A: No, AniList's API does not allow updating an anime which isnt on your watch list. If it didn't detect your anime correctly, then it will
-simply error.
-
-**Q: It does not work with X format. What do I do?**
-
-A: You can try launching the file through the command line with `mpv file.mkv` or opening the console through the keybind \` and see `Guessed name: X`. Try changing the file's name or folder so it has
-a better chance at guessing the anime. If it still doesn't work, try opening a GitHub issue or messaging me on discord (azuredblue).
+To see which anime got detected, you can use `c` or `Ctrl+B` to launch the AniList page.
 
 ## MAL
 

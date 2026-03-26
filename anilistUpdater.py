@@ -173,6 +173,22 @@ class AniListQueries:
         }
     """
 
+    # Query to get anime by AniList ID
+    GET_ANIME_BY_ID = """
+        query($id: Int) {
+            Media(id: $id, type: ANIME) {
+                id
+                idMal
+                title { romaji, english }
+                episodes
+                mediaListEntry {
+                    status
+                    progress
+                }
+            }
+        }
+    """
+
 
 # ═══════════════════════════════════════════════════════════════════════════════════════════════════════
 # MAIN ANILIST UPDATER CLASS
@@ -1045,6 +1061,66 @@ class AniListUpdater:
             print(f'Error adding "{anime_name}" to list: {e}')
             return False
 
+    def correct_anime_id(self, filepath: str, anilist_id: int, relative_episode: int | None = None) -> None:
+        """
+        Correct the anime ID in cache by querying AniList for the given ID.
+
+        Args:
+            filepath (str): Path to the currently playing file (used to compute dir hash).
+            anilist_id (int): The correct AniList anime ID.
+            relative_episode (int | None): Optional relative episode override for current file.
+
+        Raises:
+            Exception: If the anime could not be found on AniList.
+        """
+        query = AniListQueries.GET_ANIME_BY_ID
+        variables = {"id": anilist_id}
+
+        response = self.make_api_request(query, variables, self.access_token)
+
+        if not response or "data" not in response or not response["data"]["Media"]:
+            raise Exception(f"Could not find anime with AniList ID {anilist_id}.")
+
+        media = response["data"]["Media"]
+        anime_name = media["title"].get("romaji") or media["title"].get("english") or "Unknown"
+        mal_id = media.get("idMal")
+        total_episodes = media.get("episodes")
+        entry = media.get("mediaListEntry")
+        current_progress = entry["progress"] if entry else 0
+        current_status = entry["status"] if entry else None
+
+        # Parse the file to get the absolute episode number for relative_progress mapping
+        file_info = self.parse_filename(filepath)
+        mapped_relative_episode = (
+            relative_episode if relative_episode and relative_episode > 0 else file_info.episode
+        )
+
+        dir_hash = self.hash_path(os.path.dirname(filepath))
+        cache = self.load_cache()
+
+        # Preserve the existing guessed_name
+        existing_name = cache.get(dir_hash, {}).get("guessed_name", file_info.name)
+
+        cache[dir_hash] = {
+            "guessed_name": existing_name,
+            "anime_id": anilist_id,
+            "mal_id": mal_id,
+            "current_progress": current_progress,
+            "relative_progress": f"{file_info.episode}->{mapped_relative_episode}",
+            "total_episodes": total_episodes,
+            "current_status": current_status,
+            "ttl": time.time() + self.CACHE_REFRESH_RATE,
+        }
+
+        self.save_cache(cache)
+        osd_message(
+            f'Corrected to "{anime_name}" (ID: {anilist_id}) | Mapped {file_info.episode}->{mapped_relative_episode}'
+        )
+        print(
+            f'Corrected cache to "{anime_name}" (AniList ID: {anilist_id}, relative_progress: '
+            f"{file_info.episode}->{mapped_relative_episode})"
+        )
+
 
 # ═══════════════════════════════════════════════════════════════════════════════════════════════════════
 # MAIN ENTRY POINT
@@ -1081,7 +1157,18 @@ def main() -> None:
 
         # Pass options to AniListUpdater
         updater = AniListUpdater(options, sys.argv[2])
-        updater.handle_filename(sys.argv[1])
+
+        if sys.argv[2] == "correct" and len(sys.argv) > 4:
+            relative_episode = None
+            if len(sys.argv) > 5:
+                try:
+                    relative_episode = int(sys.argv[5])
+                except ValueError:
+                    relative_episode = None
+
+            updater.correct_anime_id(sys.argv[1], int(sys.argv[4]), relative_episode)
+        else:
+            updater.handle_filename(sys.argv[1])
 
     except Exception as e:
         print(f"ERROR: {e}")
