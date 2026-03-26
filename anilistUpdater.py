@@ -202,7 +202,7 @@ class AniListUpdater:
     TOKEN_PATH: str = os.path.join(os.path.dirname(__file__), "anilistToken.txt")
     CACHE_PATH: str = os.path.join(os.path.dirname(__file__), "cache.json")
     OPTIONS: ClassVar[dict[str, Any]] = {"excludes": ["country", "language"]}
-    CACHE_REFRESH_RATE: int = 24 * 60 * 60
+    CACHE_REFRESH_RATE: int = 14 * 24 * 60 * 60
 
     _CHARS_TO_REPLACE: str = r'\/:!*?"<>|._-'
     # Matches any of the chars, only if not followed by a whitespace and a digit.
@@ -365,6 +365,10 @@ class AniListUpdater:
             entry = cache.get(dir_hash)
 
             if entry and entry.get("guessed_name") == guessed_name:
+                # Sliding expiration
+                entry["ttl"] = now + self.CACHE_REFRESH_RATE
+                cache[dir_hash] = entry
+                self.save_cache(cache)
                 return entry
 
             return None
@@ -622,11 +626,11 @@ class AniListUpdater:
         Args:
             filepath (str): Path to video file.
 
-        Raises:
-            Exception: If no title is found from file name and the folders it is in.
-
         Returns:
             FileInfo: Parsed info with name, episode, year.
+
+        Raises:
+            Exception: If no title is found from file name and the folders it is in.
         """
         path_parts = self.fix_filename(filepath.replace("\\", "/").split("/"))
         filename = path_parts[-1]
