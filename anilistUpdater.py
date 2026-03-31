@@ -418,7 +418,7 @@ class AniListUpdater:
     # Function to make an api request to AniList's api
     def make_api_request(
         self, query: str, variables: dict[str, Any] | None = None, access_token: str | None = None
-    ) -> dict[str, Any] | None:
+    ) -> dict[str, Any]:
         """
         Make POST request to AniList GraphQL API.
 
@@ -428,7 +428,10 @@ class AniListUpdater:
             access_token (str | None): AniList access token.
 
         Returns:
-            dict[str, Any] | None: API response or None on error.
+            dict[str, Any]: API response data.
+
+        Raises:
+            Exception: If the API responds with a non-200 status code.
         """
         headers = {"Content-Type": "application/json", "Accept": "application/json"}
         if access_token:
@@ -437,12 +440,14 @@ class AniListUpdater:
         response = requests.post(
             self.ANILIST_API_URL, json={"query": query, "variables": variables}, headers=headers, timeout=10
         )
+
+        response_json = response.json()
+
         if response.status_code == 200:
-            return response.json()
-        print(
-            f"API request failed: {response.status_code} - {response.text}\nQuery: {query}\nVariables: {variables}"
-        )
-        return None
+            return response_json
+
+        error_msg = response_json.get("errors", [{}])[0].get("message", "Unknown error")
+        raise Exception(f"API request failed: {response.status_code} - {error_msg}")
 
     # ──────────────────────────────────────────────────────────────────────────────────────────────────
     # SEASON & EPISODE HANDLING
@@ -836,9 +841,6 @@ class AniListUpdater:
 
         response = self.make_api_request(query, variables, self.access_token)
 
-        if not response or "data" not in response:
-            return AnimeInfo(None, None, None, None, None, None, None)
-
         user_list_seasons = response["data"]["UserSearch"]["media"]
         global_search_seasons = response["data"]["GlobalSearch"]["media"]
 
@@ -976,20 +978,17 @@ class AniListUpdater:
             query = AniListQueries.SAVE_MEDIA_LIST_ENTRY
 
             variables = {"mediaId": anime_id, "progress": 0, "status": "REPEATING"}
-            response = self.make_api_request(query, variables, self.access_token)
+            self.make_api_request(query, variables, self.access_token)
 
             # Step 2: Set progress to 1
             variables = {"mediaId": anime_id, "progress": 1}
             response = self.make_api_request(query, variables, self.access_token)
 
-            if response and "data" in response:
-                updated_progress = response["data"]["SaveMediaListEntry"]["progress"]
-                osd_message(f'Updated "{anime_name}" to REPEATING with progress: {updated_progress}')
-                print(f"Episode count updated successfully! New progress: {updated_progress}")
+            updated_progress = response["data"]["SaveMediaListEntry"]["progress"]
+            osd_message(f'Updated "{anime_name}" to REPEATING with progress: {updated_progress}')
+            print(f"Episode count updated successfully! New progress: {updated_progress}")
 
-                return AnimeInfo(anime_id, anime_name, updated_progress, total_episodes, 1, "REPEATING", mal_id)
-            print("Failed to update episode count.")
-            raise Exception("Failed to update episode count.")
+            return AnimeInfo(anime_id, anime_name, updated_progress, total_episodes, 1, "REPEATING", mal_id)
 
         # Handle updating progress for rewatching
         if current_status == "REPEATING" and self.options["UPDATE_PROGRESS_WHEN_REWATCHING"]:
@@ -1024,17 +1023,15 @@ class AniListUpdater:
             variables["status"] = status_to_set
 
         response = self.make_api_request(query, variables, self.access_token)
-        if response and "data" in response:
-            updated_progress = response["data"]["SaveMediaListEntry"]["progress"]
-            osd_message(f'Updated "{anime_name}" to: {updated_progress}')
-            print(f"Episode count updated successfully! New progress: {updated_progress}")
-            updated_status = response["data"]["SaveMediaListEntry"]["status"]
 
-            return AnimeInfo(
-                anime_id, anime_name, updated_progress, total_episodes, file_progress, updated_status, mal_id
-            )
-        print("Failed to update episode count.")
-        raise Exception("Failed to update episode count.")
+        updated_progress = response["data"]["SaveMediaListEntry"]["progress"]
+        osd_message(f'Updated "{anime_name}" to: {updated_progress}')
+        print(f"Episode count updated successfully! New progress: {updated_progress}")
+        updated_status = response["data"]["SaveMediaListEntry"]["status"]
+
+        return AnimeInfo(
+            anime_id, anime_name, updated_progress, total_episodes, file_progress, updated_status, mal_id
+        )
 
     def add_anime_to_list(
         self, anime_id: int, anime_name: str, initial_status: str = "PLANNING", initial_progress: int = 0
@@ -1057,7 +1054,7 @@ class AniListUpdater:
 
             response = self.make_api_request(query, variables, self.access_token)
 
-            if response and "data" in response and response["data"]["SaveMediaListEntry"]:
+            if response["data"]["SaveMediaListEntry"]:
                 return True
             print(f'Failed to add "{anime_name}" to your list.')
             return False
@@ -1082,7 +1079,7 @@ class AniListUpdater:
 
         response = self.make_api_request(query, variables, self.access_token)
 
-        if not response or "data" not in response or not response["data"]["Media"]:
+        if not response["data"]["Media"]:
             raise Exception(f"Could not find anime with AniList ID {anilist_id}.")
 
         media = response["data"]["Media"]
