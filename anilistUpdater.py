@@ -527,21 +527,16 @@ class AniListUpdater:
             offset = int(left) - int(right)
             relative_episode = file_info.episode - offset
             if 1 <= relative_episode <= (cache_entry.get("total_episodes") or 0):
-                print(
-                    f"INFO:{
-                        json.dumps(
-                            {
-                                'anime_id': cache_entry.get('anime_id'),
-                                'mal_id': cache_entry.get('mal_id'),
-                                'anime_name': cache_entry.get('guessed_name'),
-                                'episode': relative_episode,
-                                'current_progress': cache_entry.get('current_progress'),
-                                'total_episodes': cache_entry.get('total_episodes'),
-                                'current_status': cache_entry.get('current_status'),
-                            }
-                        )
-                    }"
-                )
+                payload = {
+                    "anime_id": cache_entry.get("anime_id"),
+                    "mal_id": cache_entry.get("mal_id"),
+                    "anime_name": cache_entry.get("guessed_name"),
+                    "episode": relative_episode,
+                    "current_progress": cache_entry.get("current_progress"),
+                    "total_episodes": cache_entry.get("total_episodes"),
+                    "current_status": cache_entry.get("current_status"),
+                }
+                print(f"INFO:{json.dumps(payload)}")
                 return
 
         # Use cached data if available, otherwise fetch fresh info
@@ -574,21 +569,16 @@ class AniListUpdater:
         # For "info" action, dumps the JSON with the anime information, save it to cache and return without updating AniList.
         if self.ACTION == "info":
             if result:
-                print(
-                    f"INFO:{
-                        json.dumps(
-                            {
-                                'anime_id': result.anime_id,
-                                'mal_id': result.mal_id,
-                                'anime_name': result.anime_name,
-                                'episode': result.file_progress,
-                                'current_progress': result.current_progress,
-                                'total_episodes': result.total_episodes,
-                                'current_status': result.current_status,
-                            }
-                        )
-                    }"
-                )
+                payload = {
+                    "anime_id": result.anime_id,
+                    "mal_id": result.mal_id,
+                    "anime_name": result.anime_name,
+                    "episode": result.file_progress,
+                    "current_progress": result.current_progress,
+                    "total_episodes": result.total_episodes,
+                    "current_status": result.current_status,
+                }
+                print(f"INFO:{json.dumps(payload)}")
                 if result.current_progress is not None:
                     self.cache_to_file(filename, file_info.name, file_info.episode, result)
             return
