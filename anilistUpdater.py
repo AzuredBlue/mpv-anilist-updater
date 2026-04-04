@@ -125,7 +125,7 @@ class AniListQueries:
             }
 
             UserSearch: Page(page: $page, perPage: 20) {
-                media (search: $search, type: ANIME, startDate_greater: $year, format_in: $format_in, sort:STATUS, onList: true) {
+                media (search: $search, type: ANIME, startDate_greater: $year, format_in: $format_in, sort:STATUS_DESC, onList: true) {
                     id
                     idMal
                     title { romaji, english }
@@ -541,16 +541,18 @@ class AniListUpdater:
 
         # Use cached data if available, otherwise fetch fresh info
         if cache_entry:
-            print(f'Using cached data for "{file_info.name}"')
-
             left, right = cache_entry.get("relative_progress", "0->0").split("->")
             # For example, if 19->7, that means that 19 absolute is equivalent to 7 relative to this season
             # File episode 20: 20 - 19 + 7 = 8 relative to this season
             offset = int(left) - int(right)
 
+            # Does it make sense if the offset is negative?
             relative_episode = file_info.episode - offset
 
-            if 1 <= relative_episode <= (cache_entry.get("total_episodes") or 0):
+            # For shows without a total episode count, just assume its correct as long as >= 1
+            if 1 <= relative_episode <= (cache_entry.get("total_episodes") or 999):
+                print(f'Using cached data for "{file_info.name}": {cache_entry["anime_id"]}')
+
                 # Reconstruct result from cache
                 result = AnimeInfo(
                     cache_entry["anime_id"],
