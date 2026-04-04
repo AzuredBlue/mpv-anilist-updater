@@ -125,7 +125,7 @@ class AniListQueries:
             }
 
             UserSearch: Page(page: $page, perPage: 20) {
-                media (search: $search, type: ANIME, startDate_greater: $year, format_in: $format_in, onList: true) {
+                media (search: $search, type: ANIME, startDate_greater: $year, format_in: $format_in, sort:STATUS, onList: true) {
                     id
                     idMal
                     title { romaji, english }
