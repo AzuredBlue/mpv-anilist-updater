@@ -92,7 +92,7 @@ class AniListQueries:
     SEARCH_ANIME = """
         query($search: String, $year: FuzzyDateInt, $page: Int, $format_in: [MediaFormat]) {
             GlobalSearch: Page(page: $page, perPage: 20) {
-                media (search: $search, type: ANIME, startDate_greater: $year, format_in: $format_in) {
+                media (search: $search, type: ANIME, startDate_greater: $year, format_in: $format_in, status_not:NOT_YET_RELEASED) {
                     id
                     idMal
                     title { romaji, english }
@@ -125,7 +125,7 @@ class AniListQueries:
             }
 
             UserSearch: Page(page: $page, perPage: 20) {
-                media (search: $search, type: ANIME, startDate_greater: $year, format_in: $format_in, sort:STATUS_DESC, onList: true) {
+                media (search: $search, type: ANIME, startDate_greater: $year, format_in: $format_in, sort:STATUS_DESC, status_not:NOT_YET_RELEASED, onList: true) {
                     id
                     idMal
                     title { romaji, english }
