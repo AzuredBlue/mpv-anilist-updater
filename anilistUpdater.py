@@ -526,7 +526,7 @@ class AniListUpdater:
             left, right = cache_entry.get("relative_progress", "0->0").split("->")
             offset = int(left) - int(right)
             relative_episode = file_info.episode - offset
-            if 1 <= relative_episode <= (cache_entry.get("total_episodes") or 0):
+            if 1 <= relative_episode <= (cache_entry.get("total_episodes") or 999):
                 payload = {
                     "anime_id": cache_entry.get("anime_id"),
                     "mal_id": cache_entry.get("mal_id"),
@@ -927,6 +927,13 @@ class AniListUpdater:
             webbrowser.open_new_tab(f"https://anilist.co/anime/{anime_id}")
             return result
 
+        # Right now, total_episodes will be None for new seasonal shows
+        # With the sliding cache, that will never refresh until it expires
+        # So attempt to refresh missing anime_info only if updating
+        if total_episodes is None:
+            result = self.refresh_anime_info_by_id(result)
+            anime_id, anime_name, current_progress, total_episodes, file_progress, current_status, mal_id = result
+
         # Handle adding anime to list if it's not already there (ADD_ENTRY_IF_MISSING feature)
         if current_progress is None and current_status is None:
             # This indicates anime was found in search but is not in user's list
@@ -1053,6 +1060,47 @@ class AniListUpdater:
         except Exception as e:
             print(f'Error adding "{anime_name}" to list: {e}')
             return False
+
+    def refresh_anime_info_by_id(self, result: AnimeInfo) -> AnimeInfo:
+        """
+        Refresh anime info by AniList ID.
+
+        Needed for refreshing total_episodes, which will be None for new shows.
+
+        Args:
+            result (AnimeInfo): Current anime information.
+
+        Returns:
+            AnimeInfo: Updated anime information if found, otherwise original info.
+        """
+        if result.anime_id is None:
+            return result
+
+        query = AniListQueries.GET_ANIME_BY_ID
+        variables = {"id": result.anime_id}
+
+        response = self.make_api_request(query, variables, self.access_token)
+        media = response.get("data", {}).get("Media")
+
+        if not media:
+            return result
+
+        entry = media.get("mediaListEntry")
+        refreshed_name = (
+            media.get("title", {}).get("romaji") or media.get("title", {}).get("english") or result.anime_name
+        )
+        refreshed_progress = entry.get("progress") if entry else result.current_progress
+        refreshed_status = entry.get("status") if entry else result.current_status
+
+        return AnimeInfo(
+            result.anime_id,
+            refreshed_name,
+            refreshed_progress,
+            media.get("episodes"),
+            result.file_progress,
+            refreshed_status,
+            media.get("idMal") or result.mal_id,
+        )
 
     def correct_anime_id(self, filepath: str, anilist_id: int, relative_episode: int | None = None) -> None:
         """
