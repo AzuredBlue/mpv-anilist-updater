@@ -253,6 +253,7 @@ end
 local python_command = get_python_command()
 
 local isPaused = false
+local is_file_eligible = false
 
 -- Make sure it doesnt trigger twice in 1 video
 local triggered = false
@@ -288,7 +289,7 @@ function on_pause_change(name, value)
     if value then
         progress_timer:stop()
     else
-        if not triggered then
+        if is_file_eligible and not triggered then
             progress_timer:resume()
         end
     end
@@ -315,22 +316,23 @@ mp.observe_property("pause", "bool", on_pause_change)
 -- Reset triggered and start/stop timer based on file loading
 mp.register_event("file-loaded", function()
     triggered = false
+    is_file_eligible = false
     progress_timer:stop()
 
     if not is_ani_cli_compatible() and #DIRECTORIES > 0 then
         local path = get_path()
 
         if not path_starts_with_any(path, DIRECTORIES) then
-            mp.unobserve_property(on_pause_change)
             return
         else
             -- If it starts with the directories, check if it starts with any of the excluded directories
             if #EXCLUDED_DIRECTORIES > 0 and path_starts_with_any(path, EXCLUDED_DIRECTORIES) then
-                mp.unobserve_property(on_pause_change)
                 return
             end
         end
     end
+
+    is_file_eligible = true
 
     -- Start timer for this file
     if not isPaused then

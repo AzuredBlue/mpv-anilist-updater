@@ -202,7 +202,8 @@ class AniListUpdater:
     TOKEN_PATH: str = os.path.join(os.path.dirname(__file__), "anilistToken.txt")
     CACHE_PATH: str = os.path.join(os.path.dirname(__file__), "cache.json")
     OPTIONS: ClassVar[dict[str, Any]] = {"excludes": ["country", "language"]}
-    CACHE_REFRESH_RATE: int = 14 * 24 * 60 * 60
+    CACHE_REFRESH_RATE: int = 24 * 60 * 60
+    CORRECTED_CACHE_REFRESH_RATE: int = 28 * 24 * 60 * 60
 
     _CHARS_TO_REPLACE: str = r'\/:!*?"<>|._-'
     # Matches any of the chars, only if not followed by a whitespace and a digit.
@@ -279,10 +280,13 @@ class AniListUpdater:
         try:
             dir_hash = self._hash_path(os.path.dirname(path))
             cache = self.load_cache()
+            existing_entry = cache.get(dir_hash, {})
+            is_corrected = bool(existing_entry.get("corrected", False))
 
             anime_id, _, current_progress, total_episodes, relative_progress, current_status, mal_id = result
 
             now = time.time()
+            ttl_refresh_rate = self.CORRECTED_CACHE_REFRESH_RATE if is_corrected else self.CACHE_REFRESH_RATE
 
             cache[dir_hash] = {
                 "guessed_name": guessed_name,
@@ -292,7 +296,8 @@ class AniListUpdater:
                 "relative_progress": f"{absolute_progress}->{relative_progress}",
                 "total_episodes": total_episodes,
                 "current_status": current_status,
-                "ttl": now + self.CACHE_REFRESH_RATE,
+                "corrected": is_corrected,
+                "ttl": now + ttl_refresh_rate,
             }
 
             self.save_cache(cache)
@@ -319,18 +324,26 @@ class AniListUpdater:
                 if v.get("ttl", 0) < now:
                     cache.pop(k, None)
                     changed = True
-            if changed:
-                self.save_cache(cache)
 
             dir_hash = self._hash_path(os.path.dirname(path))
             entry = cache.get(dir_hash)
 
             if entry and entry.get("guessed_name") == guessed_name:
-                # Sliding expiration
-                entry["ttl"] = now + self.CACHE_REFRESH_RATE
-                cache[dir_hash] = entry
-                self.save_cache(cache)
+                # Apply sliding expiration only for corrected entries when close to expiration.
+                if entry.get("corrected", False) and entry.get("ttl", 0) <= now + (
+                    self.CORRECTED_CACHE_REFRESH_RATE // 2
+                ):
+                    entry["ttl"] = now + self.CORRECTED_CACHE_REFRESH_RATE
+                    cache[dir_hash] = entry
+                    changed = True
+
+                if changed:
+                    self.save_cache(cache)
+
                 return entry
+
+            if changed:
+                self.save_cache(cache)
 
             return None
         except Exception as e:
@@ -1073,7 +1086,8 @@ class AniListUpdater:
             "relative_progress": f"{file_info.episode}->{mapped_relative_episode}",
             "total_episodes": total_episodes,
             "current_status": current_status,
-            "ttl": time.time() + self.CACHE_REFRESH_RATE,
+            "corrected": True,
+            "ttl": time.time() + self.CORRECTED_CACHE_REFRESH_RATE,
         }
 
         self.save_cache(cache)
