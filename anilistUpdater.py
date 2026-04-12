@@ -479,24 +479,6 @@ class AniListUpdater:
             open_anilist(file_info.name, cache_entry["anime_id"])
             return
 
-        # If getting info and cache has all needed data, return early with JSON.
-        if self.ACTION == "info" and cache_entry and cache_entry.get("anime_id"):
-            left, right = cache_entry.get("relative_progress", "0->0").split("->")
-            offset = int(left) - int(right)
-            relative_episode = file_info.episode - offset
-            if 1 <= relative_episode <= (cache_entry.get("total_episodes") or 999):
-                payload = {
-                    "anime_id": cache_entry.get("anime_id"),
-                    "mal_id": cache_entry.get("mal_id"),
-                    "anime_name": cache_entry.get("guessed_name"),
-                    "episode": relative_episode,
-                    "current_progress": cache_entry.get("current_progress"),
-                    "total_episodes": cache_entry.get("total_episodes"),
-                    "current_status": cache_entry.get("current_status"),
-                }
-                print(f"INFO:{json.dumps(payload)}")
-                return
-
         # Use cached data if available, otherwise fetch fresh info
         if cache_entry:
             left, right = cache_entry.get("relative_progress", "0->0").split("->")
@@ -542,6 +524,18 @@ class AniListUpdater:
                 if result.current_progress is not None:
                     self.cache_to_file(filename, file_info.name, file_info.episode, result)
             return
+
+        # total_episodes can be None at first for ongoing anime. It is only necessary to refresh that information
+        # if it's a "corrected" anime, since that won't expire.
+        should_refresh_missing_episodes = bool(
+            self.ACTION == "update"
+            and cache_entry
+            and cache_entry.get("corrected", False)
+            and result
+            and result.total_episodes is None
+        )
+        if should_refresh_missing_episodes:
+            result = self.refresh_anime_info_by_id(result)
 
         result = self.update_episode_count(result)
 
@@ -882,13 +876,6 @@ class AniListUpdater:
         if self.ACTION == "launch":
             open_anilist(anime_name, anime_id)
             return result
-
-        # Right now, total_episodes will be None for new seasonal shows
-        # With the sliding cache, that will never refresh until it expires
-        # So attempt to refresh missing anime_info only if updating
-        if total_episodes is None:
-            result = self.refresh_anime_info_by_id(result)
-            anime_id, anime_name, current_progress, total_episodes, file_progress, current_status, mal_id = result
 
         should_add_entry = current_progress is None and current_status is None
         is_last_episode = file_progress == total_episodes

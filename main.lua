@@ -258,7 +258,7 @@ local is_file_eligible = false
 -- Make sure it doesnt trigger twice in 1 video
 local triggered = false
 -- Check progress every X seconds (when not paused)
-local UPDATE_INTERVAL = 0.5
+local UPDATE_INTERVAL = 1
 
 -- Initialize timer once - we control it with stop/resume
 local progress_timer = mp.add_periodic_timer(UPDATE_INTERVAL, function()
