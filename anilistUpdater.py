@@ -964,23 +964,31 @@ class AniListUpdater:
             anime_id, anime_name, updated_progress, total_episodes, file_progress, updated_status, mal_id
         )
 
-    def _save_media_list_entry(self, anime_id: int, status: str | None, progress: int) -> dict[str, Any]:
+    def _save_media_list_entry(self, anime_id: int, status: str | None, progress: int | None) -> dict[str, Any]:
         """
         Helper function to save media list entry.
 
         Args:
             anime_id (int): AniList anime ID.
             status (str | None): Status to set.
-            progress (int): Progress to set.
+            progress (int | None): Progress to set.
 
         Returns:
             dict[str, Any]: API response.
+
+        Raises:
+            ValueError: If both status and progress are omitted.
         """
         query = AniListQueries.SAVE_MEDIA_LIST_ENTRY
-        variables = {"mediaId": anime_id, "status": status, "progress": progress}
+        variables: dict[str, Any] = {"mediaId": anime_id}
 
-        if status is None:
-            variables = {"mediaId": anime_id, "progress": progress}
+        if status is not None:
+            variables["status"] = status
+        if progress is not None:
+            variables["progress"] = progress
+
+        if "status" not in variables and "progress" not in variables:
+            raise ValueError("At least one of status or progress must be provided.")
 
         return self._make_api_request(query, variables, self.access_token)
 
@@ -1025,7 +1033,81 @@ class AniListUpdater:
             media.get("idMal") or result.mal_id,
         )
 
-    def correct_anime_id(self, filepath: str, anilist_id: int, relative_episode: int | None = None) -> None:
+    def _correct_anime_id_change(
+        self,
+        anilist_id: int,
+        fallback_name: str,
+        fallback_progress: int | None,
+        fallback_status: str | None,
+    ) -> dict[str, Any]:
+        """
+        Fetch AniList media data for a changed ID and merge with fallback cache values.
+
+        Raises:
+            Exception: If the anime could not be found on AniList.
+        """
+        query = AniListQueries.GET_ANIME_BY_ID
+        variables = {"id": anilist_id}
+        response = self._make_api_request(query, variables, self.access_token)
+
+        media = response.get("data", {}).get("Media")
+        if not media:
+            raise Exception(f"Could not find anime with AniList ID {anilist_id}.")
+
+        entry = media.get("mediaListEntry")
+        anime_name = media.get("title", {}).get("romaji") or media.get("title", {}).get("english") or fallback_name
+
+        return {
+            "anime_name": anime_name,
+            "mal_id": media.get("idMal"),
+            "total_episodes": media.get("episodes"),
+            "current_progress": entry.get("progress") if entry else fallback_progress,
+            "current_status": entry.get("status") if entry else fallback_status,
+        }
+
+    def _correct_relative_episode(
+        self,
+        absolute_episode: int,
+        existing_relative_mapping: str | None,
+        requested_relative_episode: int | None,
+    ) -> tuple[int, bool]:
+        """Resolve the mapped relative episode and whether it changed."""
+        existing_relative_episode = absolute_episode
+        if isinstance(existing_relative_mapping, str):
+            _, _, right = existing_relative_mapping.partition("->")
+            if right:
+                try:
+                    existing_relative_episode = int(right)
+                except Exception:
+                    existing_relative_episode = absolute_episode
+
+        mapped_relative_episode = (
+            requested_relative_episode
+            if requested_relative_episode and requested_relative_episode > 0
+            else existing_relative_episode
+        )
+        mapped_relative_episode = max(1, mapped_relative_episode)
+
+        return mapped_relative_episode, mapped_relative_episode != existing_relative_episode
+
+    def _correct_status(
+        self, anime_id: int, selected_status: str | None, current_status: str | None
+    ) -> tuple[str | None, bool]:
+        """Update AniList status only when a new status was selected."""
+        if not selected_status or selected_status == current_status:
+            return current_status, False
+
+        self._save_media_list_entry(anime_id, selected_status, None)
+        return selected_status, True
+
+    def _correct_cache(self, cache: dict[str, Any], dir_hash: str, payload: dict[str, Any]) -> None:
+        """Persist corrected mapping into cache.json."""
+        cache[dir_hash] = payload
+        self.save_cache(cache)
+
+    def correct_anime_id(
+        self, filepath: str, anilist_id: int, relative_episode: int | None = None, target_status: str | None = None
+    ) -> None:
         """
         Correct the anime ID in cache by querying AniList for the given ID.
 
@@ -1033,54 +1115,80 @@ class AniListUpdater:
             filepath (str): Path to the currently playing file (used to compute dir hash).
             anilist_id (int): The correct AniList anime ID.
             relative_episode (int | None): Optional relative episode override for current file.
+            target_status (str | None): Optional MediaList status override.
 
-        Raises:
-            Exception: If the anime could not be found on AniList.
         """
-        query = AniListQueries.GET_ANIME_BY_ID
-        variables = {"id": anilist_id}
+        selected_status = target_status.upper() if target_status else None
 
-        response = self._make_api_request(query, variables, self.access_token)
-
-        if not response["data"]["Media"]:
-            raise Exception(f"Could not find anime with AniList ID {anilist_id}.")
-
-        media = response["data"]["Media"]
-        anime_name = media["title"].get("romaji") or media["title"].get("english") or "Unknown"
-        mal_id = media.get("idMal")
-        total_episodes = media.get("episodes")
-        entry = media.get("mediaListEntry")
-        current_progress = entry["progress"] if entry else 0
-        current_status = entry["status"] if entry else None
-
-        # Parse the file to get the absolute episode number for relative_progress mapping
         file_info = self.parse_filename(filepath)
-        mapped_relative_episode = (
-            relative_episode if relative_episode and relative_episode > 0 else file_info.episode
-        )
-
         dir_hash = self._hash_path(os.path.dirname(filepath))
         cache = self.load_cache()
+        existing_entry = cache.get(dir_hash, {})
 
-        # Preserve the existing guessed_name
-        existing_name = cache.get(dir_hash, {}).get("guessed_name", file_info.name)
+        guessed_name = existing_entry.get("guessed_name", file_info.name)
+        existing_anime_id = existing_entry.get("anime_id")
+        id_changed = existing_anime_id != anilist_id
 
-        cache[dir_hash] = {
-            "guessed_name": existing_name,
-            "anime_id": anilist_id,
-            "mal_id": mal_id,
-            "current_progress": current_progress,
-            "relative_progress": f"{file_info.episode}->{mapped_relative_episode}",
-            "total_episodes": total_episodes,
-            "current_status": current_status,
-            "corrected": True,
-            "ttl": time.time() + self.CORRECTED_CACHE_REFRESH_RATE,
-        }
+        anime_name = guessed_name
+        mal_id = existing_entry.get("mal_id")
+        total_episodes = existing_entry.get("total_episodes")
+        current_progress = existing_entry.get("current_progress")
+        current_status = existing_entry.get("current_status")
 
-        self.save_cache(cache)
-        osd_message(
-            f'Corrected to "{anime_name}" (ID: {anilist_id}) | Mapped {file_info.episode}->{mapped_relative_episode}'
+        if id_changed:
+            id_data = self._correct_anime_id_change(
+                anilist_id,
+                guessed_name,
+                current_progress,
+                current_status,
+            )
+            anime_name = id_data["anime_name"]
+            mal_id = id_data["mal_id"]
+            total_episodes = id_data["total_episodes"]
+            current_progress = id_data["current_progress"]
+            current_status = id_data["current_status"]
+
+        mapped_relative_episode, relative_changed = self._correct_relative_episode(
+            file_info.episode,
+            existing_entry.get("relative_progress"),
+            relative_episode,
         )
+
+        status_before = current_status
+        current_status, status_changed = self._correct_status(
+            anilist_id,
+            selected_status,
+            current_status,
+        )
+
+        changes = [
+            f"ID: {existing_anime_id or '?'}->{anilist_id}" if id_changed else None,
+            f"Mapped {file_info.episode}->{mapped_relative_episode}" if relative_changed else None,
+            f"Status: {status_before or 'None'}->{current_status}" if status_changed else None,
+        ]
+        changes = [change for change in changes if change]
+
+        if not changes:
+            osd_message("No correction changes detected.")
+            return
+
+        self._correct_cache(
+            cache,
+            dir_hash,
+            {
+                "guessed_name": guessed_name,
+                "anime_id": anilist_id,
+                "mal_id": mal_id,
+                "current_progress": current_progress,
+                "relative_progress": f"{file_info.episode}->{mapped_relative_episode}",
+                "total_episodes": total_episodes,
+                "current_status": current_status,
+                "corrected": True if id_changed else existing_entry.get("corrected", False),
+                "ttl": time.time() + self.CORRECTED_CACHE_REFRESH_RATE,
+            },
+        )
+
+        osd_message(f'Corrected "{anime_name}" (ID: {anilist_id}) | ' + " | ".join(changes))
 
 
 # ═══════════════════════════════════════════════════════════════════════════════════════════════════════
@@ -1127,15 +1235,8 @@ def main() -> None:
         # Pass options to AniListUpdater
         updater = AniListUpdater(options, sys.argv[2])
 
-        if sys.argv[2] == "correct" and len(sys.argv) > 4:
-            relative_episode = None
-            if len(sys.argv) > 5:
-                try:
-                    relative_episode = int(sys.argv[5])
-                except ValueError:
-                    relative_episode = None
-
-            updater.correct_anime_id(sys.argv[1], int(sys.argv[4]), relative_episode)
+        if sys.argv[2] == "correct" and len(sys.argv) > 6:
+            updater.correct_anime_id(sys.argv[1], int(sys.argv[4]), int(sys.argv[5]), sys.argv[6])
         else:
             updater.handle_filename(sys.argv[1])
 
