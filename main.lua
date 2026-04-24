@@ -198,12 +198,12 @@ function callback(success, result, error)
     if success and result and result.status == 0 then
         if #messages == 0 then
             table.insert(messages, "Updated anime correctly.")
-        elseif #messages > 0 then
-            mp.osd_message(table.concat(messages, "\n"), 5)
         end
     end
 
-    -- Maybe show an error message from the script? Probably not needed
+    if #messages > 0 then
+        mp.osd_message(table.concat(messages, "\n"), 5)
+    end
 end
 
 local function get_python_command()

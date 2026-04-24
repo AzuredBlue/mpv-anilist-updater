@@ -421,6 +421,7 @@ class AniListUpdater:
             return response_json
 
         error_msg = response_json.get("errors", [{}])[0].get("message", "Unknown error")
+        osd_message(f"API request failed: {error_msg}")
         raise Exception(f"API request failed: {response.status_code} - {error_msg}")
 
     # ──────────────────────────────────────────────────────────────────────────────────────────────────
