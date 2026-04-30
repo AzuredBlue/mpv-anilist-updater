@@ -12,6 +12,8 @@ Parses anime filenames, finds AniList entries, and updates progress/status.
 #   SET_TO_COMPLETED_AFTER_LAST_EPISODE_CURRENT: Boolean. If true, set to COMPLETED after last episode if status was CURRENT.
 #   SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING: Boolean. If true, set to COMPLETED after last episode if status was REPEATING (rewatching).
 #   ADD_ENTRY_IF_MISSING: Boolean. If true, automatically add anime to your list when an update is triggered (i.e., when you've watched enough of the episode). Default is False.
+#   CACHE_REFRESH_RATE: Integer (hours). How long a normal cache entry is valid, in hours. Default is 24 (1 day).
+#   CACHE_MODE: String. Either "NORMAL" or "SLIDING". If set to "SLIDING", sliding expiration behaviour will be applied to every cached entry. Default is "NORMAL".
 
 # ═══════════════════════════════════════════════════════════════════════════════════════════════════════
 # IMPORTS
@@ -205,6 +207,10 @@ class AniListUpdater:
     CACHE_REFRESH_RATE: int = 24 * 60 * 60
     CORRECTED_CACHE_REFRESH_RATE: int = 28 * 24 * 60 * 60
 
+    # CACHE_MODE: "NORMAL" (default) or "SLIDING". When "SLIDING", apply sliding
+    # expiration to all cache entries.
+    CACHE_MODE: str = "NORMAL"
+
     _CHARS_TO_REPLACE: str = r'\/:!*?"<>|._-'
     # Matches any of the chars, only if not followed by a whitespace and a digit.
     CLEAN_PATTERN: str = rf"(?: - Movie)|[{re.escape(_CHARS_TO_REPLACE)}](?!\s*\d)"
@@ -227,6 +233,16 @@ class AniListUpdater:
         self.options: dict[str, Any] = options
         self.ACTION: str = action
         self._cache: dict[str, Any] | None = None
+        # Convert CACHE_REFRESH_RATE from hours to seconds.
+        try:
+            hours = float(self.options.get("CACHE_REFRESH_RATE", self.CACHE_REFRESH_RATE // 3600))
+            self.CACHE_REFRESH_RATE = int(hours * 3600)
+        except Exception:
+            self.CACHE_REFRESH_RATE = AniListUpdater.CACHE_REFRESH_RATE
+
+        self.CORRECTED_CACHE_REFRESH_RATE = AniListUpdater.CORRECTED_CACHE_REFRESH_RATE
+
+        self.CACHE_MODE = str(self.options.get("CACHE_MODE", self.CACHE_MODE)).upper()
 
     # Load token from anilistToken.txt
     def _load_access_token(self) -> str | None:
@@ -329,13 +345,23 @@ class AniListUpdater:
             entry = cache.get(dir_hash)
 
             if entry and entry.get("guessed_name") == guessed_name:
-                # Apply sliding expiration only for corrected entries when close to expiration.
-                if entry.get("corrected", False) and entry.get("ttl", 0) <= now + (
-                    self.CORRECTED_CACHE_REFRESH_RATE // 2
-                ):
-                    entry["ttl"] = now + self.CORRECTED_CACHE_REFRESH_RATE
-                    cache[dir_hash] = entry
-                    changed = True
+                # Determine whether to apply sliding expiration.
+                apply_sliding = False
+                if self.CACHE_MODE == "SLIDING" or entry.get("corrected", False):
+                    apply_sliding = True
+
+                if apply_sliding:
+                    # Choose refresh window based on whether the entry is corrected.
+                    refresh_rate = (
+                        self.CORRECTED_CACHE_REFRESH_RATE
+                        if entry.get("corrected", False)
+                        else self.CACHE_REFRESH_RATE
+                    )
+                    # If close to expiration (within half of its TTL), extend it.
+                    if entry.get("ttl", 0) <= now + (refresh_rate // 2):
+                        entry["ttl"] = now + refresh_rate
+                        cache[dir_hash] = entry
+                        changed = True
 
                 if changed:
                     self.save_cache(cache)
@@ -1228,6 +1254,8 @@ def main() -> None:
             "SET_TO_COMPLETED_AFTER_LAST_EPISODE_CURRENT": False,
             "SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING": True,
             "ADD_ENTRY_IF_MISSING": False,
+            "CACHE_REFRESH_RATE": AniListUpdater.CACHE_REFRESH_RATE // 3600,
+            "CACHE_MODE": AniListUpdater.CACHE_MODE,
         }
         if len(sys.argv) > 3:
             user_options = json.loads(sys.argv[3])

@@ -75,6 +75,8 @@ UPDATE_PROGRESS_WHEN_REWATCHING=yes
 SET_TO_COMPLETED_AFTER_LAST_EPISODE_CURRENT=yes
 SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING=yes
 ADD_ENTRY_IF_MISSING=no
+CACHE_REFRESH_RATE=24
+CACHE_MODE=NORMAL
 SILENT_MODE=no
 ```
 
@@ -84,6 +86,10 @@ SILENT_MODE=no
   - Restricting directories only prevents the script from automatically updating AniList for files outside the specified directories. Manual actions using the keybinds (Ctrl+A, Ctrl+B, Ctrl+D, C) will still work for any file, regardless of its location.
 - **EXCLUDED_DIRECTORIES**: Comma or semicolon separated list of directories. Useful for ignoring paths inside directories from above. Example: EXCLUDED_DIRECTORIES = {"D:/Torrents/Watched", "D:/Anime/Planned"}
 - **UPDATE_PERCENTAGE**: Number (0-100). The percentage of the video you need to watch before it updates AniList automatically. Default is `85`.
+- **CACHE_REFRESH_RATE**: Number (hours). Controls how long normal cache entries remain valid. Default is `24`. Higher values are recommended if you do not plan on modifying your watching list through AniList, but it might cause your cache to go stale.
+- **CACHE_MODE**: `NORMAL`/`SLIDING`. Default is `NORMAL`.
+  - `NORMAL`: Cache entries expire after CACHE_REFRESH_RATE except for those corrected..
+  - `SLIDING`: applies sliding expiration to all cache entries when they are read. Recommended with higher CACHE_REFRESH_RATE (more than a week for seasonals) values.
 - **SET_COMPLETED_TO_REWATCHING_ON_FIRST_EPISODE**: `yes`/`no`. If `yes`, when watching episode 1 of a completed anime, set it to rewatching and update progress. Default is `no`.
 - **UPDATE_PROGRESS_WHEN_REWATCHING**: `yes`/`no`. If `yes`, allow updating progress for anime set to rewatching. Default is `yes`.
 - **SET_TO_COMPLETED_AFTER_LAST_EPISODE_CURRENT**: `yes`/`no`. If `yes`, set to COMPLETED after last episode if status was CURRENT. **Default is `yes`.**

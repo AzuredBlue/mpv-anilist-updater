@@ -17,6 +17,10 @@ SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING: Boolean. If true, set to COMPLET
 
 ADD_ENTRY_IF_MISSING: Boolean. If true, automatically add anime to your list if it's not found during search. Default is false.
 
+CACHE_REFRESH_RATE: Number (hours). How long a normal cache entry stays valid. Default is 24.
+
+CACHE_MODE: String. Either NORMAL or SLIDING. NORMAL keeps current behavior. SLIDING refreshes cache TTL on reads for all titles.
+
 SILENT_MODE: Boolean. If true, won't show OSD messages.
 ]]
 
@@ -73,6 +77,8 @@ UPDATE_PROGRESS_WHEN_REWATCHING=yes
 SET_TO_COMPLETED_AFTER_LAST_EPISODE_CURRENT=yes
 SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING=yes
 ADD_ENTRY_IF_MISSING=no
+CACHE_REFRESH_RATE=24
+CACHE_MODE=NORMAL
 SILENT_MODE=no
 ]]
 
@@ -143,6 +149,8 @@ local options = {
     SET_TO_COMPLETED_AFTER_LAST_EPISODE_CURRENT = true,
     SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING = true,
     ADD_ENTRY_IF_MISSING = false,
+    CACHE_REFRESH_RATE = 24,
+    CACHE_MODE = "NORMAL",
     SILENT_MODE = false
 }
 
@@ -159,7 +167,9 @@ local python_options = {
     UPDATE_PROGRESS_WHEN_REWATCHING = options.UPDATE_PROGRESS_WHEN_REWATCHING,
     SET_TO_COMPLETED_AFTER_LAST_EPISODE_CURRENT = options.SET_TO_COMPLETED_AFTER_LAST_EPISODE_CURRENT,
     SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING = options.SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING,
-    ADD_ENTRY_IF_MISSING = options.ADD_ENTRY_IF_MISSING
+    ADD_ENTRY_IF_MISSING = options.ADD_ENTRY_IF_MISSING,
+    CACHE_REFRESH_RATE = tonumber(options.CACHE_REFRESH_RATE) or 24,
+    CACHE_MODE = tostring(options.CACHE_MODE or "NORMAL")
 }
 local python_options_json = utils.format_json(python_options)
 
