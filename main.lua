@@ -533,6 +533,8 @@ local function paste_clipboard_to_field()
         args = {"powershell", "-NoProfile", "-Command", "Get-Clipboard -Raw"}
     elseif os.getenv("OSTYPE") == "darwin" then
         args = {"pbpaste"}
+    elseif os.getenv("XDG_SESSION_TYPE") == "wayland" then
+        args = {"wl-paste"}
     else
         args = {"xclip", "-selection", "clipboard", "-o"}
     end
