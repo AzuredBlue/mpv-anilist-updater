@@ -552,12 +552,12 @@ class AniListUpdater:
                     self.cache_to_file(filename, file_info.name, file_info.episode, result)
             return
 
-        # total_episodes can be None at first for ongoing anime. It is only necessary to refresh that information
-        # if it's a "corrected" anime, since that won't expire.
+        # total_episodes can be None at first for ongoing anime. Refresh it for corrected entries
+        # and for sliding cache entries so stale missing metadata gets filled in.
         should_refresh_missing_episodes = bool(
             self.ACTION == "update"
             and cache_entry
-            and cache_entry.get("corrected", False)
+            and (cache_entry.get("corrected", False) or self.CACHE_MODE == "SLIDING")
             and result
             and result.total_episodes is None
         )
