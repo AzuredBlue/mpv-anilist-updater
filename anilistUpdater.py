@@ -293,32 +293,29 @@ class AniListUpdater:
             absolute_progress (int): Absolute episode number.
             result (AnimeInfo): Anime information to cache.
         """
-        try:
-            dir_hash = self._hash_path(os.path.dirname(path))
-            cache = self.load_cache()
-            existing_entry = cache.get(dir_hash, {})
-            is_corrected = bool(existing_entry.get("corrected", False))
+        dir_hash = self._hash_path(os.path.dirname(path))
+        cache = self.load_cache()
+        existing_entry = cache.get(dir_hash, {})
+        is_corrected = bool(existing_entry.get("corrected", False))
 
-            anime_id, _, current_progress, total_episodes, relative_progress, current_status, mal_id = result
+        anime_id, _, current_progress, total_episodes, relative_progress, current_status, mal_id = result
 
-            now = time.time()
-            ttl_refresh_rate = self.CORRECTED_CACHE_REFRESH_RATE if is_corrected else self.CACHE_REFRESH_RATE
+        now = time.time()
+        ttl_refresh_rate = self.CORRECTED_CACHE_REFRESH_RATE if is_corrected else self.CACHE_REFRESH_RATE
 
-            cache[dir_hash] = {
-                "guessed_name": guessed_name,
-                "anime_id": anime_id,
-                "mal_id": mal_id,
-                "current_progress": current_progress,
-                "relative_progress": f"{absolute_progress}->{relative_progress}",
-                "total_episodes": total_episodes,
-                "current_status": current_status,
-                "corrected": is_corrected,
-                "ttl": now + ttl_refresh_rate,
-            }
+        cache[dir_hash] = {
+            "guessed_name": guessed_name,
+            "anime_id": anime_id,
+            "mal_id": mal_id,
+            "current_progress": current_progress,
+            "relative_progress": f"{absolute_progress}->{relative_progress}",
+            "total_episodes": total_episodes,
+            "current_status": current_status,
+            "corrected": is_corrected,
+            "ttl": now + ttl_refresh_rate,
+        }
 
-            self.save_cache(cache)
-        except Exception as e:
-            print(f"Error trying to cache {result}: {e}")
+        self.save_cache(cache)
 
     def check_and_clean_cache(self, path: str, guessed_name: str) -> dict[str, Any] | None:
         """
@@ -331,50 +328,43 @@ class AniListUpdater:
         Returns:
             dict[str, Any] | None: Cache entry or None if not found/valid.
         """
-        try:
-            cache = self.load_cache()
-            now = time.time()
-            changed = False
-            # Purge expired
-            for k, v in list(cache.items()):
-                if v.get("ttl", 0) < now:
-                    cache.pop(k, None)
+        cache = self.load_cache()
+        now = time.time()
+        changed = False
+
+        # Purge expired
+        for k, v in list(cache.items()):
+            if v.get("ttl", 0) < now:
+                cache.pop(k, None)
+                changed = True
+
+        dir_hash = self._hash_path(os.path.dirname(path))
+        entry = cache.get(dir_hash)
+
+        if entry and entry.get("guessed_name") == guessed_name:
+            # Determine whether to apply sliding expiration.
+            apply_sliding = self.CACHE_MODE == "SLIDING" or entry.get("corrected", False)
+
+            if apply_sliding:
+                # Choose refresh window based on whether the entry is corrected.
+                refresh_rate = (
+                    self.CORRECTED_CACHE_REFRESH_RATE if entry.get("corrected", False) else self.CACHE_REFRESH_RATE
+                )
+                # If close to expiration (within half of its TTL), extend it.
+                if entry.get("ttl", 0) <= now + (refresh_rate // 2):
+                    entry["ttl"] = now + refresh_rate
+                    cache[dir_hash] = entry
                     changed = True
-
-            dir_hash = self._hash_path(os.path.dirname(path))
-            entry = cache.get(dir_hash)
-
-            if entry and entry.get("guessed_name") == guessed_name:
-                # Determine whether to apply sliding expiration.
-                apply_sliding = False
-                if self.CACHE_MODE == "SLIDING" or entry.get("corrected", False):
-                    apply_sliding = True
-
-                if apply_sliding:
-                    # Choose refresh window based on whether the entry is corrected.
-                    refresh_rate = (
-                        self.CORRECTED_CACHE_REFRESH_RATE
-                        if entry.get("corrected", False)
-                        else self.CACHE_REFRESH_RATE
-                    )
-                    # If close to expiration (within half of its TTL), extend it.
-                    if entry.get("ttl", 0) <= now + (refresh_rate // 2):
-                        entry["ttl"] = now + refresh_rate
-                        cache[dir_hash] = entry
-                        changed = True
-
-                if changed:
-                    self.save_cache(cache)
-
-                return entry
 
             if changed:
                 self.save_cache(cache)
 
-            return None
-        except Exception as e:
-            print(f"Error trying to read cache file: {e}")
-            return None
+            return entry
+
+        if changed:
+            self.save_cache(cache)
+
+        return None
 
     def load_cache(self) -> dict[str, Any]:
         """
@@ -1238,37 +1228,40 @@ def open_anilist(anime_name: str, anime_id: int) -> None:
 
 def main() -> None:
     """Main entry point for the script."""
-    try:
-        # Reconfigure to utf-8
-        if sys.stdout.encoding != "utf-8":
-            try:
-                sys.stdout.reconfigure(encoding="utf-8")  # type: ignore
-                sys.stderr.reconfigure(encoding="utf-8")  # type: ignore
-            except Exception as e_reconfigure:
-                print(f"Couldn't reconfigure stdout/stderr to UTF-8: {e_reconfigure}", file=sys.stderr)
+    # Reconfigure to utf-8
+    if sys.stdout.encoding != "utf-8":
+        try:
+            sys.stdout.reconfigure(encoding="utf-8")  # type: ignore
+            sys.stderr.reconfigure(encoding="utf-8")  # type: ignore
+        except Exception as e_reconfigure:
+            print(f"Couldn't reconfigure stdout/stderr to UTF-8: {e_reconfigure}", file=sys.stderr)
 
-        # Parse options from argv[3] if present
-        options = {
-            "SET_COMPLETED_TO_REWATCHING_ON_FIRST_EPISODE": False,
-            "UPDATE_PROGRESS_WHEN_REWATCHING": True,
-            "SET_TO_COMPLETED_AFTER_LAST_EPISODE_CURRENT": False,
-            "SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING": True,
-            "ADD_ENTRY_IF_MISSING": False,
-            "CACHE_REFRESH_RATE": AniListUpdater.CACHE_REFRESH_RATE // 3600,
-            "CACHE_MODE": AniListUpdater.CACHE_MODE,
-        }
-        if len(sys.argv) > 3:
+    # Parse options from argv[3] if present
+    options = {
+        "SET_COMPLETED_TO_REWATCHING_ON_FIRST_EPISODE": False,
+        "UPDATE_PROGRESS_WHEN_REWATCHING": True,
+        "SET_TO_COMPLETED_AFTER_LAST_EPISODE_CURRENT": False,
+        "SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING": True,
+        "ADD_ENTRY_IF_MISSING": False,
+        "CACHE_REFRESH_RATE": AniListUpdater.CACHE_REFRESH_RATE // 3600,
+        "CACHE_MODE": AniListUpdater.CACHE_MODE,
+    }
+    if len(sys.argv) > 3:
+        try:
             user_options = json.loads(sys.argv[3])
             options.update(user_options)
+        except Exception as e:
+            print(f"ERROR: {e}")
+            sys.exit(1)
 
-        # Pass options to AniListUpdater
-        updater = AniListUpdater(options, sys.argv[2])
+    # Pass options to AniListUpdater
+    updater = AniListUpdater(options, sys.argv[2])
 
+    try:
         if sys.argv[2] == "correct" and len(sys.argv) > 6:
             updater.correct_anime_id(sys.argv[1], int(sys.argv[4]), int(sys.argv[5]), sys.argv[6])
         else:
             updater.handle_filename(sys.argv[1])
-
     except Exception as e:
         print(f"ERROR: {e}")
         sys.exit(1)
