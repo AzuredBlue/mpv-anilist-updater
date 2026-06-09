@@ -189,7 +189,8 @@ end
 
 function callback(success, result, error)
 
-    if options.SILENT_MODE then return end
+    -- Don't show any messages only if the the result is sucessful
+    if options.SILENT_MODE and result and result.status == 0 then return end
     
     -- Can send multiple OSD messages to display
     local messages = {}
