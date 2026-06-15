@@ -1249,8 +1249,11 @@ def run_action(updater: AniListUpdater) -> None:
     if action == "update_with_info" and len(sys.argv) > 4:
         anime_info_json = json.loads(sys.argv[4])
         updater.update_with_preloaded_info(filepath, anime_info_json)
-    elif action == "correct" and len(sys.argv) > 6:
-        updater.correct_anime_id(filepath, int(sys.argv[4]), int(sys.argv[5]), sys.argv[6])
+    elif action == "correct":
+        if len(sys.argv) > 6:
+            updater.correct_anime_id(filepath, int(sys.argv[4]), int(sys.argv[5]), sys.argv[6])
+        else:
+            updater.correct_anime_id(filepath, int(sys.argv[4]), None, sys.argv[5])
     else:
         updater.handle_filename(filepath)
 

@@ -206,7 +206,7 @@ end
 
 function callback(success, result, error)
 
-    -- Don't show any messages only if the result is sucessful
+    -- Don't show any messages only if the result is successful
     if options.SILENT_MODE and result and result.status == 0 then return end
     
     -- Can send multiple OSD messages to display
@@ -305,10 +305,9 @@ local function fetch_anime_info(cb)
     is_fetching = true
 
     local path = get_path()
-    local s_dir = debug.getinfo(1).source:match("@?(.*/)") 
     mp.command_native_async({
         name = "subprocess",
-        args = {python_command, s_dir .. "anilistUpdater.py", path, "info", python_options_json},
+        args = {python_command, script_dir .. "anilistUpdater.py", path, "info", python_options_json},
         capture_stdout = true
     }, function(success, result)
         is_fetching = false
@@ -365,7 +364,6 @@ function on_pause_change(name, value)
 end
 
 local function update(info)
-    local script_dir = debug.getinfo(1).source:match("@?(.*/)") 
     local path = get_path()
     local info_json = utils.format_json(info)
 
