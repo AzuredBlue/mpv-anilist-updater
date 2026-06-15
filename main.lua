@@ -113,7 +113,6 @@ for _, path in ipairs(conf_paths) do
         if f then
             f:close()
             conf_path = path
-            -- print("Found config at: " .. path)
             break
         end
     end
@@ -128,7 +127,6 @@ if not conf_path then
                 f:write(default_conf)
                 f:close()
                 conf_path = path
-                -- print("Created config at: " .. path)
                 break
             end
         end
@@ -208,7 +206,7 @@ end
 
 function callback(success, result, error)
 
-    -- Don't show any messages only if the the result is sucessful
+    -- Don't show any messages only if the result is sucessful
     if options.SILENT_MODE and result and result.status == 0 then return end
     
     -- Can send multiple OSD messages to display
@@ -468,13 +466,7 @@ function open_folder()
         return
     end
 
-    if path:find('\\') then
-        directory = path:match("(.*)\\")
-    elseif path:find('\\\\') then
-        directory = path:match("(.*)\\\\")
-    else
-        directory = mp.get_property("working-directory")
-    end
+    directory = path:match("(.+)[/\\]") or mp.get_property("working-directory")
 
     open(directory)
 end
