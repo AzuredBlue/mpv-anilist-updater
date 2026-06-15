@@ -152,7 +152,7 @@ This script should work on most formats as long as the name is present in the fi
 
 `E12 - Welcome [F1119374].mkv` will work if the folder that it is in has `86` in the name. If it has `86 Part 2` then it should be `Episode 1`
 
-To see which anime got detected, you can use `c` or `Ctrl+B` to launch the AniList page.
+To see which anime got detected, you can use `c`, `Ctrl+B` to launch the AniList page, or check mpv's console.
 
 ## MAL
 

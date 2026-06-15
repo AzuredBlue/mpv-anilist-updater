@@ -25,7 +25,6 @@ import os
 import re
 import sys
 import time
-import webbrowser
 from collections.abc import Iterator
 from dataclasses import dataclass
 from typing import Any, ClassVar
@@ -482,7 +481,7 @@ class AniListUpdater:
 
     def handle_filename(self, filename: str) -> None:
         """
-        Handle file processing: parse, check cache, update AniList.
+        Handle file processing for the info action: parse, check cache, output info.
 
         Args:
             filename (str): Path to video file.
@@ -490,11 +489,6 @@ class AniListUpdater:
         file_info = self.parse_filename(filename)
         cache_entry = self.check_and_clean_cache(filename, file_info.name)
         result = None
-
-        # If launching and cache has anime_id, we can skip search and open directly.
-        if self.ACTION == "launch" and cache_entry and cache_entry.get("anime_id"):
-            open_anilist(file_info.name, cache_entry["anime_id"])
-            return
 
         # Use cached data if available, otherwise fetch fresh info
         if cache_entry:
@@ -525,28 +519,10 @@ class AniListUpdater:
         if result is None:
             result = self.get_anime_info_and_progress(file_info)
 
-        # For "info" action, dumps the JSON with the anime information, save it to cache and return without updating AniList.
-        if self.ACTION == "info":
-            if result:
-                payload = {
-                    "anime_id": result.anime_id,
-                    "mal_id": result.mal_id,
-                    "anime_name": result.anime_name,
-                    "episode": result.file_progress,
-                    "current_progress": result.current_progress,
-                    "total_episodes": result.total_episodes,
-                    "current_status": result.current_status,
-                }
-                print(f"INFO:{json.dumps(payload)}")
-                if result.current_progress is not None:
-                    self.cache_to_file(filename, file_info.name, file_info.episode, result)
-            return
-
         # total_episodes can be None at first for ongoing anime. Refresh it for corrected entries
         # and for sliding cache entries so stale missing metadata gets filled in.
         should_refresh_missing_episodes = bool(
-            self.ACTION == "update"
-            and cache_entry
+            cache_entry
             and (cache_entry.get("corrected", False) or self.CACHE_MODE == "SLIDING")
             and result
             and result.total_episodes is None
@@ -554,12 +530,21 @@ class AniListUpdater:
         if should_refresh_missing_episodes:
             result = self.refresh_anime_info_by_id(result)
 
-        result = self.update_episode_count(result)
-
-        if result and result.current_progress is not None:
-            # Update cache with latest data
-            self.cache_to_file(filename, file_info.name, file_info.episode, result)
-        return
+        if result:
+            payload = {
+                "anime_id": result.anime_id,
+                "mal_id": result.mal_id,
+                "anime_name": result.anime_name,
+                "episode": result.file_progress,
+                "current_progress": result.current_progress,
+                "total_episodes": result.total_episodes,
+                "current_status": result.current_status,
+                "guessed_name": file_info.name,
+                "absolute_episode": file_info.episode,
+            }
+            print(f"INFO:{json.dumps(payload)}")
+            if result.current_progress is not None:
+                self.cache_to_file(filename, file_info.name, file_info.episode, result)
 
     # Attempt to improve detection
     def fix_filename(self, path_parts: list[str]) -> list[str]:
@@ -889,11 +874,6 @@ class AniListUpdater:
         if anime_id is None:
             raise Exception("Couldn't find that anime! Make sure it is on your list and the title is correct.")
 
-        # Only launch anilist
-        if self.ACTION == "launch":
-            open_anilist(anime_name, anime_id)
-            return result
-
         should_add_entry = current_progress is None and current_status is None
         is_last_episode = file_progress == total_episodes
 
@@ -1049,6 +1029,35 @@ class AniListUpdater:
             refreshed_status,
             media.get("idMal") or result.mal_id,
         )
+
+    def update_with_preloaded_info(self, filepath: str, anime_info: dict[str, Any]) -> None:
+        """
+        Update AniList using pre-fetched anime info.
+
+        Args:
+            filepath (str): Path to the currently playing file.
+            anime_info (dict[str, Any]): Pre-fetched anime info from the 'info' action.
+        """
+        result = AnimeInfo(
+            anime_id=anime_info.get("anime_id"),
+            anime_name=anime_info.get("anime_name"),
+            current_progress=anime_info.get("current_progress"),
+            total_episodes=anime_info.get("total_episodes"),
+            file_progress=anime_info.get("episode"),
+            current_status=anime_info.get("current_status"),
+            mal_id=anime_info.get("mal_id"),
+        )
+
+        self.ACTION = "update"
+        result = self.update_episode_count(result)
+
+        if result and result.current_progress is not None:
+            self.cache_to_file(
+                filepath,
+                anime_info["guessed_name"],
+                anime_info["absolute_episode"],
+                result,
+            )
 
     def _correct_anime_id_change(
         self,
@@ -1207,6 +1216,20 @@ class AniListUpdater:
 
         osd_message(f'Corrected "{anime_name}" (ID: {anilist_id}) | ' + " | ".join(changes))
 
+        # Emit corrected info for Lua to update current_anime_info
+        corrected_payload = {
+            "anime_id": anilist_id,
+            "mal_id": mal_id,
+            "anime_name": anime_name,
+            "episode": mapped_relative_episode,
+            "current_progress": current_progress,
+            "total_episodes": total_episodes,
+            "current_status": current_status,
+            "guessed_name": guessed_name,
+            "absolute_episode": file_info.episode,
+        }
+        print(f"INFO:{json.dumps(corrected_payload)}")
+
 
 # ═══════════════════════════════════════════════════════════════════════════════════════════════════════
 # MAIN ENTRY POINT
@@ -1219,11 +1242,17 @@ def osd_message(msg: str) -> None:
     print(f"{msg}")
 
 
-def open_anilist(anime_name: str, anime_id: int) -> None:
-    """Open the given anime ID on AniList in a web browser."""
-    url = f"https://anilist.co/anime/{anime_id}"
-    osd_message(f'Opening AniList for "{anime_name}": {url}')
-    webbrowser.open_new_tab(url)
+def run_action(updater: AniListUpdater) -> None:
+    """Execute the appropriate updater action based on command line arguments."""
+    action = sys.argv[2]
+    filepath = sys.argv[1]
+    if action == "update_with_info" and len(sys.argv) > 4:
+        anime_info_json = json.loads(sys.argv[4])
+        updater.update_with_preloaded_info(filepath, anime_info_json)
+    elif action == "correct" and len(sys.argv) > 6:
+        updater.correct_anime_id(filepath, int(sys.argv[4]), int(sys.argv[5]), sys.argv[6])
+    else:
+        updater.handle_filename(filepath)
 
 
 def main() -> None:
@@ -1258,10 +1287,7 @@ def main() -> None:
     updater = AniListUpdater(options, sys.argv[2])
 
     try:
-        if sys.argv[2] == "correct" and len(sys.argv) > 6:
-            updater.correct_anime_id(sys.argv[1], int(sys.argv[4]), int(sys.argv[5]), sys.argv[6])
-        else:
-            updater.handle_filename(sys.argv[1])
+        run_action(updater)
     except Exception as e:
         print(f"ERROR: {e}")
         sys.exit(1)
