@@ -220,13 +220,12 @@ class AniListUpdater:
     # ──────────────────────────────────────────────────────────────────────────────────────────────────
 
     # Load token
-    def __init__(self, options: dict[str, Any], action: str) -> None:
+    def __init__(self, options: dict[str, Any]) -> None:
         """
-        Initialize AniListUpdater with configuration and action.
+        Initialize AniListUpdater with configuration.
 
         Args:
             options (dict[str, Any]): Configuration options.
-            action (str): Action to perform ('update' or 'launch').
         """
         self.access_token: str | None = self._load_access_token()
         self.options: dict[str, Any] = options
@@ -1285,7 +1284,7 @@ def main() -> None:
             sys.exit(1)
 
     # Pass options to AniListUpdater
-    updater = AniListUpdater(options, sys.argv[2])
+    updater = AniListUpdater(options)
 
     try:
         run_action(updater)
