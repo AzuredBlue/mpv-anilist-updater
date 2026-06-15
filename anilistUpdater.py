@@ -230,7 +230,6 @@ class AniListUpdater:
         """
         self.access_token: str | None = self._load_access_token()
         self.options: dict[str, Any] = options
-        self.ACTION: str = action
         self._cache: dict[str, Any] | None = None
         # Convert CACHE_REFRESH_RATE from hours to seconds.
         try:
@@ -1048,7 +1047,6 @@ class AniListUpdater:
             mal_id=anime_info.get("mal_id"),
         )
 
-        self.ACTION = "update"
         result = self.update_episode_count(result)
 
         if result and result.current_progress is not None:
