@@ -298,6 +298,34 @@ local isPaused = false
 local is_file_eligible = false
 local current_anime_info = nil
 
+local is_fetching = false
+
+local function fetch_anime_info(cb)
+    if is_fetching then
+        return
+    end
+    is_fetching = true
+
+    local path = get_path()
+    local s_dir = debug.getinfo(1).source:match("@?(.*/)") 
+    mp.command_native_async({
+        name = "subprocess",
+        args = {python_command, s_dir .. "anilistUpdater.py", path, "info", python_options_json},
+        capture_stdout = true
+    }, function(success, result)
+        is_fetching = false
+        if success and result and result.status == 0 then
+            current_anime_info = parse_detected_info(result)
+            if current_anime_info then
+                print("Detected anime: " .. (current_anime_info.anime_name or "?") .. " #" .. (current_anime_info.episode or "?"))
+            end
+        end
+        if cb then
+            cb(current_anime_info)
+        end
+    end)
+end
+
 -- Make sure it doesnt trigger twice in 1 video
 local triggered = false
 -- Check progress every X seconds (when not paused)
@@ -338,24 +366,33 @@ function on_pause_change(name, value)
     end
 end
 
--- Function to launch the .py script to update AniList
-function update_anilist()
-    if not current_anime_info then
-        if not options.SILENT_MODE then
-            mp.osd_message("Error: Anime info not loaded yet.", 3)
-        end
-        return
-    end
-
+local function update(info)
     local script_dir = debug.getinfo(1).source:match("@?(.*/)") 
     local path = get_path()
-    local info_json = utils.format_json(current_anime_info)
+    local info_json = utils.format_json(info)
 
     mp.command_native_async({
         name = "subprocess",
         args = {python_command, script_dir .. "anilistUpdater.py", path, "update_with_info", python_options_json, info_json},
         capture_stdout = true
     }, callback)
+end
+
+-- Function to launch the .py script to update AniList
+function update_anilist()
+    if current_anime_info then
+        update(current_anime_info)
+    else
+        fetch_anime_info(function(info)
+            if info then
+                update(info)
+            else
+                if not options.SILENT_MODE then
+                    mp.osd_message("Error: Anime info not loaded yet.", 3)
+                end
+            end
+        end)
+    end
 end
 
 mp.observe_property("pause", "bool", on_pause_change)
@@ -365,6 +402,7 @@ mp.register_event("file-loaded", function()
     triggered = false
     is_file_eligible = false
     current_anime_info = nil
+    is_fetching = false
     progress_timer:stop()
 
     if not is_ani_cli_compatible() and #DIRECTORIES > 0 then
@@ -383,20 +421,7 @@ mp.register_event("file-loaded", function()
     is_file_eligible = true
 
     -- Fetch anime info on file load
-    local path = get_path()
-    local s_dir = debug.getinfo(1).source:match("@?(.*/)") 
-    mp.command_native_async({
-        name = "subprocess",
-        args = {python_command, s_dir .. "anilistUpdater.py", path, "info", python_options_json},
-        capture_stdout = true
-    }, function(success, result)
-        if success and result and result.status == 0 then
-            current_anime_info = parse_detected_info(result)
-            if current_anime_info then
-                print("Detected anime: " .. (current_anime_info.anime_name or "?") .. " #" .. (current_anime_info.episode or "?"))
-            end
-        end
-    end)
+    fetch_anime_info()
 
     -- Start timer for this file
     if not isPaused then
@@ -407,19 +432,31 @@ end)
 -- Default keybinds - can be customized in input.conf using script-binding commands
 mp.add_key_binding("ctrl+a", 'update_anilist', update_anilist)
 
-mp.add_key_binding("ctrl+b", 'launch_anilist', function()
-    if current_anime_info and current_anime_info.anime_id then
-        local url = "https://anilist.co/anime/" .. current_anime_info.anime_id
-        if not options.SILENT_MODE then
-            mp.osd_message('Opening AniList for "' .. (current_anime_info.anime_name or "?") .. '"', 3)
-        end
-        open(url)
-    else
-        if not options.SILENT_MODE then
-            mp.osd_message("Error: Anime info not loaded yet.", 3)
-        end
+local function launch(info)
+    local url = "https://anilist.co/anime/" .. info.anime_id
+    if not options.SILENT_MODE then
+        mp.osd_message('Opening AniList for "' .. (info.anime_name or "?") .. '"', 3)
     end
-end)
+    open(url)
+end
+
+local function launch_anilist()
+    if current_anime_info and current_anime_info.anime_id then
+        launch(current_anime_info)
+    else
+        fetch_anime_info(function(info)
+            if info and info.anime_id then
+                launch(info)
+            else
+                if not options.SILENT_MODE then
+                    mp.osd_message("Error: Anime info not loaded yet.", 3)
+                end
+            end
+        end)
+    end
+end
+
+mp.add_key_binding("ctrl+b", 'launch_anilist', launch_anilist)
 
 -- Open the folder that the video is
 function open_folder()
