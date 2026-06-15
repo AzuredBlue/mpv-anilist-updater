@@ -26,6 +26,7 @@ SILENT_MODE: Boolean. If true, won't show OSD messages.
 
 local utils = require 'mp.utils'
 local mpoptions = require("mp.options")
+local correction_overlay = require("correction_overlay")
 
 local conf_name = "anilistUpdater.conf"
 local script_dir = (debug.getinfo(1).source:match("@?(.*/)") or "./")
@@ -112,7 +113,6 @@ for _, path in ipairs(conf_paths) do
         if f then
             f:close()
             conf_path = path
-            -- print("Found config at: " .. path)
             break
         end
     end
@@ -127,7 +127,6 @@ if not conf_path then
                 f:write(default_conf)
                 f:close()
                 conf_path = path
-                -- print("Created config at: " .. path)
                 break
             end
         end
@@ -187,9 +186,27 @@ local function path_starts_with_any(path, directories)
     return false
 end
 
+local function parse_detected_info(result)
+    if not result or not result.stdout then
+        return nil
+    end
+
+    for line in result.stdout:gmatch("[^\r\n]+") do
+        local json_part = line:match("^INFO:%s*(.+)$")
+        if json_part then
+            local info = utils.parse_json(json_part)
+            if info and type(info) == "table" then
+                return info
+            end
+        end
+    end
+
+    return nil
+end
+
 function callback(success, result, error)
 
-    -- Don't show any messages only if the the result is sucessful
+    -- Don't show any messages only if the result is successful
     if options.SILENT_MODE and result and result.status == 0 then return end
     
     -- Can send multiple OSD messages to display
@@ -218,14 +235,26 @@ function callback(success, result, error)
 end
 
 local function get_python_command()
-    local os_name = package.config:sub(1, 1)
-    if os_name == '\\' then
-        -- Windows
+    local platform = mp.get_property("platform")
+    if platform == "windows" then
         return "python"
     else
-        -- Linux
         return "python3"
     end
+end
+
+-- Helper to open a path or URL with the system's default handler
+local function open(target)
+    local platform = mp.get_property("platform")
+    local args
+    if platform == "windows" then
+        args = {"cmd", "/c", "start", "", target}
+    elseif platform == "darwin" then
+        args = {"open", target}
+    else
+        args = {"xdg-open", target}
+    end
+    mp.command_native({name = "subprocess", args = args, detach = true})
 end
 
 -- Helper function to detect ani-cli compatibility
@@ -265,6 +294,34 @@ local python_command = get_python_command()
 
 local isPaused = false
 local is_file_eligible = false
+local current_anime_info = nil
+
+local is_fetching = false
+
+local function fetch_anime_info(cb)
+    if is_fetching then
+        return
+    end
+    is_fetching = true
+
+    local path = get_path()
+    mp.command_native_async({
+        name = "subprocess",
+        args = {python_command, script_dir .. "anilistUpdater.py", path, "info", python_options_json},
+        capture_stdout = true
+    }, function(success, result)
+        is_fetching = false
+        if success and result and result.status == 0 then
+            current_anime_info = parse_detected_info(result)
+            if current_anime_info then
+                print("Detected anime: " .. (current_anime_info.anime_name or "?") .. " #" .. (current_anime_info.episode or "?"))
+            end
+        end
+        if cb then
+            cb(current_anime_info)
+        end
+    end)
+end
 
 -- Make sure it doesnt trigger twice in 1 video
 local triggered = false
@@ -283,7 +340,7 @@ local progress_timer = mp.add_periodic_timer(UPDATE_INTERVAL, function()
     end
 
     if percent_pos >= UPDATE_PERCENTAGE then
-        update_anilist("update")
+        update_anilist()
         triggered = true
         if progress_timer then
             progress_timer:stop()
@@ -306,20 +363,32 @@ function on_pause_change(name, value)
     end
 end
 
--- Function to launch the .py script
-function update_anilist(action)
-    if action == "launch" and not options.SILENT_MODE then
-        mp.osd_message("Launching AniList", 2)
-    end
-    local script_dir = debug.getinfo(1).source:match("@?(.*/)")
-
+local function update(info)
     local path = get_path()
+    local info_json = utils.format_json(info)
 
-    local table = {}
-    table.name = "subprocess"
-    table.args = {python_command, script_dir .. "anilistUpdater.py", path, action, python_options_json}
-    table.capture_stdout = true
-    local cmd = mp.command_native_async(table, callback)
+    mp.command_native_async({
+        name = "subprocess",
+        args = {python_command, script_dir .. "anilistUpdater.py", path, "update_with_info", python_options_json, info_json},
+        capture_stdout = true
+    }, callback)
+end
+
+-- Function to launch the .py script to update AniList
+function update_anilist()
+    if current_anime_info then
+        update(current_anime_info)
+    else
+        fetch_anime_info(function(info)
+            if info then
+                update(info)
+            else
+                if not options.SILENT_MODE then
+                    mp.osd_message("Error: Anime info not loaded yet.", 3)
+                end
+            end
+        end)
+    end
 end
 
 mp.observe_property("pause", "bool", on_pause_change)
@@ -328,6 +397,8 @@ mp.observe_property("pause", "bool", on_pause_change)
 mp.register_event("file-loaded", function()
     triggered = false
     is_file_eligible = false
+    current_anime_info = nil
+    is_fetching = false
     progress_timer:stop()
 
     if not is_ani_cli_compatible() and #DIRECTORIES > 0 then
@@ -345,6 +416,9 @@ mp.register_event("file-loaded", function()
 
     is_file_eligible = true
 
+    -- Fetch anime info on file load
+    fetch_anime_info()
+
     -- Start timer for this file
     if not isPaused then
         progress_timer:resume()
@@ -352,13 +426,33 @@ mp.register_event("file-loaded", function()
 end)
 
 -- Default keybinds - can be customized in input.conf using script-binding commands
-mp.add_key_binding("ctrl+a", 'update_anilist', function()
-    update_anilist("update")
-end)
+mp.add_key_binding("ctrl+a", 'update_anilist', update_anilist)
 
-mp.add_key_binding("ctrl+b", 'launch_anilist', function()
-    update_anilist("launch")
-end)
+local function launch(info)
+    local url = "https://anilist.co/anime/" .. info.anime_id
+    if not options.SILENT_MODE then
+        mp.osd_message('Opening AniList for "' .. (info.anime_name or "?") .. '"', 3)
+    end
+    open(url)
+end
+
+local function launch_anilist()
+    if current_anime_info and current_anime_info.anime_id then
+        launch(current_anime_info)
+    else
+        fetch_anime_info(function(info)
+            if info and info.anime_id then
+                launch(info)
+            else
+                if not options.SILENT_MODE then
+                    mp.osd_message("Error: Anime info not loaded yet.", 3)
+                end
+            end
+        end)
+    end
+end
+
+mp.add_key_binding("ctrl+b", 'launch_anilist', launch_anilist)
 
 -- Open the folder that the video is
 function open_folder()
@@ -370,375 +464,22 @@ function open_folder()
         return
     end
 
-    if path:find('\\') then
-        directory = path:match("(.*)\\")
-    elseif path:find('\\\\') then
-        directory = path:match("(.*)\\\\")
-    else
-        directory = mp.get_property("working-directory")
-    end
+    directory = path:match("(.+)[/\\]") or mp.get_property("working-directory")
 
-    -- Use the system command to open the folder in File Explorer
-    local args
-    if package.config:sub(1, 1) == '\\' then
-        -- Windows
-        args = {'explorer', directory}
-    elseif os.getenv("XDG_CURRENT_DESKTOP") or os.getenv("WAYLAND_DISPLAY") or os.getenv("DISPLAY") then
-        -- Linux (assume a desktop environment like GNOME, KDE, etc.)
-        args = {'xdg-open', directory}
-    elseif package.config:sub(1, 1) == '/' then
-        -- macOS
-        args = {'open', directory}
-    end
-
-    mp.command_native({
-        name = "subprocess",
-        args = args,
-        detach = true
-    })
+    open(directory)
 end
 
 mp.add_key_binding("ctrl+d", 'open_folder', open_folder)
 
-local correction_overlay = {
-    active = false,
-    focus = 1,
-    id_input = "",
-    episode_input = "",
-    status_index = 1,
-    detected = nil,
-    path = nil,
-    s_dir = nil
-}
+-- Initialize and bind correction overlay module
+correction_overlay.init({
+    python_command = python_command,
+    python_options_json = python_options_json,
+    callback = callback,
+    get_current_anime_info = function() return current_anime_info end,
+    set_current_anime_info = function(info) current_anime_info = info end
+})
 
-local correction_statuses = {
-    "CURRENT",
-    "PAUSED",
-    "DROPPED",
-    "COMPLETED",
-    "REPEATING",
-    "PLANNING",
-}
-
-local function get_status_index(status_code)
-    if not status_code then
-        return 1
-    end
-
-    for i, status in ipairs(correction_statuses) do
-        if status == status_code then
-            return i
-        end
-    end
-
-    return 1
-end
-
-local overlay_timer = mp.add_periodic_timer(0.1, function()
-    if not correction_overlay.active then
-        return
-    end
-
-    local w, h = mp.get_osd_size()
-    if not w or not h or w == 0 or h == 0 then
-        return
-    end
-
-    local detected_name = (correction_overlay.detected and correction_overlay.detected.anime_name) or "Unknown"
-    local detected_id = (correction_overlay.detected and correction_overlay.detected.anime_id) or "?"
-    local detected_ep = (correction_overlay.detected and correction_overlay.detected.episode) or "?"
-    local detected_status = (correction_overlay.detected and correction_overlay.detected.current_status) or "CURRENT"
-    local focus = correction_overlay.focus
-    local id_text = correction_overlay.id_input ~= "" and correction_overlay.id_input or "(paste AniList URL or type ID)"
-    local episode_text = correction_overlay.episode_input ~= "" and correction_overlay.episode_input or "(optional, relative episode)"
-    local selected_status = correction_statuses[correction_overlay.status_index] or correction_statuses[1]
-    local status_text = selected_status
-
-    local ass = string.format(
-        "{\\an7\\pos(40,50)\\fs30\\bord2\\shad0}Correction"
-            .. "\\N{\\fs20}Detected: %s"
-            .. "\\N{\\fs20}ID: %s | Episode: %s | Status: %s"
-            .. "\\N"
-            .. "\\N{\\fs22}%s ID / URL: %s"
-            .. "\\N{\\fs22}%s Corrected episode: %s"
-            .. "\\N{\\fs22}%s Status: %s"
-            .. "\\N"
-            .. "\\N{\\fs18}Tab/Up/Down: switch field | Left/Right: change status | Enter: submit | Esc: cancel"
-            .. "\\N{\\fs18}Ctrl+V: paste clipboard | Backspace/Del: clear field",
-        detected_name,
-        tostring(detected_id),
-        tostring(detected_ep),
-        tostring(detected_status),
-        focus == 1 and ">" or "  ",
-        id_text,
-        focus == 2 and ">" or "  ",
-        episode_text,
-        focus == 3 and ">" or "  ",
-        status_text
-    )
-
-    mp.set_osd_ass(w, h, ass)
+mp.add_key_binding("c", 'correct_anime_id', function()
+    correction_overlay.correct_anime_id(get_path)
 end)
-overlay_timer:stop()
-
-local function parse_detected_info(result)
-    if not result or not result.stdout then
-        return nil
-    end
-
-    for line in result.stdout:gmatch("[^\r\n]+") do
-        local json_part = line:match("^INFO:%s*(.+)$")
-        if json_part then
-            local info = utils.parse_json(json_part)
-            if info and type(info) == "table" then
-                return info
-            end
-        end
-    end
-
-    return nil
-end
-
-local function extract_anilist_id(input_text)
-    if not input_text then
-        return nil
-    end
-
-    local trimmed = input_text:gsub("^%s*(.-)%s*$", "%1")
-    if trimmed == "" then
-        return nil
-    end
-
-    return trimmed:match("anilist%.co/anime/(%d+)") or trimmed:match("^(%d+)$")
-end
-
-local function append_to_active_field(text)
-    if not text or text == "" then
-        return
-    end
-
-    if correction_overlay.focus == 1 then
-        correction_overlay.id_input = correction_overlay.id_input .. text
-    elseif correction_overlay.focus == 2 then
-        local digits = text:gsub("%D", "")
-        if digits ~= "" then
-            correction_overlay.episode_input = correction_overlay.episode_input .. digits
-        end
-    end
-end
-
-local function paste_clipboard_to_field()
-    local args
-
-    if package.config:sub(1, 1) == '\\' then
-        args = {"powershell", "-NoProfile", "-Command", "Get-Clipboard -Raw"}
-    elseif os.getenv("OSTYPE") == "darwin" then
-        args = {"pbpaste"}
-    elseif os.getenv("XDG_SESSION_TYPE") == "wayland" then
-        args = {"wl-paste"}
-    else
-        args = {"xclip", "-selection", "clipboard", "-o"}
-    end
-
-    mp.command_native_async({
-        name = "subprocess",
-        args = args,
-        capture_stdout = true
-    }, function(success, result)
-        if not success or not result or result.status ~= 0 or not result.stdout then
-            mp.osd_message("Clipboard paste failed", 2)
-            return
-        end
-
-        local text = result.stdout:gsub("[\r\n]+$", "")
-        append_to_active_field(text)
-    end)
-end
-
-local function clear_overlay_bindings()
-    local keys = {
-        "ESC", "ENTER", "KP_ENTER", "TAB", "UP", "DOWN", "LEFT", "RIGHT", "BS", "DEL", "Ctrl+v", "v", "V", "any_unicode"
-    }
-
-    for _, key in ipairs(keys) do
-        mp.remove_key_binding("correct_overlay_" .. key)
-    end
-end
-
-local function close_correction_overlay()
-    correction_overlay.active = false
-    overlay_timer:stop()
-    mp.set_osd_ass(0, 0, "")
-    clear_overlay_bindings()
-end
-
-local function submit_correction()
-    local anilist_id = extract_anilist_id(correction_overlay.id_input)
-    if not anilist_id then
-        mp.osd_message("Invalid AniList URL/ID.", 2)
-        return
-    end
-
-    local relative_episode = nil
-    if correction_overlay.episode_input ~= "" then
-        relative_episode = tonumber(correction_overlay.episode_input)
-        if not relative_episode or relative_episode < 1 then
-            mp.osd_message("Episode override must be a positive number.", 2)
-            return
-        end
-    end
-
-    local selected_status = correction_statuses[correction_overlay.status_index] or correction_statuses[1]
-
-    local args = {python_command, correction_overlay.s_dir .. "anilistUpdater.py", correction_overlay.path, "correct", python_options_json, anilist_id}
-    if relative_episode then
-        table.insert(args, tostring(relative_episode))
-    end
-    table.insert(args, selected_status)
-
-    close_correction_overlay()
-    mp.osd_message("Applying correction...", 2)
-
-    mp.command_native_async({
-        name = "subprocess",
-        args = args,
-        capture_stdout = true
-    }, callback)
-end
-
-local function open_correction_overlay(path, s_dir, detected)
-    correction_overlay.active = true
-    correction_overlay.focus = 1
-    correction_overlay.path = path
-    correction_overlay.s_dir = s_dir
-    correction_overlay.detected = detected
-    correction_overlay.id_input = ""
-    correction_overlay.episode_input = ""
-    correction_overlay.status_index = 1
-
-    if detected then
-        if detected.anime_id then
-            correction_overlay.id_input = tostring(detected.anime_id)
-        end
-        if detected.episode then
-            correction_overlay.episode_input = tostring(detected.episode)
-        end
-        if detected.current_status then
-            correction_overlay.status_index = get_status_index(detected.current_status)
-        end
-    end
-
-    local function switch_focus(step)
-        local next_focus = correction_overlay.focus + step
-
-        if next_focus < 1 then
-            next_focus = 3
-        elseif next_focus > 3 then
-            next_focus = 1
-        end
-
-        correction_overlay.focus = next_focus
-    end
-
-    local function cycle_status(step)
-        if correction_overlay.focus ~= 3 then
-            return
-        end
-
-        local count = #correction_statuses
-        local idx = correction_overlay.status_index + step
-        if idx < 1 then
-            idx = count
-        elseif idx > count then
-            idx = 1
-        end
-        correction_overlay.status_index = idx
-    end
-
-    mp.add_forced_key_binding("ESC", "correct_overlay_ESC", function()
-        close_correction_overlay()
-    end)
-
-    mp.add_forced_key_binding("ENTER", "correct_overlay_ENTER", function()
-        submit_correction()
-    end)
-
-    mp.add_forced_key_binding("KP_ENTER", "correct_overlay_KP_ENTER", function()
-        submit_correction()
-    end)
-
-    mp.add_forced_key_binding("TAB", "correct_overlay_TAB", function()
-        switch_focus(1)
-    end)
-    mp.add_forced_key_binding("UP", "correct_overlay_UP", function()
-        switch_focus(-1)
-    end)
-    mp.add_forced_key_binding("DOWN", "correct_overlay_DOWN", function()
-        switch_focus(1)
-    end)
-    mp.add_forced_key_binding("LEFT", "correct_overlay_LEFT", function()
-        cycle_status(-1)
-    end)
-    mp.add_forced_key_binding("RIGHT", "correct_overlay_RIGHT", function()
-        cycle_status(1)
-    end)
-
-    mp.add_forced_key_binding("BS", "correct_overlay_BS", function()
-        if correction_overlay.focus == 1 then
-            correction_overlay.id_input = ""
-        else
-            correction_overlay.episode_input = ""
-        end
-    end)
-
-    mp.add_forced_key_binding("DEL", "correct_overlay_DEL", function()
-        if correction_overlay.focus == 1 then
-            correction_overlay.id_input = ""
-        else
-            correction_overlay.episode_input = ""
-        end
-    end)
-
-    mp.add_forced_key_binding("Ctrl+v", "correct_overlay_Ctrl+v", paste_clipboard_to_field)
-
-    mp.add_forced_key_binding("any_unicode", "correct_overlay_any_unicode", function(key)
-        if not key then
-            return
-        end
-
-        local key_text = key.key_text or ""
-        if key.event and key.event ~= "down" and key.event ~= "repeat" then
-            return
-        end
-
-        if key_text == "" or key_text == "\r" or key_text == "\n" then
-            return
-        end
-
-        append_to_active_field(key_text)
-    end, {repeatable = true, complex = true})
-
-    overlay_timer:resume()
-end
-
-local function correct_anime_id()
-    local path = get_path()
-    local s_dir = debug.getinfo(1).source:match("@?(.*/)")
-
-    mp.osd_message("Loading detected anime info...", 2)
-
-    mp.command_native_async({
-        name = "subprocess",
-        args = {python_command, s_dir .. "anilistUpdater.py", path, "info", python_options_json},
-        capture_stdout = true
-    }, function(success, result)
-        local detected = nil
-        if success and result and result.status == 0 then
-            detected = parse_detected_info(result)
-        end
-
-        open_correction_overlay(path, s_dir, detected)
-    end)
-end
-
-mp.add_key_binding("c", 'correct_anime_id', correct_anime_id)
