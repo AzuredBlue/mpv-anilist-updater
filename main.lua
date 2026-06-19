@@ -207,9 +207,17 @@ local function parse_detected_info(result)
 end
 
 function callback(success, result, error)
+    local is_success = success and result and result.status == 0
+
+    -- Update progress locally
+    if is_success then
+        if current_anime_info and current_anime_info.episode then
+            current_anime_info.current_progress = current_anime_info.episode
+        end
+    end
 
     -- Don't show any messages only if the result is successful
-    if options.SILENT_MODE and result and result.status == 0 then return end
+    if options.SILENT_MODE and is_success then return end
     
     -- Can send multiple OSD messages to display
     local messages = {}
@@ -225,12 +233,7 @@ function callback(success, result, error)
     end
     
 
-    if success and result and result.status == 0 then
-
-        -- Update locally too
-        if current_anime_info and current_anime_info.episode then
-            current_anime_info.current_progress = current_anime_info.episode
-        end
+    if is_success then
         if #messages == 0 then
             table.insert(messages, "Updated anime correctly.")
         end
