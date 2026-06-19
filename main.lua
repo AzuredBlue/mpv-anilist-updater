@@ -176,6 +176,8 @@ DIRECTORIES = options.DIRECTORIES
 EXCLUDED_DIRECTORIES = options.EXCLUDED_DIRECTORIES
 UPDATE_PERCENTAGE = tonumber(options.UPDATE_PERCENTAGE) or 85
 
+local current_anime_info = nil
+
 local function path_starts_with_any(path, directories)
     local norm_path = normalize_path(path)
     for _, dir in ipairs(directories) do
@@ -224,6 +226,11 @@ function callback(success, result, error)
     
 
     if success and result and result.status == 0 then
+
+        -- Update locally too
+        if current_anime_info and current_anime_info.episode then
+            current_anime_info.current_progress = current_anime_info.episode
+        end
         if #messages == 0 then
             table.insert(messages, "Updated anime correctly.")
         end
@@ -294,8 +301,6 @@ local python_command = get_python_command()
 
 local isPaused = false
 local is_file_eligible = false
-local current_anime_info = nil
-
 local is_fetching = false
 
 local function fetch_anime_info(cb)
