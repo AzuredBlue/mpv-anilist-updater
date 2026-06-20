@@ -195,6 +195,8 @@ local function submit_correction()
     end
     table.insert(args, selected_status)
 
+    table.insert(args, utils.format_json(correction_overlay.detected))
+
     close_correction_overlay()
     mp.osd_message("Applying correction...", 2)
 

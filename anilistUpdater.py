@@ -1129,7 +1129,12 @@ class AniListUpdater:
         self.save_cache(cache)
 
     def correct_anime_id(
-        self, filepath: str, anilist_id: int, relative_episode: int | None = None, target_status: str | None = None
+        self,
+        filepath: str,
+        anilist_id: int,
+        relative_episode: int | None,
+        target_status: str | None,
+        anime_info: dict[str, Any],
     ) -> None:
         """
         Correct the anime ID in cache by querying AniList for the given ID.
@@ -1139,24 +1144,21 @@ class AniListUpdater:
             anilist_id (int): The correct AniList anime ID.
             relative_episode (int | None): Optional relative episode override for current file.
             target_status (str | None): Optional MediaList status override.
+            anime_info (dict[str, Any]): Pre-fetched anime info.
 
         """
         selected_status = target_status.upper() if target_status else None
 
-        file_info = self.parse_filename(filepath)
-        dir_hash = self._hash_path(os.path.dirname(filepath))
-        cache = self.load_cache()
-        existing_entry = cache.get(dir_hash, {})
-
-        guessed_name = existing_entry.get("guessed_name", file_info.name)
-        existing_anime_id = existing_entry.get("anime_id")
+        guessed_name = anime_info.get("guessed_name", "")
+        absolute_episode = anime_info.get("absolute_episode", 1)
+        existing_anime_id = anime_info.get("anime_id")
         id_changed = existing_anime_id != anilist_id
 
-        anime_name = guessed_name
-        mal_id = existing_entry.get("mal_id")
-        total_episodes = existing_entry.get("total_episodes")
-        current_progress = existing_entry.get("current_progress")
-        current_status = existing_entry.get("current_status")
+        anime_name = anime_info.get("anime_name") or guessed_name
+        mal_id = anime_info.get("mal_id")
+        total_episodes = anime_info.get("total_episodes")
+        current_progress = anime_info.get("current_progress")
+        current_status = anime_info.get("current_status")
 
         if id_changed:
             id_data = self._correct_anime_id_change(
@@ -1171,11 +1173,12 @@ class AniListUpdater:
             current_progress = id_data["current_progress"]
             current_status = id_data["current_status"]
 
-        mapped_relative_episode, relative_changed = self._correct_relative_episode(
-            file_info.episode,
-            existing_entry.get("relative_progress"),
-            relative_episode,
+        existing_relative_episode = anime_info.get("episode") or absolute_episode
+        mapped_relative_episode = (
+            relative_episode if relative_episode and relative_episode > 0 else existing_relative_episode
         )
+        mapped_relative_episode = max(1, mapped_relative_episode)
+        relative_changed = mapped_relative_episode != existing_relative_episode
 
         status_before = current_status
         current_status, status_changed = self._correct_status(
@@ -1186,7 +1189,7 @@ class AniListUpdater:
 
         changes = [
             f"ID: {existing_anime_id or '?'}->{anilist_id}" if id_changed else None,
-            f"Mapped {file_info.episode}->{mapped_relative_episode}" if relative_changed else None,
+            f"Mapped {absolute_episode}->{mapped_relative_episode}" if relative_changed else None,
             f"Status: {status_before or 'None'}->{current_status}" if status_changed else None,
         ]
         changes = [change for change in changes if change]
@@ -1194,6 +1197,10 @@ class AniListUpdater:
         if not changes:
             osd_message("No correction changes detected.")
             return
+
+        dir_hash = self._hash_path(os.path.dirname(filepath))
+        cache = self.load_cache()
+        existing_entry = cache.get(dir_hash, {})
 
         self._correct_cache(
             cache,
@@ -1203,7 +1210,7 @@ class AniListUpdater:
                 "anime_id": anilist_id,
                 "mal_id": mal_id,
                 "current_progress": current_progress,
-                "relative_progress": f"{file_info.episode}->{mapped_relative_episode}",
+                "relative_progress": f"{absolute_episode}->{mapped_relative_episode}",
                 "total_episodes": total_episodes,
                 "current_status": current_status,
                 "corrected": True if id_changed else existing_entry.get("corrected", False),
@@ -1213,7 +1220,7 @@ class AniListUpdater:
 
         osd_message(f'Corrected "{anime_name}" (ID: {anilist_id}) | ' + " | ".join(changes))
 
-        # Emit corrected info for Lua to update current_anime_info
+        # Update anime info
         corrected_payload = {
             "anime_id": anilist_id,
             "mal_id": mal_id,
@@ -1223,7 +1230,7 @@ class AniListUpdater:
             "total_episodes": total_episodes,
             "current_status": current_status,
             "guessed_name": guessed_name,
-            "absolute_episode": file_info.episode,
+            "absolute_episode": absolute_episode,
         }
         print(f"INFO:{json.dumps(corrected_payload)}")
 
@@ -1247,10 +1254,12 @@ def run_action(updater: AniListUpdater) -> None:
         anime_info_json = json.loads(sys.argv[4])
         updater.update_with_preloaded_info(filepath, anime_info_json)
     elif action == "correct":
-        if len(sys.argv) > 6:
-            updater.correct_anime_id(filepath, int(sys.argv[4]), int(sys.argv[5]), sys.argv[6])
+        # Pre-fetched anime info JSON is always the last argument
+        anime_info = json.loads(sys.argv[-1])
+        if len(sys.argv) > 7:
+            updater.correct_anime_id(filepath, int(sys.argv[4]), int(sys.argv[5]), sys.argv[6], anime_info)
         else:
-            updater.correct_anime_id(filepath, int(sys.argv[4]), None, sys.argv[5])
+            updater.correct_anime_id(filepath, int(sys.argv[4]), None, sys.argv[5], anime_info)
     else:
         updater.handle_filename(filepath)
 
