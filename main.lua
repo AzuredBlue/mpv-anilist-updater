@@ -188,6 +188,23 @@ local function path_starts_with_any(path, directories)
     return false
 end
 
+local function parse_osd_messages(result)
+    local messages = {}
+    if result and result.stdout then
+        for line in result.stdout:gmatch("[^\r\n]+") do
+            local msg = line:match("^OSD:%s*(.-)%s*$")
+            if msg then
+                table.insert(messages, msg)
+            else
+                print(line)
+            end
+        end
+    end
+    return messages
+end
+
+
+
 local function parse_detected_info(result)
     if not result or not result.stdout then
         return nil
@@ -218,25 +235,11 @@ function callback(success, result, error)
 
     -- Don't show any messages only if the result is successful
     if options.SILENT_MODE and is_success then return end
-    
-    -- Can send multiple OSD messages to display
-    local messages = {}
-    if result and result.stdout then
-        for line in result.stdout:gmatch("[^\r\n]+") do
-            local msg = line:match("^OSD:%s*(.-)%s*$")
-            if msg then
-                table.insert(messages, msg)
-            else
-                print(line)
-            end
-        end
-    end
-    
 
-    if is_success then
-        if #messages == 0 then
-            table.insert(messages, "Updated anime correctly.")
-        end
+    local messages = parse_osd_messages(result)
+
+    if is_success and #messages == 0 then
+        table.insert(messages, "Updated anime correctly.")
     end
 
     if #messages > 0 then
@@ -324,6 +327,8 @@ local function fetch_anime_info(cb)
             if current_anime_info then
                 print("Detected anime: " .. (current_anime_info.anime_name or "?") .. " #" .. (current_anime_info.episode or "?"))
             end
+        else
+            parse_osd_messages(result)
         end
         if cb then
             cb(current_anime_info)
