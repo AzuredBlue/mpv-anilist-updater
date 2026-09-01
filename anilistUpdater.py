@@ -214,6 +214,9 @@ class AniListUpdater:
     # Matches any of the chars, only if not followed by a whitespace and a digit.
     CLEAN_PATTERN: str = rf"(?: - Movie)|[{re.escape(_CHARS_TO_REPLACE)}](?!\s*\d)"
     VERSION_REGEX: re.Pattern[str] = re.compile(r"(E\d+)v\d")
+    SEASON_EPISODE_REGEX: re.Pattern[str] = re.compile(
+        r"\b(?:season\s*|s)(\d+)\s*[-_ ]\s*(\d{1,4})\b", re.IGNORECASE
+    )
 
     # ──────────────────────────────────────────────────────────────────────────────────────────────────
     # INITIALIZATION & TOKEN HANDLING
@@ -564,6 +567,10 @@ class AniListUpdater:
         if match:
             episode = match.group(1)
             path_parts[-1] = path_parts[-1].replace(match.group(0), episode)
+
+        # Convert "Season 2 - 02", "Season 2 02", "S2 - 02", etc. into "S2 E02"
+        # so GuessIt doesn't mistake it for a season range or break titles with numbers
+        path_parts[-1] = self.SEASON_EPISODE_REGEX.sub(r"S\1 E\2", path_parts[-1])
 
         return path_parts
 
