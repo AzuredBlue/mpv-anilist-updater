@@ -1154,6 +1154,18 @@ class AniListUpdater:
             anime_info (dict[str, Any]): Pre-fetched anime info.
 
         """
+        # It can be none, but we still need to populate it to save it correctly on cache
+        if not anime_info:
+            file_info = self.parse_filename(filepath)
+            episode = file_info.episode or 1
+            anime_info = {
+                "guessed_name": file_info.name,
+                "absolute_episode": episode,
+                "anime_id": None,
+                "episode": episode,
+            }
+
+
         selected_status = target_status.upper() if target_status else None
 
         guessed_name = anime_info.get("guessed_name", "")
