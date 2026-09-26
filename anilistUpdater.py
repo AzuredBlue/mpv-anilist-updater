@@ -298,13 +298,14 @@ class AniListUpdater:
         existing_entry = cache.get(dir_hash, {})
         is_corrected = bool(existing_entry.get("corrected", False))
 
-        anime_id, _, current_progress, total_episodes, relative_progress, current_status, mal_id = result
+        anime_id, anime_name, current_progress, total_episodes, relative_progress, current_status, mal_id = result
 
         now = time.time()
         ttl_refresh_rate = self.CORRECTED_CACHE_REFRESH_RATE if is_corrected else self.CACHE_REFRESH_RATE
 
         cache[dir_hash] = {
             "guessed_name": guessed_name,
+            "anime_name": anime_name,
             "anime_id": anime_id,
             "mal_id": mal_id,
             "current_progress": current_progress,
@@ -508,7 +509,7 @@ class AniListUpdater:
                 # Reconstruct result from cache
                 result = AnimeInfo(
                     cache_entry["anime_id"],
-                    cache_entry["guessed_name"],
+                    cache_entry.get("anime_name") or cache_entry["guessed_name"],
                     cache_entry["current_progress"],
                     cache_entry["total_episodes"],
                     relative_episode,
@@ -1226,6 +1227,7 @@ class AniListUpdater:
             dir_hash,
             {
                 "guessed_name": guessed_name,
+                "anime_name": anime_name,
                 "anime_id": anilist_id,
                 "mal_id": mal_id,
                 "current_progress": current_progress,
