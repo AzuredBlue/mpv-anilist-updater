@@ -22,6 +22,7 @@ local correction_overlay = {
     id_input = "",
     episode_input = "",
     status_index = 1,
+    status_changed = false,
     detected = nil,
     path = nil,
     s_dir = nil
@@ -193,7 +194,7 @@ local function submit_correction()
     if relative_episode then
         table.insert(args, tostring(relative_episode))
     end
-    table.insert(args, selected_status)
+    table.insert(args, correction_overlay.status_changed and selected_status or "")
 
     table.insert(args, utils.format_json(correction_overlay.detected))
 
@@ -231,6 +232,7 @@ local function open_correction_overlay(path, s_dir, detected)
     correction_overlay.id_input = ""
     correction_overlay.episode_input = ""
     correction_overlay.status_index = 1
+    correction_overlay.status_changed = false
 
     if detected then
         if detected.anime_id then
@@ -269,6 +271,7 @@ local function open_correction_overlay(path, s_dir, detected)
             idx = 1
         end
         correction_overlay.status_index = idx
+        correction_overlay.status_changed = true
     end
 
     mp.add_forced_key_binding("ESC", "correct_overlay_ESC", function()

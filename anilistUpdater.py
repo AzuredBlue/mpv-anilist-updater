@@ -463,10 +463,12 @@ class AniListUpdater:
             return SeasonEpisodeInfo(None, None, None, None, None)
 
         accumulated_episodes = 0
-        for season in seasons:
-            season_episodes = season.get("episodes", 12) if season.get("episodes") else 12
+        for i, season in enumerate(seasons):
+            season_episodes = season.get("episodes") or 12
+            # Last season still airing with unknown episode count: assume the episode belongs to it
+            is_open_ended = not season.get("episodes") and i == len(seasons) - 1
 
-            if accumulated_episodes + season_episodes >= absolute_episode:
+            if is_open_ended or accumulated_episodes + season_episodes >= absolute_episode:
                 return SeasonEpisodeInfo(
                     season.get("id"),
                     season.get("title", {}).get("romaji"),
@@ -645,7 +647,8 @@ class AniListUpdater:
             season = season[0]
 
         # Ensure episode is never None
-        episode = episode or 1
+        if episode is None:
+            episode = 1
 
         season = str(season)
 
@@ -672,6 +675,14 @@ class AniListUpdater:
                     )
 
                     guessed_name = str(folder_guess.get("title", ""))
+                    # Numeric titles like "86" get parsed as an episode
+                    folder_keys = list(folder_guess.keys())
+                    folder_episode = folder_guess.get("episode")
+                    if isinstance(folder_episode, int) and (
+                        not guessed_name or folder_keys.index("episode") < folder_keys.index("title")
+                    ):
+                        guessed_name = f"{folder_episode} {guessed_name}".strip()
+
                     season = season or str(folder_guess.get("season", ""))
                     part = part or str(folder_guess.get("part", ""))
                     year = year or str(folder_guess.get("year", ""))
@@ -697,7 +708,7 @@ class AniListUpdater:
         # If episode_title is detected, part must be before it
         episode_title_index = keys.index("episode_title") if "episode_title" in guess else 99
 
-        if part and keys.index("part") < episode_title_index:
+        if part and ("part" not in keys or keys.index("part") < episode_title_index):
             guessed_name += f" Part {part}"
 
         print(f"Guessed: {guessed_name}{f' {file_format}' if file_format else ''} - E{episode} {year}")
@@ -879,6 +890,9 @@ class AniListUpdater:
 
         if anime_id is None:
             raise Exception("Couldn't find that anime! Make sure it is on your list and the title is correct.")
+
+        if file_progress == 0:
+            raise Exception("Episode 0 is not counted on AniList. Not updating.")
 
         should_add_entry = current_progress is None and current_status is None
         is_last_episode = file_progress == total_episodes
