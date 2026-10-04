@@ -700,6 +700,10 @@ class AniListUpdater:
         if remaining:
             guessed_name += " " + " ".join(str(ep) for ep in remaining)
 
+        # GuessIt reads "(2019)" as both year and season
+        if season == year:
+            season = ""
+
         # Add season and part if there are
         if season and (int(season) > 1 or part):
             guessed_name += f" Season {season}"
@@ -800,7 +804,7 @@ class AniListUpdater:
         # We first need to make sure if we should search ALL of anime or only the user's list
         # Only those that are in the user's list at first
         query = AniListQueries.SEARCH_ANIME
-        variables = {"search": name, "year": year or 1, "page": 1, "format_in": format_in}
+        variables = {"search": name, "year": int(year) * 10000 if year else 1, "page": 1, "format_in": format_in}
 
         response = self._make_api_request(query, variables, self.access_token)
 
