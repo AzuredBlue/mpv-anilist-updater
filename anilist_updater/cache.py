@@ -20,12 +20,13 @@ CACHE_PATH = Path(__file__).resolve().parent.parent / "cache.json"
 CORRECTED_TTL = 28 * 24 * 60 * 60
 
 
-def _key(filepath: str) -> str:
-    return os.path.dirname(filepath)
+def _key(filepath: str, title: str) -> str:
+    # Streams are named by title alone, so each show gets its own entry.
+    return os.path.dirname(filepath) or f"title:{title}"
 
 
 def _legacy_key(filepath: str) -> str:
-    return hashlib.sha256(_key(filepath).encode()).hexdigest()
+    return hashlib.sha256(os.path.dirname(filepath).encode()).hexdigest()
 
 
 @dataclass(slots=True)
@@ -38,7 +39,6 @@ class Entry:
     guessed_name: str
     anime_id: int
     anime_name: str | None
-    mal_id: int | None
     current_progress: int | None
     total_episodes: int | None
     current_status: Status | None
@@ -57,7 +57,6 @@ class Entry:
             guessed_name=raw["guessed_name"],
             anime_id=raw["anime_id"],
             anime_name=raw.get("anime_name"),
-            mal_id=raw.get("mal_id"),
             current_progress=raw.get("current_progress"),
             total_episodes=raw.get("total_episodes"),
             current_status=Status(raw["current_status"]) if raw.get("current_status") else None,
@@ -77,7 +76,6 @@ class Entry:
             return None
         return AnimeInfo(
             anime_id=self.anime_id,
-            mal_id=self.mal_id,
             anime_name=self.anime_name or self.guessed_name,
             episode=relative,
             current_progress=self.current_progress,
@@ -125,9 +123,9 @@ class Cache:
                 entries[key] = entry
         return entries
 
-    def _entry(self, filepath: str) -> Entry | None:
+    def _entry(self, filepath: str, title: str) -> Entry | None:
         """The directory's entry, moving one stored under the old hashed key to its path."""
-        key = _key(filepath)
+        key = _key(filepath, title)
         if key not in self._entries and (legacy := self._entries.pop(_legacy_key(filepath), None)):
             self._entries[key] = legacy
             self._changed.add(key)
@@ -136,7 +134,7 @@ class Cache:
 
     def get(self, filepath: str, guessed_name: str) -> Entry | None:
         """Look up the directory's entry if it was detected from the same title."""
-        entry = self._entry(filepath)
+        entry = self._entry(filepath, guessed_name)
         if entry is None or entry.guessed_name != guessed_name:
             return None
 
@@ -145,22 +143,21 @@ class Cache:
             now = self._clock()
             if entry.ttl <= now + window / 2:
                 entry.ttl = now + window
-                self._changed.add(_key(filepath))
+                self._changed.add(_key(filepath, guessed_name))
         return entry
 
     def put(self, filepath: str, info: AnimeInfo, *, corrected: bool = False) -> None:
         """Store `info` for the file's directory; once corrected, an entry stays corrected."""
         if info.anime_id is None or info.episode is None:
             return
-        previous = self._entry(filepath)
+        previous = self._entry(filepath, info.guessed_name)
         corrected = corrected or bool(previous and previous.corrected and previous.anime_id == info.anime_id)
 
-        key = _key(filepath)
+        key = _key(filepath, info.guessed_name)
         self._entries[key] = Entry(
             guessed_name=info.guessed_name,
             anime_id=info.anime_id,
             anime_name=info.anime_name,
-            mal_id=info.mal_id,
             current_progress=info.current_progress,
             total_episodes=info.total_episodes,
             current_status=info.current_status,

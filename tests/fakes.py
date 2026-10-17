@@ -1,0 +1,31 @@
+from anilist_updater.errors import SkipUpdate
+
+
+def media(anime_id, episodes, *, fmt="TV", sequel=None, duration=24, status="FINISHED", entry=None):
+    edges = [{"relationType": "SEQUEL", "node": {"id": sequel, "format": "TV"}}] if sequel else []
+    return {
+        "id": anime_id,
+        "title": {"romaji": f"Show {anime_id}", "english": None},
+        "episodes": episodes,
+        "duration": duration,
+        "format": fmt,
+        "status": status,
+        "mediaListEntry": entry,
+        "relations": {"edges": edges},
+    }
+
+
+SEASONS = [media(1, 12, sequel=2), media(2, 24, sequel=3), media(3, None, status="RELEASING")]
+
+
+class FakeClient:
+    def __init__(self, user=(), everything=(), by_id=None):
+        self.user, self.everything, self.by_id = list(user), list(everything), by_id or {}
+
+    def search(self, title, year, formats):
+        return self.user, self.everything
+
+    def media_by_id(self, anime_id):
+        if anime_id not in self.by_id:
+            raise SkipUpdate("missing")
+        return self.by_id[anime_id]

@@ -20,14 +20,13 @@ TIMEOUT = 10
 _MEDIA_FIELDS = """
     fragment MediaFields on Media {
         id
-        idMal
         title { romaji english }
         episodes
         duration
         format
         status
         mediaListEntry { status progress }
-        relations { edges { relationType node { id format title { romaji } } } }
+        relations { edges { relationType node { id format } } }
     }
 """
 
@@ -71,11 +70,10 @@ _SAVE_ENTRY = """
     }
 """
 
-_SCORE_FORMAT = "query { Viewer { mediaListOptions { scoreFormat } } }"
-
 _SCORE = """
-    query($id: Int, $format: ScoreFormat) {
-        Media(id: $id, type: ANIME) { mediaListEntry { score(format: $format) } }
+    query($id: Int) {
+        Viewer { mediaListOptions { scoreFormat } }
+        Media(id: $id, type: ANIME) { mediaListEntry { score } }
     }
 """
 
@@ -83,13 +81,17 @@ _MEDIA_BY_ID = """
     query($id: Int) {
         Media(id: $id, type: ANIME) {
             id
-            idMal
             title { romaji english }
             episodes
             mediaListEntry { status progress }
         }
     }
 """
+
+
+def media_title(media: dict[str, Any]) -> str | None:
+    """The romaji title, or the English one when there is none."""
+    return media["title"].get("romaji") or media["title"].get("english")
 
 
 def _error_message(error: urllib.error.HTTPError) -> str:
@@ -167,7 +169,7 @@ class AniListClient:
         return [
             {
                 "id": m["id"],
-                "title": m["title"]["romaji"] or m["title"]["english"],
+                "title": media_title(m),
                 "format": m["format"],
                 "year": m["seasonYear"],
                 "episodes": m["episodes"],
@@ -201,9 +203,9 @@ class AniListClient:
         """
         if not self._token:
             raise SkipUpdate("Scoring needs an AniList token.")
-        score_format = self._post(_SCORE_FORMAT, {})["Viewer"]["mediaListOptions"]["scoreFormat"]
-        media = self._post(_SCORE, {"id": anime_id, "format": score_format})["Media"]
-        return score_format, (media["mediaListEntry"] or {}).get("score") or 0
+        data = self._post(_SCORE, {"id": anime_id})
+        score_format = data["Viewer"]["mediaListOptions"]["scoreFormat"]
+        return score_format, (data["Media"]["mediaListEntry"] or {}).get("score") or 0
 
     def save_entry(
         self,

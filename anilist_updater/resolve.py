@@ -4,7 +4,7 @@ import logging
 from dataclasses import replace
 from typing import Any
 
-from .api import AniListClient
+from .api import AniListClient, media_title
 from .errors import SkipUpdate
 from .models import AnimeInfo, FileInfo, Status
 
@@ -82,11 +82,9 @@ def locate_episode(series: list[Media] | None, absolute: int) -> tuple[Media, in
 
 def _to_info(media: Media, episode: int, file: FileInfo) -> AnimeInfo:
     entry = media.get("mediaListEntry")
-    title = media["title"]
     return AnimeInfo(
         anime_id=media["id"],
-        mal_id=media.get("idMal"),
-        anime_name=title.get("romaji") or title.get("english"),
+        anime_name=media_title(media),
         episode=episode,
         current_progress=entry["progress"] if entry else None,
         total_episodes=media.get("episodes"),
@@ -151,19 +149,13 @@ def refresh(client: AniListClient, info: AnimeInfo, anime_id: int | None = None)
     media = client.media_by_id(target)
     entry = media.get("mediaListEntry")
     same = media["id"] == info.anime_id
-    title = media["title"]
 
-    if entry:
-        progress, status = entry["progress"], Status(entry["status"])
-    else:
-        # A different anime has none of the old one's progress.
-        progress, status = (info.current_progress, info.current_status) if same else (None, None)
+    progress, status = (entry["progress"], Status(entry["status"])) if entry else (None, None)
 
     return replace(
         info,
         anime_id=media["id"],
-        mal_id=media.get("idMal") or (info.mal_id if same else None),
-        anime_name=title.get("romaji") or title.get("english") or (info.anime_name if same else None),
+        anime_name=media_title(media) or (info.anime_name if same else None),
         current_progress=progress,
         current_status=status,
         total_episodes=media.get("episodes"),

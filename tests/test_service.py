@@ -1,5 +1,5 @@
 import pytest
-from test_resolve import FakeClient, media
+from fakes import FakeClient, media
 
 from anilist_updater.cache import Cache
 from anilist_updater.errors import SkipUpdate
@@ -29,6 +29,13 @@ class RecordingClient(FakeClient):
 def make(tmp_path, client, **options):
     opts = Options(**options)
     return Service(opts, client, Cache(opts, tmp_path / "cache.json"))
+
+
+@pytest.fixture
+def detected(tmp_path):
+    client = RecordingClient(user=[media(1, 12, entry=ENTRY)])
+    service = make(tmp_path, client)
+    return client, service, service.info(PATH).info
 
 
 def test_info_then_cache_hit_skips_the_search(tmp_path):
@@ -105,44 +112,43 @@ def test_correct_changes_id_episode_and_status(tmp_path):
     assert (entry.anime_id, entry.corrected, entry.info_for(5).episode) == (2, True, 7)
 
 
-def test_correct_score_alone_is_one_save_without_a_status(tmp_path):
-    client = RecordingClient(user=[media(1, 12, entry=ENTRY)])
-    service = make(tmp_path, client)
-    detected = service.info(PATH).info
-
-    outcome = service.correct(PATH, detected, Correction(1, score=8.5))
+def test_correct_score_alone_is_one_save_without_a_status(detected):
+    client, service, info = detected
+    outcome = service.correct(PATH, info, Correction(1, score=8.5))
     assert (client.saves, client.scores) == ([(1, None, None)], [8.5])
     assert outcome.message.endswith("| Score: 8.5")
     assert outcome.info.current_status == Status.CURRENT
 
 
-def test_correct_status_and_score_share_a_save(tmp_path):
-    client = RecordingClient(user=[media(1, 12, entry=ENTRY)])
-    service = make(tmp_path, client)
-    detected = service.info(PATH).info
-
-    outcome = service.correct(PATH, detected, Correction(1, status=Status.PAUSED, score=7))
+def test_correct_status_and_score_share_a_save(detected):
+    client, service, info = detected
+    outcome = service.correct(PATH, info, Correction(1, status=Status.PAUSED, score=7))
     assert (client.saves, client.scores) == ([(1, Status.PAUSED, None)], [7])
     assert outcome.info.current_status == Status.PAUSED
 
 
-def test_correct_score_zero_clears_it(tmp_path):
-    client = RecordingClient(user=[media(1, 12, entry=ENTRY)])
-    service = make(tmp_path, client)
-    outcome = service.correct(PATH, service.info(PATH).info, Correction(1, score=0))
+def test_correct_score_zero_clears_it(detected):
+    client, service, info = detected
+    outcome = service.correct(PATH, info, Correction(1, score=0))
     assert client.scores == [0]
     assert outcome.message.endswith("| Score: cleared")
 
 
-def test_correct_without_changes_is_skipped(tmp_path):
-    client = RecordingClient(user=[media(1, 12, entry=ENTRY)])
-    service = make(tmp_path, client)
-    detected = service.info(PATH).info
+def test_correct_without_changes_is_skipped(detected):
+    _, service, info = detected
     with pytest.raises(SkipUpdate, match="No correction"):
-        service.correct(PATH, detected, Correction(1))
+        service.correct(PATH, info, Correction(1))
 
 
 def test_correct_without_detection_parses_the_path(tmp_path):
     client = RecordingClient(by_id={3: media(3, 12)})
     outcome = make(tmp_path, client).correct(PATH, None, Correction(3))
     assert (outcome.info.anime_id, outcome.info.guessed_name, outcome.info.episode) == (3, "Show", 5)
+
+
+def test_update_does_not_re_add_a_removed_entry(tmp_path):
+    client = RecordingClient(by_id={1: media(1, 12)})
+    info = AnimeInfo(anime_id=1, episode=5, current_progress=4, current_status=Status.CURRENT, total_episodes=12)
+    with pytest.raises(SkipUpdate, match="on your list"):
+        make(tmp_path, client).update(PATH, info)
+    assert client.saves == []

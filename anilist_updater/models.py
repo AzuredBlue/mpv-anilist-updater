@@ -40,7 +40,6 @@ class AnimeInfo:
     """
 
     anime_id: int | None = None
-    mal_id: int | None = None
     anime_name: str | None = None
     episode: int | None = None
     current_progress: int | None = None

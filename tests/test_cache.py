@@ -129,8 +129,8 @@ def test_legacy_entry_is_migrated(tmp_path):
 
     saved = json.loads((tmp_path / "cache.json").read_text(encoding="utf-8"))
     assert list(saved) == [os.path.dirname(PATH)]
-    assert saved[_key(PATH)]["offset"] == 12
-    assert "relative_progress" not in saved[_key(PATH)]
+    assert saved[_key(PATH, "Show")]["offset"] == 12
+    assert "relative_progress" not in saved[_key(PATH, "Show")]
 
 
 def test_unchanged_cache_is_not_rewritten(tmp_path):
@@ -151,9 +151,20 @@ def test_hashed_key_moves_to_the_path(tmp_path):
     cache.save()
     file = tmp_path / "cache.json"
     saved = json.loads(file.read_text(encoding="utf-8"))
-    file.write_text(json.dumps({_legacy_key(PATH): saved[_key(PATH)]}), encoding="utf-8")
+    file.write_text(json.dumps({_legacy_key(PATH): saved[_key(PATH, "Show")]}), encoding="utf-8")
 
     reread = make(tmp_path)
     assert reread.get(PATH, "Show").offset == 12
     reread.save()
-    assert list(json.loads(file.read_text(encoding="utf-8"))) == [_key(PATH)]
+    assert list(json.loads(file.read_text(encoding="utf-8"))) == [_key(PATH, "Show")]
+
+
+def test_streams_without_a_directory_get_one_entry_per_title(tmp_path):
+    cache = make(tmp_path)
+    cache.put("A Episode 5", replace(INFO, guessed_name="A"), corrected=True)
+    cache.put("B Episode 3", replace(INFO, anime_id=8, guessed_name="B"))
+    cache.save()
+
+    entry = make(tmp_path).get("A Episode 6", "A")
+    assert entry is not None
+    assert entry.corrected

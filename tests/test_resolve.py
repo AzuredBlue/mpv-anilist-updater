@@ -1,39 +1,9 @@
 import pytest
+from fakes import SEASONS, FakeClient, media
 
 from anilist_updater.errors import SkipUpdate
 from anilist_updater.models import FileInfo, Status
 from anilist_updater.resolve import locate_episode, main_series, refresh, resolve
-
-
-def media(anime_id, episodes, *, fmt="TV", sequel=None, duration=24, status="FINISHED", entry=None):
-    edges = [{"relationType": "SEQUEL", "node": {"id": sequel, "format": "TV"}}] if sequel else []
-    return {
-        "id": anime_id,
-        "idMal": anime_id + 1000,
-        "title": {"romaji": f"Show {anime_id}", "english": None},
-        "episodes": episodes,
-        "duration": duration,
-        "format": fmt,
-        "status": status,
-        "mediaListEntry": entry,
-        "relations": {"edges": edges},
-    }
-
-
-SEASONS = [media(1, 12, sequel=2), media(2, 24, sequel=3), media(3, None, status="RELEASING")]
-
-
-class FakeClient:
-    def __init__(self, user=(), everything=(), by_id=None):
-        self.user, self.everything, self.by_id = list(user), list(everything), by_id or {}
-
-    def search(self, title, year, formats):
-        return self.user, self.everything
-
-    def media_by_id(self, anime_id):
-        if anime_id not in self.by_id:
-            raise SkipUpdate("missing")
-        return self.by_id[anime_id]
 
 
 def test_main_series_follows_sequels_in_order():
@@ -76,7 +46,7 @@ def test_resolve_prefers_user_list_and_reads_entry():
     client = FakeClient(user=[media(1, 12, entry=entry)], everything=[media(9, 12)])
     info = resolve(client, FileInfo("Show", 4))
     assert (info.anime_id, info.episode, info.current_progress, info.current_status) == (1, 4, 3, Status.CURRENT)
-    assert (info.guessed_name, info.absolute_episode, info.mal_id) == ("Show", 4, 1001)
+    assert (info.guessed_name, info.absolute_episode) == ("Show", 4)
 
 
 def test_resolve_absolute_episode_across_seasons():
@@ -100,17 +70,13 @@ def test_resolve_absolute_episode_out_of_range():
         resolve(FakeClient(user=SEASONS[:2]), FileInfo("Show", 99))
 
 
-def test_refresh_fills_episode_count_and_keeps_progress_without_entry():
+def test_refresh_fills_episode_count_and_drops_progress_without_entry():
     client = FakeClient(by_id={1: media(1, 12)})
     base = resolve(
         FakeClient(user=[media(1, None, entry={"status": "CURRENT", "progress": 2})]), FileInfo("Show", 3)
     )
     refreshed = refresh(client, base)
-    assert (refreshed.total_episodes, refreshed.current_progress, refreshed.current_status) == (
-        12,
-        2,
-        Status.CURRENT,
-    )
+    assert (refreshed.total_episodes, refreshed.current_progress, refreshed.current_status) == (12, None, None)
 
 
 def test_refresh_to_another_anime_drops_old_progress():
@@ -120,4 +86,3 @@ def test_refresh_to_another_anime_drops_old_progress():
     )
     switched = refresh(client, base, 2)
     assert (switched.anime_id, switched.current_progress, switched.current_status) == (2, None, None)
-    assert switched.mal_id == 1002
