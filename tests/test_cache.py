@@ -1,6 +1,7 @@
 import json
+import os
 
-from anilist_updater.cache import CORRECTED_TTL, Cache, _key
+from anilist_updater.cache import CORRECTED_TTL, Cache, _key, _legacy_key
 from anilist_updater.models import AnimeInfo, Options, Status
 
 PATH = "/anime/Show/Show - 13.mkv"
@@ -87,7 +88,7 @@ def test_corrected_entries_last_longer_and_stay_corrected(tmp_path):
 
 def test_legacy_entry_is_migrated(tmp_path):
     legacy = {
-        _key(PATH): {
+        _legacy_key(PATH): {
             "guessed_name": "Show",
             "anime_name": "Show 2",
             "anime_id": 7,
@@ -108,8 +109,9 @@ def test_legacy_entry_is_migrated(tmp_path):
     cache.save()
 
     saved = json.loads((tmp_path / "cache.json").read_text(encoding="utf-8"))
-    assert list(saved) == [_key(PATH)]
+    assert list(saved) == [os.path.dirname(PATH)]
     assert saved[_key(PATH)]["offset"] == 12
+    assert "relative_progress" not in saved[_key(PATH)]
 
 
 def test_unchanged_cache_is_not_rewritten(tmp_path):
@@ -122,3 +124,17 @@ def test_unchanged_cache_is_not_rewritten(tmp_path):
 def test_corrupt_file_starts_empty(tmp_path):
     (tmp_path / "cache.json").write_text("{nope", encoding="utf-8")
     assert make(tmp_path).get(PATH, "Show") is None
+
+
+def test_hashed_key_moves_to_the_path(tmp_path):
+    cache = make(tmp_path)
+    cache.put(PATH, INFO)
+    cache.save()
+    file = tmp_path / "cache.json"
+    saved = json.loads(file.read_text(encoding="utf-8"))
+    file.write_text(json.dumps({_legacy_key(PATH): saved[_key(PATH)]}), encoding="utf-8")
+
+    reread = make(tmp_path)
+    assert reread.get(PATH, "Show").offset == 12
+    reread.save()
+    assert list(json.loads(file.read_text(encoding="utf-8"))) == [_key(PATH)]

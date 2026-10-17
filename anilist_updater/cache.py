@@ -21,7 +21,11 @@ CORRECTED_TTL = 28 * 24 * 60 * 60
 
 
 def _key(filepath: str) -> str:
-    return hashlib.sha256(os.path.dirname(filepath).encode()).hexdigest()
+    return os.path.dirname(filepath)
+
+
+def _legacy_key(filepath: str) -> str:
+    return hashlib.sha256(_key(filepath).encode()).hexdigest()
 
 
 @dataclass(slots=True)
@@ -63,8 +67,8 @@ class Entry:
         )
 
     def to_json(self) -> dict[str, Any]:
-        """Serialise, keeping the old mapping so a checkout of main still reads the cache."""
-        return {**asdict(self), "relative_progress": f"{self.offset}->0"}
+        """Serialise for the cache file."""
+        return asdict(self)
 
     def info_for(self, absolute: int) -> AnimeInfo | None:
         """The cached info for a file's absolute episode, or None if it falls outside the entry."""
@@ -115,9 +119,17 @@ class Cache:
                 entries[key] = entry
         return entries
 
+    def _entry(self, filepath: str) -> Entry | None:
+        """The directory's entry, moving one stored under the old hashed key to its path."""
+        key = _key(filepath)
+        if key not in self._entries and (legacy := self._entries.pop(_legacy_key(filepath), None)):
+            self._entries[key] = legacy
+            self._dirty = True
+        return self._entries.get(key)
+
     def get(self, filepath: str, guessed_name: str) -> Entry | None:
         """Look up the directory's entry if it was detected from the same title."""
-        entry = self._entries.get(_key(filepath))
+        entry = self._entry(filepath)
         if entry is None or entry.guessed_name != guessed_name:
             return None
 
@@ -133,11 +145,10 @@ class Cache:
         """Store `info` for the file's directory; once corrected, an entry stays corrected."""
         if info.anime_id is None or info.episode is None:
             return
-        key = _key(filepath)
-        previous = self._entries.get(key)
+        previous = self._entry(filepath)
         corrected = corrected or bool(previous and previous.corrected)
 
-        self._entries[key] = Entry(
+        self._entries[_key(filepath)] = Entry(
             guessed_name=info.guessed_name,
             anime_id=info.anime_id,
             anime_name=info.anime_name,
