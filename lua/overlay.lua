@@ -134,11 +134,18 @@ local function refresh()
         state.results = {}
         if not state.inflight then
             state.inflight = true
+            local requested_by = state
             deps.backend.call("search", { query = text }, function(response)
+                local found = response.ok and response.results
+                if found then
+                    memo[text] = found
+                end
+                -- the overlay was closed (and maybe reopened) meanwhile; the results are still worth keeping
+                if state ~= requested_by then
+                    return
+                end
                 state.inflight = false
-                if response.ok and response.results then
-                    memo[text] = response.results
-                elseif state.active and key_of(state.query) == text then
+                if not found and state.active and key_of(state.query) == text then
                     state.error = response.message
                 end
                 if state.active and not state.timer:is_enabled() and key_of(state.query) ~= text then
