@@ -1,6 +1,6 @@
 local msg = require("mp.msg")
 local utils = require("mp.utils")
-local config = require("config")
+local config = require("lua.config")
 
 local M = {}
 

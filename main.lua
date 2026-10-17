@@ -1,7 +1,7 @@
 local msg = require("mp.msg")
-local config = require("config")
-local backend = require("backend")
-local overlay = require("overlay")
+local config = require("lua.config")
+local backend = require("lua.backend")
+local overlay = require("lua.overlay")
 
 local silent = config.options.SILENT_MODE
 
