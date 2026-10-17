@@ -48,6 +48,12 @@ def test_other_title_or_directory_misses(tmp_path):
     assert cache.get("/elsewhere/file.mkv", "Show") is None
 
 
+def test_title_punctuation_does_not_miss(tmp_path):
+    cache = make(tmp_path)
+    cache.put(PATH, replace(INFO, guessed_name="Show-Name! 3"))
+    assert cache.get(PATH, "Show Name 3") is not None
+
+
 def test_normal_entry_expires(tmp_path):
     clock = Clock()
     cache = make(tmp_path, clock, cache_refresh_rate=1)

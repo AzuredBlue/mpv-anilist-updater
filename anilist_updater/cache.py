@@ -4,6 +4,7 @@ import hashlib
 import json
 import logging
 import os
+import re
 import tempfile
 import time
 from collections.abc import Callable
@@ -23,6 +24,10 @@ CORRECTED_TTL = 28 * 24 * 60 * 60
 def _key(filepath: str, title: str) -> str:
     # Streams are named by title alone, so each show gets its own entry.
     return os.path.dirname(filepath) or f"title:{title}"
+
+
+def _fold(title: str) -> str:
+    return re.sub(r"\W", "", title).casefold()
 
 
 def _legacy_key(filepath: str) -> str:
@@ -135,7 +140,8 @@ class Cache:
     def get(self, filepath: str, guessed_name: str) -> Entry | None:
         """Look up the directory's entry if it was detected from the same title."""
         entry = self._entry(filepath, guessed_name)
-        if entry is None or entry.guessed_name != guessed_name:
+        # Punctuation is ignored, so a parser that spells a title differently doesn't drop a correction
+        if entry is None or _fold(entry.guessed_name) != _fold(guessed_name):
             return None
 
         if self.sliding or entry.corrected:
