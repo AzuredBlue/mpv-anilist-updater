@@ -107,8 +107,11 @@ local function read_conf(path)
     end
 end
 
+local windows = mp.get_property("platform") == "windows"
+
 local function normalize(path)
-    return (path:gsub("\\", "/"):gsub("/$", ""))
+    path = path:gsub("\\", "/"):gsub("/$", "")
+    return windows and path:lower() or path
 end
 
 local function parse_directories(value)
