@@ -30,21 +30,20 @@ _MEDIA_FIELDS = """
     }
 """
 
-_SEARCH = (
-    _MEDIA_FIELDS
-    + """
-    query($search: String, $year: FuzzyDateInt, $formats: [MediaFormat]) {
-        GlobalSearch: Page(page: 1, perPage: 20) {
-            media(search: $search, type: ANIME, startDate_greater: $year, format_in: $formats,
-                  status_not: NOT_YET_RELEASED) { ...MediaFields }
-        }
-        UserSearch: Page(page: 1, perPage: 20) {
-            media(search: $search, type: ANIME, startDate_greater: $year, format_in: $formats,
-                  status_not: NOT_YET_RELEASED, onList: true) { ...MediaFields }
-        }
-    }
-"""
-)
+
+def _search_query(count: int) -> str:
+    """A query for `count` searches, each with a global page `Global{i}` and a user list page `User{i}`."""
+    variables = ", ".join(f"$s{i}: String, $y{i}: FuzzyDateInt" for i in range(count))
+    pages = "\n".join(
+        f"""{name}{i}: Page(page: 1, perPage: 20) {{
+            media(search: $s{i}, type: ANIME, startDate_greater: $y{i}, format_in: $formats,
+                  status_not: NOT_YET_RELEASED{on_list}) {{ ...MediaFields }}
+        }}"""
+        for i in range(count)
+        for name, on_list in (("Global", ""), ("User", ", onList: true"))
+    )
+    return f"{_MEDIA_FIELDS} query($formats: [MediaFormat], {variables}) {{ {pages} }}"
+
 
 _SEARCH_TITLES = """
     query($search: String) {
@@ -110,6 +109,9 @@ class AniListClient:
     def __init__(self, token: str | None) -> None:
         """Create a client; without a token only public data is readable."""
         self._token = token
+        self._searches: dict[
+            tuple[str, int | None, tuple[str, ...]], tuple[list[dict[str, Any]], list[dict[str, Any]]]
+        ] = {}
 
     @classmethod
     def from_token_file(cls, path: Path = TOKEN_PATH) -> Self:
@@ -146,17 +148,33 @@ class AniListClient:
             raise AniListError(errors[0].get("message", "Unknown error"))
         return payload["data"]
 
+    def prefetch(self, searches: list[tuple[str, int | None]], formats: list[str]) -> None:
+        """Run the searches not made yet in one request, for `search` to answer from.
+
+        Args:
+            searches (list[tuple[str, int | None]]): Titles and years to search.
+            formats (list[str]): The media formats for all of them.
+        """
+        wanted = [s for s in dict.fromkeys(searches) if (*s, tuple(formats)) not in self._searches]
+        if not wanted:
+            return
+        variables: dict[str, Any] = {"formats": formats}
+        for i, (title, year) in enumerate(wanted):
+            variables |= {f"s{i}": title, f"y{i}": year * 10000 if year else 1}
+        data = self._post(_search_query(len(wanted)), variables)
+        for i, (title, year) in enumerate(wanted):
+            self._searches[title, year, tuple(formats)] = (data[f"User{i}"]["media"], data[f"Global{i}"]["media"])
+
     def search(
         self, title: str, year: int | None, formats: list[str]
     ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-        """Search the user's list and all of AniList in one request.
+        """Search the user's list and all of AniList, once per title, year and formats.
 
         Returns:
             tuple[list[dict[str, Any]], list[dict[str, Any]]]: User list results, then global results.
         """
-        variables = {"search": title, "year": year * 10000 if year else 1, "formats": formats}
-        data = self._post(_SEARCH, variables)
-        return data["UserSearch"]["media"], data["GlobalSearch"]["media"]
+        self.prefetch([(title, year)], formats)
+        return self._searches[title, year, tuple(formats)]
 
     def search_titles(self, query: str) -> list[dict[str, Any]]:
         """Look up anime by title for the correction overlay, in one light request.
