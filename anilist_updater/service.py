@@ -43,7 +43,7 @@ class Service:
         info = cached or resolve(self.client, file)
 
         # An unfinished season has no episode count at first; corrected and sliding entries fill it in later.
-        stale = entry and (entry.corrected or self.cache.sliding) and info.total_episodes is None
+        stale = cached and (entry.corrected or self.cache.sliding) and info.total_episodes is None
         if stale:
             info = refresh(self.client, info)
 

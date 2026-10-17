@@ -39,6 +39,16 @@ def test_info_then_cache_hit_skips_the_search(tmp_path):
     assert second == first
 
 
+def test_resolved_info_is_not_refreshed_again(tmp_path):
+    client = RecordingClient(user=[media(2, None, entry=ENTRY)])
+    service = make(tmp_path, client)
+    known = AnimeInfo(
+        anime_id=1, episode=1, total_episodes=3, current_progress=0, guessed_name="Show", absolute_episode=1
+    )
+    service.cache.put(PATH, known, corrected=True)
+    assert service.info(PATH).info.anime_id == 2
+
+
 def test_info_without_list_entry_is_not_cached(tmp_path):
     client = RecordingClient(everything=[media(1, 12)])
     make(tmp_path, client).info(PATH)
