@@ -1,5 +1,6 @@
 import json
 import os
+from dataclasses import replace
 
 from anilist_updater.cache import CORRECTED_TTL, Cache, _key, _legacy_key
 from anilist_updater.models import AnimeInfo, Options, Status
@@ -84,6 +85,24 @@ def test_corrected_entries_last_longer_and_stay_corrected(tmp_path):
     entry = cache.get(PATH, "Show")
     assert entry.corrected
     assert entry.ttl == clock.now + CORRECTED_TTL
+
+
+def test_a_different_anime_does_not_inherit_corrected(tmp_path):
+    cache = make(tmp_path, Clock())
+    cache.put(PATH, INFO, corrected=True)
+    cache.put(PATH, replace(INFO, anime_id=INFO.anime_id + 1, guessed_name="Other"))
+    assert not cache.get(PATH, "Other").corrected
+
+
+def test_saving_keeps_entries_written_by_a_parallel_run(tmp_path):
+    clock = Clock()
+    first, second = make(tmp_path, clock), make(tmp_path, clock)
+    first.get(PATH, "Show"), second.get(PATH, "Show")
+    first.put("/a/one.mkv", INFO)
+    second.put("/b/two.mkv", INFO)
+    first.save()
+    second.save()
+    assert set(json.loads((tmp_path / "cache.json").read_text())) == {"/a", "/b"}
 
 
 def test_legacy_entry_is_migrated(tmp_path):

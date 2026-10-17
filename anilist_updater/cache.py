@@ -89,7 +89,10 @@ class Entry:
 
 
 class Cache:
-    """Read lazily, written at most once and only if something changed."""
+    """Read lazily, written at most once and only if something changed.
+
+    Saving merges just the changed keys into the file as it is then, so runs in parallel don't undo each other.
+    """
 
     def __init__(self, options: Options, path: Path = CACHE_PATH, clock: Callable[[], float] = time.time) -> None:
         """Create a cache over `path`; `clock` is injectable for tests."""
@@ -97,24 +100,27 @@ class Cache:
         self._ttl = float(options.cache_refresh_rate) * 3600
         self._path = path
         self._clock = clock
-        self._dirty = False
+        self._changed: set[str] = set()
+        self._dropped: set[str] = set()
 
-    @cached_property
-    def _entries(self) -> dict[str, Entry]:
+    def _read(self) -> dict[str, Any]:
         try:
             raw = json.loads(self._path.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             return {}
+        return raw if isinstance(raw, dict) else {}
 
+    @cached_property
+    def _entries(self) -> dict[str, Entry]:
         now, entries = self._clock(), {}
-        for key, value in raw.items():
+        for key, value in self._read().items():
             try:
                 entry = Entry.from_json(value)
             except (KeyError, ValueError, TypeError, AttributeError):
-                self._dirty = True
+                self._dropped.add(key)
                 continue
             if entry.ttl < now:
-                self._dirty = True
+                self._dropped.add(key)
             else:
                 entries[key] = entry
         return entries
@@ -124,7 +130,8 @@ class Cache:
         key = _key(filepath)
         if key not in self._entries and (legacy := self._entries.pop(_legacy_key(filepath), None)):
             self._entries[key] = legacy
-            self._dirty = True
+            self._changed.add(key)
+            self._dropped.add(_legacy_key(filepath))
         return self._entries.get(key)
 
     def get(self, filepath: str, guessed_name: str) -> Entry | None:
@@ -138,7 +145,7 @@ class Cache:
             now = self._clock()
             if entry.ttl <= now + window / 2:
                 entry.ttl = now + window
-                self._dirty = True
+                self._changed.add(_key(filepath))
         return entry
 
     def put(self, filepath: str, info: AnimeInfo, *, corrected: bool = False) -> None:
@@ -146,9 +153,10 @@ class Cache:
         if info.anime_id is None or info.episode is None:
             return
         previous = self._entry(filepath)
-        corrected = corrected or bool(previous and previous.corrected)
+        corrected = corrected or bool(previous and previous.corrected and previous.anime_id == info.anime_id)
 
-        self._entries[_key(filepath)] = Entry(
+        key = _key(filepath)
+        self._entries[key] = Entry(
             guessed_name=info.guessed_name,
             anime_id=info.anime_id,
             anime_name=info.anime_name,
@@ -160,13 +168,14 @@ class Cache:
             corrected=corrected,
             ttl=self._clock() + (CORRECTED_TTL if corrected else self._ttl),
         )
-        self._dirty = True
+        self._changed.add(key)
 
     def save(self) -> None:
         """Write the cache if it changed, atomically so an interrupted run can't corrupt it."""
-        if not self._dirty:
+        if not (self._changed or self._dropped):
             return
-        payload = {key: entry.to_json() for key, entry in self._entries.items()}
+        payload = {key: value for key, value in self._read().items() if key not in self._dropped}
+        payload.update({key: self._entries[key].to_json() for key in self._changed})
         try:
             with tempfile.NamedTemporaryFile(
                 "w", dir=self._path.parent, suffix=".tmp", delete=False, encoding="utf-8"
@@ -176,4 +185,5 @@ class Cache:
         except OSError as e:
             log.warning("Failed saving cache: %s", e)
         else:
-            self._dirty = False
+            self._changed.clear()
+            self._dropped.clear()
