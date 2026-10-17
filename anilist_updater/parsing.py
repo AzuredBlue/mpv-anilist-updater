@@ -23,6 +23,9 @@ _VERSION = re.compile(r"(E\d+)v\d")
 # "Season 2 - 02", "S2 02" -> "S2 E02", or guessit takes it for a season range or mangles numeric titles.
 _SEASON_EPISODE = re.compile(r"\b(?:season\s*|s)(\d+)\s*[-_ ]\s*(\d{1,4})\b", re.IGNORECASE)
 
+# "Episode 5.5", "- 05.5": recaps and specials between episodes, which AniList has no number for ("2.0" is audio).
+_DECIMAL_EPISODE = re.compile(r"(?:\be(?:p(?:isode)?)?\s*|\s-\s)\d+\.[1-9]\d*(?:v\d)?(?=\s|$)", re.IGNORECASE)
+
 
 @cache
 def _guessit() -> Callable[..., Mapping[str, Any]]:
@@ -153,6 +156,8 @@ def parse_path(path: str) -> FileInfo:
     """
     parts = path.replace("\\", "/").split("/")
     filename = _normalise(parts[-1])
+    if _DECIMAL_EPISODE.search(filename):
+        raise ParseError(f"'{filename}' is a special between episodes. Not updating.")
     guess = _guess(filename)
     log.info("File name guess: %s -> %s", filename, dict(guess))
 

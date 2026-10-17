@@ -137,5 +137,14 @@
     null,
     null
   ],
-  "03.mkv": "error"
+  "03.mkv": "error",
+  "Frieren Episode 5.5": "error",
+  "[Group] Frieren - 05.5 [1080p].mkv": "error",
+  "[Group] Frieren - 5.5v2 [1080p].mkv": "error",
+  "[Group] Frieren - 05 [BD 1080p FLAC 2.0].mkv": [
+    "Frieren",
+    5,
+    null,
+    null
+  ]
 }
