@@ -8,16 +8,20 @@ local python = mp.get_property("platform") == "windows" and "python" or "python3
 local entry_point = config.script_dir .. "anilistUpdater.py"
 
 -- ani-cli plays remote streams, so the filename means nothing and the media title is used instead.
+-- It names them with --force-media-title="<title> Episode <n>" on the command line.
 function M.is_ani_cli()
-    local full_path = utils.join_path(mp.get_property("working-directory") or "", mp.get_property("path") or "")
-    return full_path:match("https?://") ~= nil and not full_path:find("127.0.0.1", 1, true)
+    local title = mp.get_property("options/force-media-title") or ""
+    return (mp.get_property("path") or ""):match("^%a+://") ~= nil
+        and mp.get_property_bool("option-info/force-media-title/set-from-commandline", false)
+        and title:find("Episode %d[%d.]*$") ~= nil
 end
 
 -- What identifies the current file to the backend.
 function M.get_path()
     local title = mp.get_property("media-title")
     if M.is_ani_cli() and title and title ~= "" then
-        return title
+        -- a "/" would be read as a folder
+        return (title:gsub("/", " "))
     end
 
     -- Linux can report the working directory without a trailing slash

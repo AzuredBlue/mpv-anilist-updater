@@ -251,12 +251,12 @@ local function submit()
         episode = episode,
         status = state.status_changed and STATUSES[state.status_index] or nil,
     }
-    local info = state.info
+    local info, generation = state.info, deps.generation()
     close()
     mp.osd_message("Applying correction...", 2)
 
     deps.backend.call("correct", { info = info, correction = correction }, function(response)
-        if response.ok and response.info then
+        if response.ok and response.info and generation == deps.generation() then
             deps.set_info(response.info)
         end
         deps.notify(response, true)
@@ -364,7 +364,7 @@ local function open()
     end)
 end
 
--- deps: backend, notify(response, manual), ensure_info(callback), set_info(info)
+-- deps: backend, notify(response, manual), ensure_info(callback), generation(), set_info(info)
 function M.init(dependencies)
     deps = dependencies
     mp.observe_property("osd-dimensions", "native", render)

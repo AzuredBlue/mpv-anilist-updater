@@ -137,8 +137,11 @@ mp.register_event("file-loaded", function()
     state.generation = state.generation + 1
     state.info, state.waiting, state.fetching = nil, {}, false
 
-    if not backend.is_ani_cli() and not config.is_eligible(backend.get_path()) then
-        return
+    if not backend.is_ani_cli() then
+        local path = backend.get_path()
+        if not path or (mp.get_property("path") or ""):match("^%a+://") or not config.is_eligible(path) then
+            return
+        end
     end
 
     -- Detect early so the update and the keybinds have the info ready
@@ -158,5 +161,6 @@ overlay.init({
     backend = backend,
     notify = notify,
     ensure_info = ensure_info,
+    generation = function() return state.generation end,
     set_info = function(info) state.info = info end,
 })
