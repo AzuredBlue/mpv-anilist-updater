@@ -95,11 +95,11 @@ class AniListClient:
         return cls(lines[0].strip() if lines else None)
 
     def _post(self, query: str, variables: dict[str, Any]) -> dict[str, Any]:
-        # Same agent the requests library sent; the default Python-urllib one is rejected with 403.
+        # AniList rejects the default Python-urllib agent with a 403.
         headers = {
             "Content-Type": "application/json",
             "Accept": "application/json",
-            "User-Agent": "python-requests/2.34.2",
+            "User-Agent": "mpv-anilist-updater",
         }
         if self._token:
             headers["Authorization"] = f"Bearer {self._token}"
