@@ -12,7 +12,7 @@ from .models import FileInfo
 
 log = logging.getLogger(__name__)
 
-GUESSIT_OPTIONS = {"excludes": ["country", "language"]}
+GUESSIT_OPTIONS = {"excludes": ["country", "language"], "episode_prefer_number": True}
 FORMATS = {"Original Animated Video": "OVA", "Original Net Animation": "ONA"}
 
 _NOISE = re.escape(r'\/:!*?"<>|._-')
