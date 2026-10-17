@@ -19,11 +19,7 @@ For any issues, you can either open an issue on here, or message me on discord (
 
 ## Requirements
 
-You will need Python 3.11 or newer installed, as well as the library `guessit`, and a recent mpv (developed on 0.41):
-
-```bash
-pip install guessit
-```
+You will need Python 3.11 or newer installed and a recent mpv (developed on 0.41). The script has no other dependencies.
 
 ## Installation
 
@@ -134,9 +130,9 @@ For example, if the file is "Attack On Titan - E48" you will need to paste the e
 
 ## How It Works
 
-The script uses Guessit to try to get as much information as possible from the file name.
+The script reads the title, episode, season, year and format from the file name with its own parser, written for fansub and scene release names.
 
-If the "episode" and "season" guess are before the title, it will consider that title wrong and try to get the title from the name of the folder it is in.
+If the file name starts with its episode or season, it has no title of its own, so the title comes from the folder it is in (or the one above it). If no folder has one, a leading `01 - Title` uses the text after the number.
 
 After that, it searches for the show both in your AniList and globally.
 
