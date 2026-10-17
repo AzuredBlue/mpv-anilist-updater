@@ -39,10 +39,10 @@ def test_release_name_quirks(path, expected):
     check(path, expected)
 
 
-def test_folder_season_keeps_the_plain_title_for_absolute_episodes():
+def test_titled_filename_takes_no_season_from_its_folder():
     info = parse_path("Anime/Sample Show Season 3/Sample Show - 38.mkv")
-    assert (info.title, info.season, info.folder_season) == ("Sample Show", 3, True)
-    assert not parse_path("Anime/Sample Show/Sample Show - 38.mkv").folder_season
+    assert (info.title, info.season, info.folder_season) == ("Sample Show", None, False)
+    assert parse_path("Anime/Show/Season 3/05.mkv").folder_season
     assert not parse_path("Anime/Sample Show/[Foobar] Sample Show S3 - 05.mkv").folder_season
 
 

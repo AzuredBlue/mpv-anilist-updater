@@ -586,11 +586,11 @@
       null
     ]
   },
-  "H26 season from the parent folder": {
+  "H26 a titled filename takes no season from its folder": {
     "Anime/Sample Show/Season 2/[Foobar] Sample Show - 05 [1080p].mkv": [
       "Sample Show",
       5,
-      2,
+      null,
       null,
       null,
       null
@@ -598,7 +598,7 @@
     "Anime/Sample Show S2/[Foobar] Sample Show - 05 [1080p].mkv": [
       "Sample Show",
       5,
-      2,
+      null,
       null,
       null,
       null
