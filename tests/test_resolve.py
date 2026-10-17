@@ -86,3 +86,20 @@ def test_refresh_to_another_anime_drops_old_progress():
     )
     switched = refresh(client, base, 2)
     assert (switched.anime_id, switched.current_progress, switched.current_status) == (2, None, None)
+
+
+class TitleClient(FakeClient):
+    """Only the base title is known to AniList; later seasons carry other names."""
+
+    def search(self, title, year, formats):
+        return ([], []) if title.endswith("Season 2") else (self.user, self.everything)
+
+
+def test_resolve_counts_sequels_when_the_season_title_is_unknown():
+    info = resolve(TitleClient(everything=SEASONS), FileInfo("Show Season 2", 3))
+    assert (info.anime_id, info.episode, info.guessed_name) == (2, 3, "Show Season 2")
+
+
+def test_resolve_season_beyond_the_known_ones_is_not_found():
+    with pytest.raises(SkipUpdate, match="Couldn't find"):
+        resolve(TitleClient(everything=SEASONS[:1]), FileInfo("Show Season 2", 1))

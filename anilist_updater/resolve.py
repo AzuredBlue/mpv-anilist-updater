@@ -1,6 +1,7 @@
 """Find the AniList entry for a parsed file, including absolute episode numbers across seasons."""
 
 import logging
+import re
 from dataclasses import replace
 from typing import Any
 
@@ -17,6 +18,7 @@ MAIN_FORMATS = {"TV", "ONA"}
 # Shorter than this is a short, not a main season.
 MIN_DURATION = 21
 DEFAULT_SEASON_LENGTH = 12
+_SEASON_TITLE = re.compile(r"(?P<base>.+) Season (?P<number>\d+)")
 
 
 def _is_series_start(media: Media) -> bool:
@@ -94,6 +96,20 @@ def _to_info(media: Media, episode: int, file: FileInfo) -> AnimeInfo:
     )
 
 
+def _nth_season(client: AniListClient, file: FileInfo, formats: list[str]) -> AnimeInfo | None:
+    """Find "Title Season N" by counting sequels, for seasons AniList names differently ("Clannad: After Story")."""
+    if not (match := _SEASON_TITLE.fullmatch(file.title)):
+        return None
+    number = int(match["number"])
+    for pool in client.search(match["base"], file.year, formats):
+        seasons = main_series(pool)
+        if seasons and len(seasons) >= number:
+            season = seasons[number - 1]
+            if not season.get("episodes") or file.episode <= season["episodes"]:
+                return _to_info(season, file.episode, file)
+    return None
+
+
 def resolve(client: AniListClient, file: FileInfo) -> AnimeInfo:
     """Search AniList for a file's anime, preferring the user's list.
 
@@ -110,6 +126,9 @@ def resolve(client: AniListClient, file: FileInfo) -> AnimeInfo:
     formats = [file.media_format] if file.media_format else DEFAULT_FORMATS
     user_list, everything = client.search(file.title, file.year, formats)
     if not (user_list or everything):
+        if info := _nth_season(client, file, formats):
+            log.info("Season %s found by counting sequels: %s", file.title, info.anime_name)
+            return info
         raise SkipUpdate(f"Couldn't find an anime from this title! ({file.title}). Is it in your list?")
 
     results = user_list or everything
