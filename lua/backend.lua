@@ -100,10 +100,12 @@ function M.call(action, fields, callback)
                 return run()
             end
 
-            for line in ((success and result and result.stderr) or ""):gmatch("[^\r\n]+") do
-                msg.info(line)
-            end
             local response = decode(success, result)
+            -- The backend's trace only matters when something went wrong; --msg-level=all=v shows it always.
+            local log = response.kind == "success" and msg.verbose or msg.info
+            for line in ((success and result and result.stderr) or ""):gmatch("[^\r\n]+") do
+                log(line)
+            end
             if response.message and response.kind ~= "cancelled" then
                 (response.kind == "error" and msg.error or msg.info)(response.message)
             end
