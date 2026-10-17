@@ -4,7 +4,12 @@ local config = require("lua.config")
 
 local M = {}
 
-local python = mp.get_property("platform") == "windows" and "python" or "python3"
+-- Windows installs often only put the py launcher on PATH; `current` moves on once one can't be started.
+local interpreters = { { "python3" } }
+if mp.get_property("platform") == "windows" then
+    interpreters = { { "python" }, { "py", "-3" } }
+end
+local current = 1
 local entry_point = config.script_dir .. "anilistUpdater.py"
 
 -- ani-cli plays remote streams, so the filename means nothing and the media title is used instead.
@@ -49,7 +54,7 @@ end
 -- Always returns a response table; a crashed backend becomes an error response.
 local function decode(success, result)
     if not success or not result then
-        return { ok = false, kind = "error", message = "Couldn't run " .. python .. "." }
+        return { ok = false, kind = "error", message = "Couldn't run " .. interpreters[current][1] .. "." }
     end
     if result.killed_by_us then
         return { ok = false, kind = "cancelled" }
@@ -72,24 +77,41 @@ function M.call(action, fields, callback)
         request[key] = value
     end
 
-    mp.command_native_async({
-        name = "subprocess",
-        args = { python, entry_point },
-        stdin_data = utils.format_json(request),
-        capture_stdout = true,
-        capture_stderr = true,
-        -- Detection is moot once the file changes, but a write must finish.
-        playback_only = action == "info",
-    }, function(success, result)
-        for line in ((success and result and result.stderr) or ""):gmatch("[^\r\n]+") do
-            msg.info(line)
+    local stdin_data = utils.format_json(request)
+
+    local function run()
+        local args = {}
+        for _, part in ipairs(interpreters[current]) do
+            args[#args + 1] = part
         end
-        local response = decode(success, result)
-        if response.message and response.kind ~= "cancelled" then
-            (response.kind == "error" and msg.error or msg.info)(response.message)
-        end
-        callback(response)
-    end)
+        args[#args + 1] = entry_point
+
+        mp.command_native_async({
+            name = "subprocess",
+            args = args,
+            stdin_data = stdin_data,
+            capture_stdout = true,
+            capture_stderr = true,
+            -- Detection is moot once the file changes, but a write must finish.
+            playback_only = action == "info",
+        }, function(success, result)
+            if success and result and result.error_string == "init" and current < #interpreters then
+                current = current + 1
+                return run()
+            end
+
+            for line in ((success and result and result.stderr) or ""):gmatch("[^\r\n]+") do
+                msg.info(line)
+            end
+            local response = decode(success, result)
+            if response.message and response.kind ~= "cancelled" then
+                (response.kind == "error" and msg.error or msg.info)(response.message)
+            end
+            callback(response)
+        end)
+    end
+
+    run()
 end
 
 return M
