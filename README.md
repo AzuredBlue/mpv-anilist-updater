@@ -78,6 +78,7 @@ ADD_ENTRY_IF_MISSING=no
 CACHE_REFRESH_RATE=24
 CACHE_MODE=NORMAL
 SILENT_MODE=no
+SHOW_DETECTED_ANIME=no
 ```
 
 #### Option Descriptions
@@ -96,6 +97,7 @@ SILENT_MODE=no
 - **SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING**: `yes`/`no`. If `yes`, set to COMPLETED after last episode if status was REPEATING (rewatching). Default is `yes`.
 - **ADD_ENTRY_IF_MISSING**: `yes`/`no`. If `yes`, automatically add anime to your list if it's not found in your list during search. Default is `no`. **⚠️ Warning: This can add incorrect anime to your list if the detection is inaccurate.**
 - **SILENT_MODE**: `yes`/`no`. If `yes`, won't show OSD messages. Default is `no`.
+- **SHOW_DETECTED_ANIME**: `yes`/`no`. If `yes`, shows the detected anime and episode when a file loads, so a wrong match can be corrected before the update. Hidden by `SILENT_MODE`. Default is `no`.
 
 > [!NOTE]
 > All boolean options must be `yes` or `no` (not `true`/`false`).

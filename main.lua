@@ -55,7 +55,11 @@ local function ensure_info(callback)
         state.fetching = false
         state.info = response.ok and response.info or nil
         if state.info then
-            msg.info("Detected anime: " .. (state.info.anime_name or "?") .. " #" .. (state.info.episode or "?"))
+            local detected = (state.info.anime_name or "?") .. " #" .. (state.info.episode or "?")
+            msg.info("Detected anime: " .. detected)
+            if config.options.SHOW_DETECTED_ANIME then
+                osd("Detected: " .. detected)
+            end
         end
 
         local waiting = state.waiting

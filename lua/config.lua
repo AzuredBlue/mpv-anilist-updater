@@ -34,10 +34,17 @@ local DEFAULTS = {
     { "CACHE_REFRESH_RATE", 24 },
     { "CACHE_MODE", "NORMAL" },
     { "SILENT_MODE", false },
+    { "SHOW_DETECTED_ANIME", false },
 }
 
 -- The Python side takes whatever is sent and has no defaults of its own, so it gets everything else.
-local LUA_ONLY = { DIRECTORIES = true, EXCLUDED_DIRECTORIES = true, UPDATE_PERCENTAGE = true, SILENT_MODE = true }
+local LUA_ONLY = {
+    DIRECTORIES = true,
+    EXCLUDED_DIRECTORIES = true,
+    UPDATE_PERCENTAGE = true,
+    SILENT_MODE = true,
+    SHOW_DETECTED_ANIME = true,
+}
 
 local options, lines = {}, { CONF_HEADER:sub(1, -2) }
 for _, default in ipairs(DEFAULTS) do
