@@ -19,10 +19,10 @@ For any issues, you can either open an issue on here, or message me on discord (
 
 ## Requirements
 
-You will need Python 3 installed, as well as the libraries `guessit` and `requests`:
+You will need Python 3.11 or newer installed, as well as the library `guessit`, and a recent mpv (developed on 0.41):
 
 ```bash
-pip install guessit requests
+pip install guessit
 ```
 
 ## Installation
