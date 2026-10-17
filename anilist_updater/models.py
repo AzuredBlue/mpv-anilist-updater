@@ -104,7 +104,8 @@ class Options:
 
 @dataclass(frozen=True, slots=True)
 class Outcome:
-    """Result of an action: the new info for Lua and an optional message for the user."""
+    """Result of an action: the new info for Lua, an optional message for the user, or search results."""
 
     info: AnimeInfo | None = None
     message: str | None = None
+    results: list[dict[str, Any]] | None = None

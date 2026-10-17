@@ -3,13 +3,20 @@
 local M = {}
 
 local STATUSES = { "CURRENT", "PAUSED", "DROPPED", "COMPLETED", "REPEATING", "PLANNING" }
-local FIELDS = { "id", "episode", "status" }
+local FIELDS = { "anime", "episode", "status" }
+-- Typing waits this long before searching, so a word costs about one request
+local DEBOUNCE = 0.4
+local MIN_QUERY = 2
+local SELECTED = "{\\1c&H00D7FF&}"
+local NORMAL = "{\\1c&HFFFFFF&}"
 -- U+FEFF stops libass from reading what follows as part of an override
 local JOINER = "\239\187\191"
 
 local deps
 local osd = mp.create_osd_overlay("ass-events")
 local state = { active = false }
+-- Search results by query. Outlives the overlay, so reopening it or retyping costs nothing.
+local memo = {}
 
 local function escape(text)
     return (tostring(text):gsub("[\\{}]", { ["\\"] = "\\" .. JOINER, ["{"] = "\\{", ["}"] = "}" .. JOINER }))
@@ -17,11 +24,24 @@ end
 
 local function field_text(name)
     local text = {
-        id = state.id ~= "" and state.id or "(paste AniList URL or type ID)",
+        anime = state.query ~= "" and state.query or "(type a title, or paste an AniList URL/ID)",
         episode = state.episode ~= "" and state.episode or "(optional, relative episode)",
         status = STATUSES[state.status_index],
     }
     return text[name]
+end
+
+local function describe(result)
+    local parts = { result.title or "?" }
+    for _, part in ipairs({ result.format or "", result.year or "", result.episodes and (result.episodes .. " eps") or "" }) do
+        if part ~= "" then
+            parts[#parts + 1] = part
+        end
+    end
+    if result.status then
+        parts[#parts + 1] = "[" .. result.status .. "]"
+    end
+    return table.concat(parts, " \194\183 ")
 end
 
 local function render()
@@ -44,7 +64,7 @@ local function render()
         )
 
     local lines = {}
-    local labels = { id = "ID / URL", episode = "Corrected episode", status = "Status" }
+    local labels = { anime = "Anime", episode = "Corrected episode", status = "Status" }
     for index, name in ipairs(FIELDS) do
         lines[#lines + 1] = string.format(
             "{\\fs22}%s %s: %s",
@@ -52,6 +72,22 @@ local function render()
             labels[name],
             escape(field_text(name))
         )
+        if name == "anime" then
+            for i, result in ipairs(state.results) do
+                lines[#lines + 1] = string.format(
+                    "{\\fs20}%s    %s %s",
+                    i == state.selected and SELECTED or NORMAL,
+                    i == state.selected and "\226\150\182" or " ",
+                    escape(describe(result))
+                )
+            end
+            if state.inflight then
+                lines[#lines + 1] = NORMAL .. "{\\fs18}    Searching..."
+            elseif state.error then
+                lines[#lines + 1] = NORMAL .. "{\\fs18}    " .. escape(state.error)
+            end
+            lines[#lines + 1] = NORMAL
+        end
     end
 
     osd.res_x, osd.res_y = width, height
@@ -61,8 +97,8 @@ local function render()
         "",
         table.concat(lines, "\\N"),
         "",
-        "{\\fs18}Tab/Up/Down: switch field | Left/Right: change status | Enter: submit | Esc: cancel",
-        "{\\fs18}Ctrl+V: paste clipboard | Backspace/Del: clear field",
+        "{\\fs18}Type to search | Up/Down: pick result | Tab: next field | Left/Right: change status",
+        "{\\fs18}Enter: submit | Esc: cancel | Ctrl+V: paste | Backspace: delete | Del: clear field",
     }, "\\N")
     osd:update()
 end
@@ -72,22 +108,90 @@ local function extract_id(text)
     return text:match("anilist%.co/anime/(%d+)") or text:match("^(%d+)$")
 end
 
-local function append(text)
-    local name = FIELDS[state.focus]
-    if name == "id" then
-        state.id = state.id .. text
-    elseif name == "episode" then
-        state.episode = state.episode .. text:gsub("%D", "")
+local function key_of(text)
+    return text:match("^%s*(.-)%s*$"):lower()
+end
+
+-- Work out what the search box offers for its text. Only a title long enough and not seen before
+-- costs a request; one request at a time, and a finished one re-checks what was typed meanwhile.
+local function refresh()
+    if not state.active then
+        return
+    end
+    local text = key_of(state.query)
+    local anilist_id = extract_id(text)
+    state.error = nil
+
+    if text == "" then
+        state.results = state.detected
+    elseif anilist_id then
+        state.results = { { id = tonumber(anilist_id), title = "AniList ID " .. anilist_id } }
+    elseif memo[text] then
+        state.results = memo[text]
+    elseif #text < MIN_QUERY then
+        state.results = {}
+    else
+        state.results = {}
+        if not state.inflight then
+            state.inflight = true
+            deps.backend.call("search", { query = text }, function(response)
+                state.inflight = false
+                if response.ok and response.results then
+                    memo[text] = response.results
+                elseif state.active and key_of(state.query) == text then
+                    state.error = response.message
+                end
+                if state.active and not state.timer:is_enabled() and key_of(state.query) ~= text then
+                    return refresh()
+                end
+                if state.active and key_of(state.query) == text then
+                    state.results = memo[text] or {}
+                end
+                render()
+            end)
+        end
+    end
+    state.selected = 1
+    render()
+end
+
+-- The typed text changed: show it now, search once typing pauses.
+local function edited()
+    state.timer:kill()
+    if FIELDS[state.focus] == "anime" then
+        state.timer:resume()
     end
     render()
 end
 
+local function append(text)
+    local name = FIELDS[state.focus]
+    if name == "anime" then
+        state.query = state.query .. text
+    elseif name == "episode" then
+        state.episode = state.episode .. text:gsub("%D", "")
+    end
+    edited()
+end
+
+local function backspace()
+    local name = FIELDS[state.focus]
+    if name == "anime" then
+        state.query = state.query:gsub("[\1-\127\194-\244][\128-\191]*$", "")
+    elseif name == "episode" then
+        state.episode = state.episode:sub(1, -2)
+    end
+    edited()
+end
+
 local function clear_field()
     local name = FIELDS[state.focus]
-    if name ~= "status" then
-        state[name] = ""
-        render()
+    if name == "anime" then
+        state.query = ""
+    elseif name == "episode" then
+        state.episode = ""
     end
+    edited()
 end
 
 local function paste()
@@ -120,6 +224,7 @@ local bindings = {}
 
 local function close()
     state.active = false
+    state.timer:kill()
     osd:remove()
     for name in pairs(bindings) do
         mp.remove_key_binding(name)
@@ -128,9 +233,9 @@ local function close()
 end
 
 local function submit()
-    local anilist_id = extract_id(state.id)
-    if not anilist_id then
-        return mp.osd_message("Invalid AniList URL/ID.", 2)
+    local picked = state.results[state.selected]
+    if not picked then
+        return mp.osd_message("Search for the anime and pick it from the results.", 2)
     end
 
     local episode
@@ -142,7 +247,7 @@ local function submit()
     end
 
     local correction = {
-        anime_id = tonumber(anilist_id),
+        anime_id = picked.id,
         episode = episode,
         status = state.status_changed and STATUSES[state.status_index] or nil,
     }
@@ -161,6 +266,16 @@ end
 local function move_focus(step)
     state.focus = (state.focus + step - 1) % #FIELDS + 1
     render()
+end
+
+-- Up and Down walk the results while the search box is focused.
+local function move_selection(step)
+    if FIELDS[state.focus] == "anime" and #state.results > 0 then
+        state.selected = (state.selected + step - 1) % #state.results + 1
+        render()
+    else
+        move_focus(step)
+    end
 end
 
 local function cycle_status(step)
@@ -190,7 +305,12 @@ end
 local function prefill(info)
     state.info, state.loading = info, false
     if info then
-        state.id = state.id ~= "" and state.id or tostring(info.anime_id or "")
+        state.detected = info.anime_id
+                and { { id = info.anime_id, title = info.anime_name, status = info.current_status } }
+            or {}
+        if state.query == "" then
+            state.results = state.detected
+        end
         state.episode = state.episode ~= "" and state.episode or tostring(info.episode or "")
         if not state.status_changed then
             state.status_index = status_index(info.current_status)
@@ -204,21 +324,28 @@ local function open()
         active = true,
         loading = true,
         focus = 1,
-        id = "",
+        query = "",
+        detected = {},
+        results = {},
+        selected = 1,
         episode = "",
         status_index = 1,
         status_changed = false,
     }
 
+    state.timer = mp.add_timeout(DEBOUNCE, refresh)
+    state.timer:kill()
+
     bind("ESC", close)
     bind("ENTER", submit)
     bind("KP_ENTER", submit)
     bind("TAB", function() move_focus(1) end)
-    bind("DOWN", function() move_focus(1) end)
-    bind("UP", function() move_focus(-1) end)
+    bind("Shift+TAB", function() move_focus(-1) end)
+    bind("DOWN", function() move_selection(1) end)
+    bind("UP", function() move_selection(-1) end)
     bind("LEFT", function() cycle_status(-1) end)
     bind("RIGHT", function() cycle_status(1) end)
-    bind("BS", clear_field)
+    bind("BS", backspace, { repeatable = true })
     bind("DEL", clear_field)
     bind("Ctrl+v", paste)
     bind("any_unicode", function(event)

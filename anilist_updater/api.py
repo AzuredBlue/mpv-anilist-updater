@@ -46,6 +46,21 @@ _SEARCH = (
 """
 )
 
+_SEARCH_TITLES = """
+    query($search: String) {
+        Page(page: 1, perPage: 8) {
+            media(search: $search, type: ANIME, sort: SEARCH_MATCH) {
+                id
+                title { romaji english }
+                format
+                seasonYear
+                episodes
+                mediaListEntry { status }
+            }
+        }
+    }
+"""
+
 _SAVE_ENTRY = """
     mutation($mediaId: Int, $progress: Int, $status: MediaListStatus) {
         SaveMediaListEntry(mediaId: $mediaId, progress: $progress, status: $status) {
@@ -129,6 +144,26 @@ class AniListClient:
         variables = {"search": title, "year": year * 10000 if year else 1, "formats": formats}
         data = self._post(_SEARCH, variables)
         return data["UserSearch"]["media"], data["GlobalSearch"]["media"]
+
+    def search_titles(self, query: str) -> list[dict[str, Any]]:
+        """Look up anime by title for the correction overlay, in one light request.
+
+        Returns:
+            list[dict[str, Any]]: Best matches first, each with `id`, `title`, `format`, `year`, `episodes`
+                and the user's list `status` (None if not on the list).
+        """
+        media = self._post(_SEARCH_TITLES, {"search": query})["Page"]["media"]
+        return [
+            {
+                "id": m["id"],
+                "title": m["title"]["romaji"] or m["title"]["english"],
+                "format": m["format"],
+                "year": m["seasonYear"],
+                "episodes": m["episodes"],
+                "status": (m["mediaListEntry"] or {}).get("status"),
+            }
+            for m in media
+        ]
 
     def media_by_id(self, anime_id: int) -> dict[str, Any]:
         """Fetch one entry by AniList ID.

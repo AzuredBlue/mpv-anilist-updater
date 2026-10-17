@@ -15,8 +15,12 @@ log = logging.getLogger(__name__)
 
 
 def _run(request: dict[str, Any]) -> Outcome:
+    client = AniListClient.from_token_file()
+    if request["action"] == "search":
+        return Outcome(results=client.search_titles(request["query"]))
+
     options = Options.from_dict(request.get("options"))
-    service = Service(options, AniListClient.from_token_file(), Cache(options))
+    service = Service(options, client, Cache(options))
     path = request["path"]
     info = AnimeInfo.from_dict(request.get("info"))
 
@@ -55,6 +59,7 @@ def handle(request: dict[str, Any]) -> dict[str, Any]:
         "kind": "success",
         "message": outcome.message,
         "info": outcome.info.to_dict() if outcome.info else None,
+        "results": outcome.results,
     }
 
 
