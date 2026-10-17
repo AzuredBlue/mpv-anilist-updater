@@ -43,8 +43,14 @@ def test_last_episode_completes_when_enabled(flag, completes):
     assert plan_update(info(progress=11, episode=12), options) == [Save(expected, 12)]
 
 
-def test_rewatching_keeps_status_and_ignores_progress_check():
-    assert plan_update(info(Status.REPEATING, progress=10, episode=2), Options()) == [Save(Status.REPEATING, 2)]
+def test_rewatching_keeps_status_and_records_new_episodes():
+    assert plan_update(info(Status.REPEATING, progress=1, episode=2), Options()) == [Save(Status.REPEATING, 2)]
+
+
+@pytest.mark.parametrize("episode", [2, 3])
+def test_rewatching_an_old_episode_is_skipped(episode):
+    with pytest.raises(SkipUpdate, match="not new"):
+        plan_update(info(Status.REPEATING, progress=3, episode=episode), Options())
 
 
 def test_rewatching_disabled_skips():
@@ -56,6 +62,15 @@ def test_completed_first_episode_rewatch_takes_two_writes():
     options = Options(set_completed_to_rewatching_on_first_episode=True)
     planned = plan_update(info(Status.COMPLETED, progress=12, episode=1), options)
     assert planned == [Save(Status.REPEATING, 0), Save(None, 1)]
+
+
+@pytest.mark.parametrize(("flag", "last_save"), [(True, Save(Status.COMPLETED, 1)), (False, Save(None, 1))])
+def test_rewatching_a_single_episode_completes_when_enabled(flag, last_save):
+    options = Options(
+        set_completed_to_rewatching_on_first_episode=True, set_to_completed_after_last_episode_rewatching=flag
+    )
+    planned = plan_update(info(Status.COMPLETED, progress=1, episode=1, total=1), options)
+    assert planned == [Save(Status.REPEATING, 0), last_save]
 
 
 def test_missing_entry_needs_opt_in():

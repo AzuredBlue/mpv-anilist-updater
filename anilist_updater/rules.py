@@ -46,16 +46,18 @@ def plan_update(info: AnimeInfo, options: Options) -> list[Save]:
     if status == Status.COMPLETED and episode == 1 and options.set_completed_to_rewatching_on_first_episode:
         # AniList resets the progress when a completed entry changes to rewatching in the same
         # request that sets it, so the progress needs its own request.
-        return [Save(Status.REPEATING, 0), Save(None, 1)]
+        completes = is_last and options.set_to_completed_after_last_episode_rewatching
+        return [Save(Status.REPEATING, 0), Save(Status.COMPLETED if completes else None, 1)]
 
     if status == Status.REPEATING and options.update_progress_when_rewatching:
         target = Status.REPEATING
     elif status in MODIFIABLE:
-        if info.current_progress is not None and episode <= info.current_progress:
-            raise SkipUpdate(f"Episode was not new. Not updating ({episode} <= {info.current_progress})")
         target = Status.CURRENT
     else:
         raise SkipUpdate(f"Anime is not in a modifiable state (status: {status}). Not updating.")
+
+    if info.current_progress is not None and episode <= info.current_progress:
+        raise SkipUpdate(f"Episode was not new. Not updating ({episode} <= {info.current_progress})")
 
     if is_last and (
         (status in MODIFIABLE and options.set_to_completed_after_last_episode_current)
