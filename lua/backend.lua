@@ -32,7 +32,7 @@ function M.get_path()
     -- "path" is sometimes absolute and sometimes relative
     local path = utils.join_path(directory, mp.get_property("path") or "")
 
-    if (path:match("([^/\\]+)$") or ""):lower() == "file.mp4" then
+    if (path:match("([^/\\]+)$") or ""):lower() == "file.mp4" and title and title ~= "" then
         return title
     end
     return path
