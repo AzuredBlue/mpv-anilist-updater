@@ -55,6 +55,7 @@ class Service:
 
     def update(self, path: str, info: AnimeInfo) -> Outcome:
         """Record the info's episode on AniList according to the user's options."""
+        info = refresh(self.client, info)
         saves = plan_update(info, self.options)
         for save in saves:
             saved = self.client.save_entry(info.anime_id, save.status, save.progress)

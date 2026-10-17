@@ -47,7 +47,7 @@ def test_info_without_list_entry_is_not_cached(tmp_path):
 
 
 def test_update_records_progress_and_caches(tmp_path):
-    client = RecordingClient(user=[media(1, 12, entry=ENTRY)])
+    client = RecordingClient(user=[media(1, 12, entry=ENTRY)], by_id={1: media(1, 12, entry=ENTRY)})
     service = make(tmp_path, client)
     outcome = service.update(PATH, service.info(PATH).info)
 
@@ -58,7 +58,7 @@ def test_update_records_progress_and_caches(tmp_path):
 
 
 def test_update_skip_reason_propagates(tmp_path):
-    client = RecordingClient()
+    client = RecordingClient(by_id={1: media(1, 12, entry={"status": "CURRENT", "progress": 3})})
     info = AnimeInfo(anime_id=1, episode=3, current_progress=3, current_status=Status.CURRENT)
     with pytest.raises(SkipUpdate, match="not new"):
         make(tmp_path, client).update(PATH, info)
@@ -66,10 +66,18 @@ def test_update_skip_reason_propagates(tmp_path):
 
 
 def test_update_adds_missing_entry_when_enabled(tmp_path):
-    client = RecordingClient()
+    client = RecordingClient(by_id={1: media(1, 12)})
     info = AnimeInfo(anime_id=1, anime_name="Show 1", episode=1, total_episodes=12)
     outcome = make(tmp_path, client, add_entry_if_missing=True).update(PATH, info)
     assert outcome.message == 'Added "Show 1" to your list with progress: 1'
+
+
+def test_update_uses_the_current_list_state_not_the_cached_one(tmp_path):
+    client = RecordingClient(by_id={1: media(1, 12, entry={"status": "COMPLETED", "progress": 12})})
+    info = AnimeInfo(anime_id=1, episode=5, current_progress=4, current_status=Status.CURRENT)
+    with pytest.raises(SkipUpdate, match="not in a modifiable state"):
+        make(tmp_path, client).update(PATH, info)
+    assert client.saves == []
 
 
 def test_correct_changes_id_episode_and_status(tmp_path):
