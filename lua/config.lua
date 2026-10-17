@@ -97,6 +97,7 @@ end
 
 local function coerce(default, raw)
     if type(default) == "boolean" then
+        raw = raw:lower()
         return raw == "yes" or raw == "true"
     elseif type(default) == "number" then
         return tonumber(raw) or default
