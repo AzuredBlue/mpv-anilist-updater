@@ -283,6 +283,11 @@ local function close()
 end
 
 local function submit()
+    if state.generation ~= deps.generation() then
+        close()
+        return mp.osd_message("The file changed, correction cancelled.", 3)
+    end
+
     local picked = state.results[state.selected]
     if not picked then
         return mp.osd_message("Search for the anime and pick it from the results.", 2)
@@ -319,7 +324,7 @@ local function submit()
         status = state.status_changed and STATUSES[state.status_index] or nil,
         score = score,
     }
-    local info, generation = state.info, deps.generation()
+    local info, generation = state.info, state.generation
     close()
     mp.osd_message("Applying correction...", 2)
 
@@ -424,6 +429,7 @@ end
 local function open()
     state = {
         active = true,
+        generation = deps.generation(),
         loading = true,
         focus = 1,
         query = "",
