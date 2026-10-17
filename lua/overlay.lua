@@ -268,10 +268,11 @@ local function move_focus(step)
     render()
 end
 
--- Up and Down walk the results while the search box is focused.
+-- Up and Down walk the results while the search box is focused, then leave it.
 local function move_selection(step)
-    if FIELDS[state.focus] == "anime" and #state.results > 0 then
-        state.selected = (state.selected + step - 1) % #state.results + 1
+    local target = state.selected + step
+    if FIELDS[state.focus] == "anime" and target >= 1 and target <= #state.results then
+        state.selected = target
         render()
     else
         move_focus(step)
