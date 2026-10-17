@@ -4,7 +4,6 @@ import hashlib
 import json
 import logging
 import os
-import re
 import tempfile
 import time
 from collections.abc import Callable
@@ -14,6 +13,7 @@ from pathlib import Path
 from typing import Any, Self
 
 from .models import AnimeInfo, Options, Status
+from .release import fold_title
 
 log = logging.getLogger(__name__)
 
@@ -22,12 +22,9 @@ CORRECTED_TTL = 28 * 24 * 60 * 60
 
 
 def _key(filepath: str, title: str) -> str:
-    # Streams are named by title alone, so each show gets its own entry.
-    return os.path.dirname(filepath) or f"title:{title}"
-
-
-def _fold(title: str) -> str:
-    return re.sub(r"\W", "", title).casefold()
+    # Streams are named by title alone; in a folder, each title gets its own entry.
+    directory = os.path.dirname(filepath)
+    return f"{directory}|{fold_title(title)}" if directory else f"title:{title}"
 
 
 def _legacy_key(filepath: str) -> str:
@@ -129,19 +126,23 @@ class Cache:
         return entries
 
     def _entry(self, filepath: str, title: str) -> Entry | None:
-        """The directory's entry, moving one stored under the old hashed key to its path."""
+        """The title's entry in the file's directory, moving one stored under an older key to the current one."""
         key = _key(filepath, title)
-        if key not in self._entries and (legacy := self._entries.pop(_legacy_key(filepath), None)):
-            self._entries[key] = legacy
-            self._changed.add(key)
-            self._dropped.add(_legacy_key(filepath))
+        directory = os.path.dirname(filepath)
+        if key not in self._entries and directory:
+            # One entry per directory, stored by its path or by the hash of it
+            for old in (directory, _legacy_key(filepath)):
+                if (entry := self._entries.get(old)) and fold_title(entry.guessed_name) == fold_title(title):
+                    self._entries[key] = self._entries.pop(old)
+                    self._changed.add(key)
+                    self._dropped.add(old)
+                    break
         return self._entries.get(key)
 
     def get(self, filepath: str, guessed_name: str) -> Entry | None:
-        """Look up the directory's entry if it was detected from the same title."""
+        """Look up the directory's entry for this title."""
         entry = self._entry(filepath, guessed_name)
-        # Punctuation is ignored, so a parser that spells a title differently doesn't drop a correction
-        if entry is None or _fold(entry.guessed_name) != _fold(guessed_name):
+        if entry is None:
             return None
 
         if self.sliding or entry.corrected:

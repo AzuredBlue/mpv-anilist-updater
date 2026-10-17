@@ -96,8 +96,34 @@ def test_corrected_entries_last_longer_and_stay_corrected(tmp_path):
 def test_a_different_anime_does_not_inherit_corrected(tmp_path):
     cache = make(tmp_path, Clock())
     cache.put(PATH, INFO, corrected=True)
-    cache.put(PATH, replace(INFO, anime_id=INFO.anime_id + 1, guessed_name="Other"))
-    assert not cache.get(PATH, "Other").corrected
+    cache.put(PATH, replace(INFO, anime_id=INFO.anime_id + 1))
+    assert not cache.get(PATH, "Show").corrected
+
+
+def test_shows_in_one_directory_keep_their_own_entries(tmp_path):
+    cache = make(tmp_path)
+    cache.put(PATH, INFO, corrected=True)
+    cache.put("/anime/Show/Other - 05.mkv", replace(INFO, anime_id=8, guessed_name="Other"))
+    cache.save()
+
+    reread = make(tmp_path)
+    assert (reread.get(PATH, "Show").anime_id, reread.get(PATH, "Show").corrected) == (7, True)
+    assert reread.get(PATH, "Other").anime_id == 8
+
+
+def test_an_entry_stored_by_directory_moves_to_its_title(tmp_path):
+    file = tmp_path / "cache.json"
+    first = make(tmp_path)
+    first.put(PATH, INFO)
+    first.save()
+    entry = json.loads(file.read_text(encoding="utf-8"))[_key(PATH, "Show")]
+    file.write_text(json.dumps({os.path.dirname(PATH): entry}), encoding="utf-8")
+
+    reread = make(tmp_path)
+    assert reread.get(PATH, "Other") is None
+    assert reread.get(PATH, "Show").offset == 12
+    reread.save()
+    assert list(json.loads(file.read_text(encoding="utf-8"))) == [_key(PATH, "Show")]
 
 
 def test_saving_keeps_entries_written_by_a_parallel_run(tmp_path):
@@ -108,7 +134,7 @@ def test_saving_keeps_entries_written_by_a_parallel_run(tmp_path):
     second.put("/b/two.mkv", INFO)
     first.save()
     second.save()
-    assert set(json.loads((tmp_path / "cache.json").read_text())) == {"/a", "/b"}
+    assert set(json.loads((tmp_path / "cache.json").read_text())) == {_key("/a/x", "Show"), _key("/b/x", "Show")}
 
 
 def test_legacy_entry_is_migrated(tmp_path):
@@ -134,7 +160,7 @@ def test_legacy_entry_is_migrated(tmp_path):
     cache.save()
 
     saved = json.loads((tmp_path / "cache.json").read_text(encoding="utf-8"))
-    assert list(saved) == [os.path.dirname(PATH)]
+    assert list(saved) == [_key(PATH, "Show")]
     assert saved[_key(PATH, "Show")]["offset"] == 12
     assert "relative_progress" not in saved[_key(PATH, "Show")]
 
