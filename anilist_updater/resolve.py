@@ -2,12 +2,14 @@
 
 import logging
 import re
+from collections.abc import Callable
 from dataclasses import replace
 from typing import Any
 
 from .api import AniListClient, media_title
 from .errors import SkipUpdate
 from .models import AnimeInfo, FileInfo, Status
+from .release import fold_title
 
 log = logging.getLogger(__name__)
 
@@ -28,39 +30,101 @@ def _is_series_start(media: Media) -> bool:
     )
 
 
-def main_series(candidates: list[Media]) -> list[Media] | None:
+def _season_formats(media: Media) -> set[str]:
+    """The formats that count as seasons next to this one: shorts only in a series made of shorts."""
+    return MAIN_FORMATS if _is_series_start(media) else SEASON_FORMATS
+
+
+def _names(media: Media, title: str | None) -> bool:
+    folded = fold_title(title or "")
+    return any(folded in fold_title(name) for name in media["title"].values() if name)
+
+
+def _related(media: Media, relation: str, by_id: dict[int, Media]) -> list[Media]:
+    edges = media.get("relations", {}).get("edges", [])
+    return [by_id[e["node"]["id"]] for e in edges if e["relationType"] == relation and e["node"]["id"] in by_id]
+
+
+def _watching(media: Media) -> bool:
+    return (media.get("mediaListEntry") or {}).get("status") in {Status.CURRENT, Status.REPEATING}
+
+
+def _first_season(
+    node: Media,
+    by_id: dict[int, Media],
+    title: str,
+    formats: set[str],
+    stop: Callable[[Media], bool] | None = None,
+) -> Media:
+    """Walk back to the first season still named like the title; AniList may rank a later one first.
+
+    A prequel with another name ("Bleach" before "Bleach: Sennen Kessen-hen") or several to choose from end the walk,
+    and so does an entry that `stop` accepts. A movie or special in between is crossed.
+    """
+    season = cursor = node
+    visited = {node["id"]}
+    while not (stop and stop(season)):
+        prequels = [p for p in _related(cursor, "PREQUEL", by_id) if p["id"] not in visited]
+        named = [p for p in prequels if p["format"] in formats and _names(p, title)]
+        step = named or [p for p in prequels if p["format"] not in formats]
+        if len(step) != 1:
+            break
+        cursor = step[0]
+        visited.add(cursor["id"])
+        if cursor["format"] in formats:
+            season = cursor
+    return season
+
+
+def _next_sequel(sequels: list[Media], title: str | None, formats: set[str]) -> Media | None:
+    """The sequel to follow: a real season over a movie or special that also continues the story.
+
+    Several seasons are told apart by the title; if that doesn't, the chain ends rather than guess.
+    """
+    seasons = [s for s in sequels if s["format"] in formats]
+    if not seasons:
+        return sequels[0]
+    if len(seasons) > 1 and title:
+        seasons = [s for s in seasons if _names(s, title)] or seasons
+    return seasons[0] if len(seasons) == 1 else None
+
+
+def main_series(candidates: list[Media], title: str | None = None) -> list[Media] | None:
     """Order the main seasons by following SEQUEL relations from the first main TV/ONA.
 
     Args:
         candidates (list[Media]): Search results; a sequel missing from them ends the chain.
+        title (str | None): The searched title; the chain starts at the first season named like it, not at
+            the best result.
 
     Returns:
         list[Media] | None: The seasons in order, or None if there is no main series among them.
+            Without a full-length one, a series of shorts (TV_SHORT, short ONA) makes the chain.
     """
     by_id = {m["id"]: m for m in candidates}
-    node = next((m for m in candidates if _is_series_start(m)), None)
+    node = next((m for m in candidates if _is_series_start(m)), None) or next(
+        (m for m in candidates if m["format"] in SEASON_FORMATS), None
+    )
     if node is None:
         return None
+    formats = _season_formats(node)
+    if title:
+        node = _first_season(node, by_id, title, formats)
 
     series = [node]
     visited = {node["id"]}
     while True:
-        sequels = [
-            edge["node"]
-            for edge in node.get("relations", {}).get("edges", [])
-            if edge["relationType"] == "SEQUEL" and edge["node"]["id"] in by_id
-        ]
+        sequels = _related(node, "SEQUEL", by_id)
         if not sequels:
             break
 
-        # Prefer a real season over a movie or special that also continues the story.
-        sequel = max(sequels, key=lambda n: n["format"] in MAIN_FORMATS)
-        if sequel["id"] in visited:
+        sequel = _next_sequel(sequels, title, formats)
+        if sequel is None or sequel["id"] in visited:
             break
         visited.add(sequel["id"])
 
         node = by_id[sequel["id"]]
-        if node["format"] in MAIN_FORMATS:
+        if node["format"] in formats:
             series.append(node)
     return series
 
@@ -175,6 +239,8 @@ def resolve(client: AniListClient, file: FileInfo) -> AnimeInfo:
         SkipUpdate: If nothing matches the title, or an absolute episode fits no season.
     """
     formats = _formats(file)
+    # The fallbacks below search these again, so they share the first request
+    client.prefetch([(file.query, file.year), (file.title, file.year), (file.query, None)], formats)
     user_list, everything = client.search(file.query, file.year, formats)
     results = user_list or everything
     # "Show Season 2" can match only the specials of the second season
@@ -189,6 +255,11 @@ def resolve(client: AniListClient, file: FileInfo) -> AnimeInfo:
         raise SkipUpdate(f"Couldn't find an anime from this title! ({file.query}). Is it in your list?")
 
     first = _first(results, file)
+    seasons = _season_formats(first)
+    if not (file.season or file.part) and first["format"] in seasons:
+        # AniList may rank a later season first; the user's list can lack the ones between
+        by_id = {m["id"]: m for m in [*everything, *results]}
+        first = _first_season(first, by_id, file.title, seasons, _watching)
     if not (first.get("episodes") and file.episode > first["episodes"]):
         info = _to_info(first, file.episode, file)
         log.info("Final guessed anime: %s", info.anime_name)
@@ -199,8 +270,14 @@ def resolve(client: AniListClient, file: FileInfo) -> AnimeInfo:
 
     # The episode exceeds the season, so it is probably absolute. The user's list may lack some seasons.
     pools = [results] if results is everything else [results, everything]
+    if file.year:
+        # A year drops the earlier seasons of the chain, which the walk back needs
+        undated = client.search(file.query, None, formats)[1]
+        pools = [pool + [m for m in undated if m not in pool] for pool in pools]
+    # With a season or part the numbering goes on from that entry, not from the first season
+    title = None if file.season or file.part else file.title
     for pool in pools:
-        if located := locate_episode(main_series(pool), file.episode):
+        if located := locate_episode(main_series(pool, title), file.episode):
             season, relative = located
             info = _to_info(season, relative, file)
             log.info("Final guessed anime: %s", info.anime_name)

@@ -23,8 +23,28 @@ def test_main_series_stops_at_cycles_and_missing_sequels():
     assert [m["id"] for m in main_series([media(1, 12, sequel=99)])] == [1]
 
 
-def test_main_series_ignores_shorts():
-    assert main_series([media(1, 12, duration=3)]) is None
+def test_main_series_ignores_shorts_next_to_a_full_series():
+    short = media(1, 12, duration=3)
+    assert main_series([short]) == [short]
+    assert [m["id"] for m in main_series([short, SEASONS[0]])] == [1]
+    full = media(5, 12, sequel=6)
+    assert [m["id"] for m in main_series([media(6, 12, fmt="TV_SHORT", prequel=5), full])] == [5]
+
+
+def test_main_series_of_shorts_is_followed_across_a_movie():
+    s1 = media(1, 12, fmt="TV_SHORT", duration=12, sequel=2)
+    s2 = media(2, 12, fmt="TV_SHORT", duration=12, sequel=3, prequel=1)
+    movie = media(3, 1, fmt="MOVIE", duration=112, sequel=4, prequel=2)
+    s3 = media(4, 11, fmt="TV_SHORT", duration=12, prequel=3)
+    assert [m["id"] for m in main_series([s3, movie, s2, s1], "Show")] == [1, 2, 4]
+    info = resolve(FakeClient(everything=[s3, movie, s2, s1]), FileInfo("Show", 25))
+    assert (info.anime_id, info.episode) == (4, 1)
+
+
+def test_resolve_bare_title_of_shorts_goes_to_the_first_season():
+    s1 = media(1, 12, fmt="TV_SHORT", duration=2, sequel=2)
+    s2 = media(2, 12, fmt="TV_SHORT", duration=2, prequel=1)
+    assert resolve(FakeClient(everything=[s2, s1]), FileInfo("Show", 5)).anime_id == 1
 
 
 @pytest.mark.parametrize(
@@ -251,3 +271,109 @@ def test_resolve_absolute_episode_ignores_a_year_that_fits_one_season_only():
 
 def test_resolve_keeps_the_year_when_the_episode_fits():
     assert resolve(YearClient(), FileInfo("Show", 5, year=2023)).anime_id == 2
+
+
+class RankedClient(FakeClient):
+    """AniList ranks the last season first."""
+
+    def __init__(self, seasons):
+        super().__init__(everything=[seasons[-1], *seasons[:-1]])
+
+
+def test_resolve_absolute_episode_starts_at_the_first_season_not_the_best_result():
+    client = RankedClient([media(1, 12, sequel=2), media(2, 12, sequel=3, prequel=1), media(3, 12, prequel=2)])
+    assert [(r.anime_id, r.episode) for r in (resolve(client, FileInfo("Show", e)) for e in (15, 30))] == [
+        (2, 3),
+        (3, 6),
+    ]
+
+
+def _three(**entries):
+    return [
+        media(i, 12, sequel=i + 1 if i < 3 else None, prequel=i - 1 or None, entry=entries.get(f"s{i}"))
+        for i in (1, 2, 3)
+    ]
+
+
+def test_resolve_bare_title_goes_to_the_first_season_not_the_best_result():
+    info = resolve(RankedClient(_three()), FileInfo("Show", 5))
+    assert (info.anime_id, info.episode) == (1, 5)
+
+
+def test_resolve_bare_title_stops_at_the_season_being_watched():
+    current = {"status": "CURRENT", "progress": 4}
+    done = {"status": "COMPLETED", "progress": 12}
+    assert resolve(RankedClient(_three(s1=done, s2=done, s3=current)), FileInfo("Show", 5)).anime_id == 3
+    assert resolve(RankedClient(_three(s2=current)), FileInfo("Show", 5)).anime_id == 2
+
+
+def test_resolve_bare_title_walks_through_seasons_missing_from_the_list():
+    seasons = _three(s1={"status": "CURRENT", "progress": 4}, s3={"status": "PLANNING", "progress": 0})
+    client = FakeClient(user=[seasons[2], seasons[0]], everything=[seasons[2], seasons[1], seasons[0]])
+    assert resolve(client, FileInfo("Show", 5)).anime_id == 1
+
+
+def test_resolve_season_in_the_file_is_not_walked_back():
+    info = resolve(RankedClient(_three()), FileInfo("Show", 5, season=3))
+    assert (info.anime_id, info.episode) == (3, 5)
+
+
+def test_resolve_absolute_episode_counts_from_the_entry_the_file_names():
+    seasons = [media(1, 12, sequel=2), media(2, 12, sequel=3, prequel=1), media(3, 12, prequel=2)]
+    client = FakeClient(everything=seasons[1:])
+    info = resolve(client, FileInfo("Show", 13, season=2))
+    assert (info.anime_id, info.episode) == (3, 1)
+
+
+def test_main_series_does_not_walk_back_to_an_entry_with_another_name():
+    old = media(1, 12, sequel=2, title="Bleach")
+    new = media(2, 13, prequel=1, title="Bleach: Thousand-Year Blood War")
+    assert [m["id"] for m in main_series([new, old], "Bleach Thousand Year Blood War")] == [2]
+    assert [m["id"] for m in main_series([new, old], "Bleach")] == [1, 2]
+
+
+def test_main_series_stops_at_several_prequels():
+    a, b = media(1, 12, sequel=3), media(2, 12, sequel=3)
+    last = media(3, 12)
+    last["relations"]["edges"] = [{"relationType": "PREQUEL", "node": {"id": i, "format": "TV"}} for i in (1, 2)]
+    assert [m["id"] for m in main_series([last, a, b], "Show")] == [3]
+
+
+def test_main_series_picks_the_sequel_named_like_the_title():
+    first = media(1, 12, sequel=2, title="Show")
+    first["relations"]["edges"].append({"relationType": "SEQUEL", "node": {"id": 3, "format": "TV"}})
+    named, other = media(2, 12, prequel=1, title="Show 2"), media(3, 12, prequel=1, title="Other")
+    assert [m["id"] for m in main_series([first, other, named], "Show")] == [1, 2]
+    assert [m["id"] for m in main_series([first, other, named])] == [1]
+
+
+class UndatedClient(FakeClient):
+    """The year filter drops the first cour."""
+
+    def __init__(self):
+        super().__init__()
+        self.years = []
+
+    def search(self, title, year, formats):
+        self.years.append(year)
+        return ([], SEASONS[1:]) if year else ([], SEASONS)
+
+
+def test_resolve_year_that_drops_the_first_season_is_searched_without_it():
+    client = UndatedClient()
+    info = resolve(client, FileInfo("Show", 40, year=2023))
+    assert (info.anime_id, info.episode) == (3, 4)
+    assert client.years == [2023, None]
+
+
+def test_resolve_absolute_episode_does_not_count_a_movie_between_seasons():
+    movie = media(10, 1, fmt="MOVIE", sequel=2, prequel=1)
+    seasons = [media(1, 12, sequel=10), movie, media(2, 12, prequel=10)]
+    client = FakeClient(everything=seasons)
+    assert [(i.anime_id, i.episode) for i in (resolve(client, FileInfo("Show", e)) for e in (12, 13, 24))] == [
+        (1, 12),
+        (2, 1),
+        (2, 12),
+    ]
+    with pytest.raises(SkipUpdate):
+        resolve(client, FileInfo("Show", 25))
