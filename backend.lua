@@ -80,7 +80,11 @@ function M.call(action, fields, callback)
         for line in ((success and result and result.stderr) or ""):gmatch("[^\r\n]+") do
             msg.info(line)
         end
-        callback(decode(success, result))
+        local response = decode(success, result)
+        if response.message and response.kind ~= "cancelled" then
+            (response.kind == "error" and msg.error or msg.info)(response.message)
+        end
+        callback(response)
     end)
 end
 

@@ -56,8 +56,6 @@ local function ensure_info(callback)
         state.info = response.ok and response.info or nil
         if state.info then
             msg.info("Detected anime: " .. (state.info.anime_name or "?") .. " #" .. (state.info.episode or "?"))
-        else
-            msg.info(response.message or "No anime detected.")
         end
 
         local waiting = state.waiting

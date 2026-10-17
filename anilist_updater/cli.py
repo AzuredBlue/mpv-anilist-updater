@@ -45,10 +45,9 @@ def handle(request: dict[str, Any]) -> dict[str, Any]:
     try:
         outcome = _run(request)
     except SkipUpdate as e:
-        log.info("Skipped: %s", e)
         return {"ok": False, "kind": "skip", "message": str(e), "info": None}
     except Exception as e:
-        log.exception("Failed")
+        log.debug("Failed", exc_info=True)
         return {"ok": False, "kind": "error", "message": str(e) or type(e).__name__, "info": None}
 
     return {

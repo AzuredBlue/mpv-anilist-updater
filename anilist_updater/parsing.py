@@ -164,5 +164,7 @@ def parse_path(path: str) -> FileInfo:
         raise ParseError(f"Couldn't find title in filename '{filename}'! Guess result: {dict(guess)}")
 
     info = FileInfo(_compose_title(title, remaining, details, guess), episode, details.year, _media_format(guess))
-    log.info("Guessed: %s", info)
+    log.info(
+        "Guessed: %s - E%s %s", " ".join(filter(None, (info.title, info.media_format))), episode, info.year or ""
+    )
     return info
