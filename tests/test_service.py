@@ -13,14 +13,16 @@ ENTRY = {"status": "CURRENT", "progress": 4}
 class RecordingClient(FakeClient):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.saves, self.searches = [], 0
+        self.saves, self.scores, self.searches = [], [], 0
 
     def search(self, title, year, formats):
         self.searches += 1
         return super().search(title, year, formats)
 
-    def save_entry(self, anime_id, status=None, progress=None):
+    def save_entry(self, anime_id, status=None, progress=None, score=None):
         self.saves.append((anime_id, status, progress))
+        if score is not None:
+            self.scores.append(score)
         return {"status": status or "CURRENT", "progress": progress}
 
 
@@ -101,6 +103,35 @@ def test_correct_changes_id_episode_and_status(tmp_path):
 
     entry = make(tmp_path, client).cache.get(PATH, "Show")
     assert (entry.anime_id, entry.corrected, entry.info_for(5).episode) == (2, True, 7)
+
+
+def test_correct_score_alone_is_one_save_without_a_status(tmp_path):
+    client = RecordingClient(user=[media(1, 12, entry=ENTRY)])
+    service = make(tmp_path, client)
+    detected = service.info(PATH).info
+
+    outcome = service.correct(PATH, detected, Correction(1, score=8.5))
+    assert (client.saves, client.scores) == ([(1, None, None)], [8.5])
+    assert outcome.message.endswith("| Score: 8.5")
+    assert outcome.info.current_status == Status.CURRENT
+
+
+def test_correct_status_and_score_share_a_save(tmp_path):
+    client = RecordingClient(user=[media(1, 12, entry=ENTRY)])
+    service = make(tmp_path, client)
+    detected = service.info(PATH).info
+
+    outcome = service.correct(PATH, detected, Correction(1, status=Status.PAUSED, score=7))
+    assert (client.saves, client.scores) == ([(1, Status.PAUSED, None)], [7])
+    assert outcome.info.current_status == Status.PAUSED
+
+
+def test_correct_score_zero_clears_it(tmp_path):
+    client = RecordingClient(user=[media(1, 12, entry=ENTRY)])
+    service = make(tmp_path, client)
+    outcome = service.correct(PATH, service.info(PATH).info, Correction(1, score=0))
+    assert client.scores == [0]
+    assert outcome.message.endswith("| Score: cleared")
 
 
 def test_correct_without_changes_is_skipped(tmp_path):

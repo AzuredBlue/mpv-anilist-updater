@@ -1,9 +1,17 @@
--- The correction overlay: fix the detected anime, episode mapping and status.
+-- The correction overlay: fix the detected anime, episode mapping and status, and set the score.
 
 local M = {}
 
 local STATUSES = { "CURRENT", "PAUSED", "DROPPED", "COMPLETED", "REPEATING", "PLANNING" }
-local FIELDS = { "anime", "episode", "status" }
+local FIELDS = { "anime", "episode", "status", "score" }
+-- Everyone picks their own score system on AniList. The backend reports it, and scores are sent in it.
+local SCORE_FORMATS = {
+    POINT_100 = { max = 100, step = 5 },
+    POINT_10_DECIMAL = { max = 10, step = 0.5, decimal = true },
+    POINT_10 = { max = 10, step = 1 },
+    POINT_5 = { max = 5, step = 1 },
+    POINT_3 = { max = 3, step = 1, labels = { ":(", ":|", ":)" } },
+}
 -- Typing waits this long before searching, so a word costs about one request
 local DEBOUNCE = 0.4
 local MIN_QUERY = 2
@@ -22,11 +30,34 @@ local function escape(text)
     return (tostring(text):gsub("[\\{}]", { ["\\"] = "\\" .. JOINER, ["{"] = "\\{", ["}"] = "}" .. JOINER }))
 end
 
+local function score_format()
+    return SCORE_FORMATS[state.score_format or ""]
+end
+
+local function score_text()
+    local format = score_format()
+    if not format then
+        return state.score_error or (state.score_loading and "loading..." or "(needs a detected anime)")
+    elseif state.score == "" then
+        return "(not scored)"
+    end
+
+    local value = tonumber(state.score)
+    local text = string.format("%s / %g", state.score, format.max)
+    if not value then
+        return text
+    elseif value == 0 then
+        return text .. " (clears the score)"
+    end
+    return format.labels and format.labels[value] and (format.labels[value] .. " " .. text) or text
+end
+
 local function field_text(name)
     local text = {
         anime = state.query ~= "" and state.query or "(type a title, or paste an AniList URL/ID)",
         episode = state.episode ~= "" and state.episode or "(optional, relative episode)",
         status = STATUSES[state.status_index],
+        score = score_text(),
     }
     return text[name]
 end
@@ -64,7 +95,7 @@ local function render()
         )
 
     local lines = {}
-    local labels = { anime = "Anime", episode = "Corrected episode", status = "Status" }
+    local labels = { anime = "Anime", episode = "Corrected episode", status = "Status", score = "Score" }
     for index, name in ipairs(FIELDS) do
         lines[#lines + 1] = string.format(
             "{\\fs22}%s %s: %s",
@@ -97,7 +128,7 @@ local function render()
         "",
         table.concat(lines, "\\N"),
         "",
-        "{\\fs18}Type to search | Up/Down: pick result | Tab: next field | Left/Right: change status",
+        "{\\fs18}Type to search | Up/Down: pick result | Tab: next field | Left/Right: change status/score",
         "{\\fs18}Enter: submit | Esc: cancel | Ctrl+V: paste | Backspace: delete | Del: clear field",
     }, "\\N")
     osd:update()
@@ -177,6 +208,14 @@ local function append(text)
         state.query = state.query .. text
     elseif name == "episode" then
         state.episode = state.episode .. text:gsub("%D", "")
+    elseif name == "score" and score_format() then
+        -- the first key replaces the score read from AniList
+        local base = state.score_edited and state.score or ""
+        local typed = text:gsub(score_format().decimal and "[^%d.]" or "%D", "")
+        if base:find(".", 1, true) then
+            typed = typed:gsub("%.", "")
+        end
+        state.score, state.score_edited = (base .. typed):sub(1, 6), true
     end
     edited()
 end
@@ -187,6 +226,8 @@ local function backspace()
         state.query = state.query:gsub("[\1-\127\194-\244][\128-\191]*$", "")
     elseif name == "episode" then
         state.episode = state.episode:sub(1, -2)
+    elseif name == "score" and score_format() then
+        state.score, state.score_edited = state.score:sub(1, -2), true
     end
     edited()
 end
@@ -197,6 +238,8 @@ local function clear_field()
         state.query = ""
     elseif name == "episode" then
         state.episode = ""
+    elseif name == "score" and score_format() then
+        state.score, state.score_edited = "", true
     end
     edited()
 end
@@ -253,10 +296,28 @@ local function submit()
         end
     end
 
+    local score
+    local format = score_format()
+    if format and state.score_edited then
+        local text = state.score
+        local value = text == "" and 0 or tonumber(text)
+        if not text:match(format.decimal and "^%d*%.?%d?$" or "^%d*$") or not value or value > format.max then
+            return mp.osd_message(
+                string.format("Score must be 0-%g (%s).", format.max, format.decimal and "one decimal" or "whole number"),
+                3
+            )
+        end
+        -- Only what was typed is sent; a score read for the detected anime isn't copied to another one.
+        if picked.id ~= (state.info or {}).anime_id or value ~= state.score_loaded then
+            score = value
+        end
+    end
+
     local correction = {
         anime_id = picked.id,
         episode = episode,
         status = state.status_changed and STATUSES[state.status_index] or nil,
+        score = score,
     }
     local info, generation = state.info, deps.generation()
     close()
@@ -286,10 +347,17 @@ local function move_selection(step)
     end
 end
 
-local function cycle_status(step)
-    if FIELDS[state.focus] == "status" then
+-- Left and Right change the status or step the score, whichever field is focused.
+local function adjust(step)
+    local name = FIELDS[state.focus]
+    if name == "status" then
         state.status_index = (state.status_index + step - 1) % #STATUSES + 1
         state.status_changed = true
+        render()
+    elseif name == "score" and score_format() then
+        local format = score_format()
+        local value = math.max(0, math.min(format.max, (tonumber(state.score) or 0) + step * format.step))
+        state.score, state.score_edited = string.format("%g", value), true
         render()
     end
 end
@@ -309,9 +377,35 @@ local function status_index(status)
     return 1
 end
 
+-- The score is read for the detected anime in the user's score format.
+local function load_score(info)
+    if not (info and info.anime_id) then
+        return
+    end
+    local requested_by = state
+    state.score_loading = true
+    deps.backend.call("score", { anime_id = info.anime_id }, function(response)
+        if state ~= requested_by then
+            return
+        end
+        state.score_loading = false
+        local score = response.ok and response.score
+        if score and SCORE_FORMATS[score.format] then
+            state.score_format, state.score_loaded = score.format, score.value
+            if not state.score_edited then
+                state.score = score.value > 0 and string.format("%g", score.value) or ""
+            end
+        else
+            state.score_error = response.message or "Score unavailable."
+        end
+        render()
+    end)
+end
+
 -- Prefill what the user hasn't already typed.
 local function prefill(info)
     state.info, state.loading = info, false
+    load_score(info)
     if info then
         state.detected = info.anime_id
                 and { { id = info.anime_id, title = info.anime_name, status = info.current_status } }
@@ -339,6 +433,9 @@ local function open()
         episode = "",
         status_index = 1,
         status_changed = false,
+        score = "",
+        score_loaded = 0,
+        score_edited = false,
     }
 
     state.timer = mp.add_timeout(DEBOUNCE, refresh)
@@ -351,8 +448,8 @@ local function open()
     bind("Shift+TAB", function() move_focus(-1) end)
     bind("DOWN", function() move_selection(1) end)
     bind("UP", function() move_selection(-1) end)
-    bind("LEFT", function() cycle_status(-1) end)
-    bind("RIGHT", function() cycle_status(1) end)
+    bind("LEFT", function() adjust(-1) end)
+    bind("RIGHT", function() adjust(1) end)
     bind("BS", backspace, { repeatable = true })
     bind("DEL", clear_field)
     bind("Ctrl+v", paste)

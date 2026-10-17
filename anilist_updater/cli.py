@@ -18,6 +18,9 @@ def _run(request: dict[str, Any]) -> Outcome:
     client = AniListClient.from_token_file()
     if request["action"] == "search":
         return Outcome(results=client.search_titles(request["query"]))
+    if request["action"] == "score":
+        score_format, value = client.score(int(request["anime_id"]))
+        return Outcome(score={"format": score_format, "value": value})
 
     options = Options.from_dict(request.get("options"))
     service = Service(options, client, Cache(options))
@@ -60,6 +63,7 @@ def handle(request: dict[str, Any]) -> dict[str, Any]:
         "message": outcome.message,
         "info": outcome.info.to_dict() if outcome.info else None,
         "results": outcome.results,
+        "score": outcome.score,
     }
 
 

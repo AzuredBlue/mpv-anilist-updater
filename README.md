@@ -107,7 +107,7 @@ This script has 4 keybinds:
 - **Ctrl + a**: Manually updates your AniList with the current episode you are watching.
 - **Ctrl + b**: Opens the AniList page of the anime you are watching on your browser. Useful to see if it guessed the anime correctly.
 - **Ctrl + d**: Opens the folder where the current video is playing. Useful if you have "your own" anime library, and navigating through folders is a pain.
-- **c**: Opens a correction overlay for the current file. Type a title to search AniList and pick the right entry with Up/Down (or paste an AniList URL/ID), and optionally override the mapped episode (relative progress). Use `Ctrl+v` to paste.
+- **c**: Opens a correction overlay for the current file. Type a title to search AniList and pick the right entry with Up/Down (or paste an AniList URL/ID), optionally override the mapped episode (relative progress), change the status and set your score. Use `Ctrl+v` to paste.
 
 The script will automatically update your AniList when the video you are watching reaches 85% completion (or the percentage you set in the config file).
 
@@ -125,6 +125,8 @@ C script-binding correct_anime_id
 ## Correction
 
 In the case the script gets it wrong, there is a menu pressing `c` where you can search for the correct anime by title (or paste its AniList URL/ID) and set the episode. 
+
+The same menu can set your score. It shows your current score and uses the score system you picked on AniList (100 point, 10 point decimal, 10 point, 5 star or 3 smiley): type it or use Left/Right to step it, and clear it with `0`. Setting a score needs the AniList token.
 
 For example, if the file is "Attack On Titan - E48" you will need to paste the entry corresponding of that episode and the corresponding episode number for that season (Attack on Titan Third Season, Episode 11)
 

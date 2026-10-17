@@ -87,10 +87,15 @@ class Service:
         if episode_changed:
             changes.append(f"Mapped {info.absolute_episode}->{episode}")
 
-        if correction.status and correction.status != info.current_status:
-            changes.append(f"Status: {info.current_status or 'None'}->{correction.status}")
-            self.client.save_entry(correction.anime_id, correction.status)
-            info = replace(info, current_status=correction.status)
+        status = correction.status if correction.status != info.current_status else None
+        score = correction.score
+        if status or score is not None:
+            if status:
+                changes.append(f"Status: {info.current_status or 'None'}->{status}")
+            if score is not None:
+                changes.append(f"Score: {score:g}" if score else "Score: cleared")
+            self.client.save_entry(correction.anime_id, status, score=score)
+            info = replace(info, current_status=status or info.current_status)
 
         if not changes:
             raise SkipUpdate("No correction changes detected.")

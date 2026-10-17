@@ -71,12 +71,18 @@ class Correction:
     anime_id: int
     episode: int | None = None
     status: Status | None = None
+    score: float | None = None
 
     @classmethod
     def from_dict(cls, data: Mapping[str, Any]) -> Self:
-        """Build from request JSON."""
+        """Build from request JSON; the score is in the user's AniList score format, and 0 clears it."""
         status = data.get("status")
-        return cls(int(data["anime_id"]), data.get("episode") or None, Status(status.upper()) if status else None)
+        return cls(
+            int(data["anime_id"]),
+            data.get("episode") or None,
+            Status(status.upper()) if status else None,
+            data.get("score"),
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -104,8 +110,9 @@ class Options:
 
 @dataclass(frozen=True, slots=True)
 class Outcome:
-    """Result of an action: the new info for Lua, an optional message for the user, or search results."""
+    """Result of an action: the new info for Lua, an optional message for the user, search results or a score."""
 
     info: AnimeInfo | None = None
     message: str | None = None
     results: list[dict[str, Any]] | None = None
+    score: dict[str, Any] | None = None

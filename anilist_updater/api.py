@@ -63,11 +63,19 @@ _SEARCH_TITLES = """
 """
 
 _SAVE_ENTRY = """
-    mutation($mediaId: Int, $progress: Int, $status: MediaListStatus) {
-        SaveMediaListEntry(mediaId: $mediaId, progress: $progress, status: $status) {
+    mutation($mediaId: Int, $progress: Int, $status: MediaListStatus, $score: Float) {
+        SaveMediaListEntry(mediaId: $mediaId, progress: $progress, status: $status, score: $score) {
             status
             progress
         }
+    }
+"""
+
+_SCORE_FORMAT = "query { Viewer { mediaListOptions { scoreFormat } } }"
+
+_SCORE = """
+    query($id: Int, $format: ScoreFormat) {
+        Media(id: $id, type: ANIME) { mediaListEntry { score(format: $format) } }
     }
 """
 
@@ -182,10 +190,35 @@ class AniListClient:
                 raise SkipUpdate(f"Could not find anime with AniList ID {anime_id}.") from e
             raise
 
+    def score(self, anime_id: int) -> tuple[str, float]:
+        """Read the user's score for an anime, in the score format they chose on AniList.
+
+        Returns:
+            tuple[str, float]: The `ScoreFormat` (e.g. "POINT_10_DECIMAL") and the score, 0 when unscored.
+
+        Raises:
+            SkipUpdate: If there is no token.
+        """
+        if not self._token:
+            raise SkipUpdate("Scoring needs an AniList token.")
+        score_format = self._post(_SCORE_FORMAT, {})["Viewer"]["mediaListOptions"]["scoreFormat"]
+        media = self._post(_SCORE, {"id": anime_id, "format": score_format})["Media"]
+        return score_format, (media["mediaListEntry"] or {}).get("score") or 0
+
     def save_entry(
-        self, anime_id: int, status: Status | None = None, progress: int | None = None
+        self,
+        anime_id: int,
+        status: Status | None = None,
+        progress: int | None = None,
+        score: float | None = None,
     ) -> dict[str, Any]:
         """Create or update a list entry, sending only what is given.
+
+        Args:
+            anime_id (int): The AniList ID.
+            status (Status | None): The new status.
+            progress (int | None): The new progress.
+            score (float | None): The new score, in the user's score format.
 
         Returns:
             dict[str, Any]: The saved entry's `status` and `progress`.
@@ -195,6 +228,6 @@ class AniListClient:
         """
         if not self._token:
             raise AniListError("No AniList token found. Put it in anilistToken.txt.")
-        variables = {"mediaId": anime_id, "status": status, "progress": progress}
+        variables = {"mediaId": anime_id, "status": status, "progress": progress, "score": score}
         variables = {k: v for k, v in variables.items() if v is not None}
         return self._post(_SAVE_ENTRY, variables)["SaveMediaListEntry"]

@@ -29,6 +29,22 @@ def test_search_titles_flattens_matches(monkeypatch):
     assert (second["title"], second["status"]) == ("Blue Giant", None)
 
 
+def test_score_action_returns_the_format_and_value(monkeypatch):
+    monkeypatch.setattr(AniListClient, "from_token_file", lambda: AniListClient("token"))
+    monkeypatch.setattr(AniListClient, "score", lambda _self, _anime_id: ("POINT_10_DECIMAL", 8.5))
+    monkeypatch.setattr(cli, "Cache", lambda *_: pytest.fail("score must not load the cache"))
+
+    response = cli.handle({"action": "score", "anime_id": 1})
+    assert response["score"] == {"format": "POINT_10_DECIMAL", "value": 8.5}
+
+
+def test_score_without_a_token_is_a_skip(monkeypatch):
+    monkeypatch.setattr(AniListClient, "from_token_file", lambda: AniListClient(None))
+
+    response = cli.handle({"action": "score", "anime_id": 1})
+    assert (response["kind"], response["message"]) == ("skip", "Scoring needs an AniList token.")
+
+
 def test_search_action_returns_results_without_touching_the_cache(monkeypatch):
     monkeypatch.setattr(AniListClient, "from_token_file", lambda: AniListClient(None))
     monkeypatch.setattr(AniListClient, "search_titles", lambda _self, query: [{"id": 1, "title": query}])
