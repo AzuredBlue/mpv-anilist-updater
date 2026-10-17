@@ -85,7 +85,7 @@ SHOW_DETECTED_ANIME=no
 
 - **DIRECTORIES**: Comma or semicolon separated list of directories. If empty, the script works for every video. Example: `DIRECTORIES=D:/Torrents,D:/Anime`
   - Restricting directories only prevents the script from automatically updating AniList for files outside the specified directories. Manual actions using the keybinds (Ctrl+A, Ctrl+B, Ctrl+D, C) will still work for any file, regardless of its location.
-- **EXCLUDED_DIRECTORIES**: Comma or semicolon separated list of directories. Useful for ignoring paths inside directories from above. Example: EXCLUDED_DIRECTORIES = {"D:/Torrents/Watched", "D:/Anime/Planned"}
+- **EXCLUDED_DIRECTORIES**: Comma or semicolon separated list of directories. Useful for ignoring paths inside directories from above. Example: `EXCLUDED_DIRECTORIES=D:/Torrents/Watched,D:/Anime/Planned`
 - **UPDATE_PERCENTAGE**: Number (0-100). The percentage of the video you need to watch before it updates AniList automatically. Default is `85`.
 - **CACHE_REFRESH_RATE**: Number (hours). Controls how long normal cache entries remain valid. Default is `24`. Higher values are recommended if you do not plan on modifying your watching list through AniList, but it might cause your cache to go stale.
 - **CACHE_MODE**: `NORMAL`/`SLIDING`. Default is `NORMAL`.
