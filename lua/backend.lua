@@ -14,9 +14,13 @@ local entry_point = config.script_dir .. "anilistUpdater.py"
 
 -- ani-cli plays remote streams, so the filename means nothing and the media title is used instead.
 -- It names them with --force-media-title="<title> Episode <n>" on the command line.
+function M.is_stream()
+    return (mp.get_property("path") or ""):match("^%a+://") ~= nil
+end
+
 function M.is_ani_cli()
     local title = mp.get_property("options/force-media-title") or ""
-    return (mp.get_property("path") or ""):match("^%a+://") ~= nil
+    return M.is_stream()
         and mp.get_property_bool("option-info/force-media-title/set-from-commandline", false)
         and title:find("Episode %d[%d.]*$") ~= nil
 end

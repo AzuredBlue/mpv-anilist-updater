@@ -140,7 +140,6 @@ local directories = parse_directories(options.DIRECTORIES)
 local excluded = parse_directories(options.EXCLUDED_DIRECTORIES)
 
 M.options = options
-M.update_percentage = options.UPDATE_PERCENTAGE
 
 M.python_options = {}
 for _, default in ipairs(DEFAULTS) do

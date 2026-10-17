@@ -12,6 +12,8 @@ local state = {
     fetching = false,
 }
 
+local progress_timer
+
 local function osd(text, seconds)
     if not silent then
         mp.osd_message(text, seconds or 3)
@@ -89,6 +91,7 @@ local function update_anilist(manual)
         backend.call("update", { info = info }, function(result)
             if result.ok and result.info and generation == state.generation then
                 state.info = result.info
+                progress_timer:kill()
             end
             notify(result, manual)
         end)
@@ -122,17 +125,16 @@ local function open_folder()
     local path = mp.get_property("path")
     if not path then
         return msg.warn("No file is currently playing.")
-    elseif path:match("^%a+://") then
+    elseif backend.is_stream() then
         return mp.osd_message("Not a local file.", 2)
     end
     open(path:match("(.+)[/\\]") or mp.get_property("working-directory"), true)
 end
 
 -- Update once the video is far enough along. percent-pos doesn't move while paused.
-local progress_timer
 progress_timer = mp.add_periodic_timer(1, function()
     local percent = mp.get_property_number("percent-pos")
-    if percent and percent >= config.update_percentage then
+    if percent and percent >= config.options.UPDATE_PERCENTAGE then
         progress_timer:kill()
         update_anilist(false)
     end
@@ -146,7 +148,7 @@ mp.register_event("file-loaded", function()
 
     if not backend.is_ani_cli() then
         local path = backend.get_path()
-        if not path or (mp.get_property("path") or ""):match("^%a+://") or not config.is_eligible(path) then
+        if not path or backend.is_stream() or not config.is_eligible(path) then
             return
         end
     end
