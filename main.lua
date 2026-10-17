@@ -75,8 +75,8 @@ local function update_anilist(manual)
         if not info then
             if response and response.kind ~= "cancelled" and response.message then
                 notify(response, manual)
-            else
-                osd("Error: Anime info not loaded yet.")
+            elseif manual then
+                mp.osd_message("Error: Anime info not loaded yet.", 3)
             end
             return
         end
@@ -91,11 +91,12 @@ local function update_anilist(manual)
     end)
 end
 
-local function open(target)
+local function open(target, folder)
     local platform = mp.get_property("platform")
     local args = { "xdg-open", target }
     if platform == "windows" then
-        args = { "cmd", "/c", "start", "", target }
+        -- start would read & and ^ in a folder name as cmd syntax
+        args = folder and { "explorer", target } or { "cmd", "/c", "start", "", target }
     elseif platform == "darwin" then
         args = { "open", target }
     end
@@ -108,7 +109,7 @@ local function launch_anilist()
             osd('Opening AniList for "' .. (info.anime_name or "?") .. '"')
             open("https://anilist.co/anime/" .. info.anime_id)
         else
-            osd("Error: Anime info not loaded yet.")
+            mp.osd_message("Error: Anime info not loaded yet.", 3)
         end
     end)
 end
@@ -117,8 +118,10 @@ local function open_folder()
     local path = mp.get_property("path")
     if not path then
         return msg.warn("No file is currently playing.")
+    elseif path:match("^%a+://") then
+        return mp.osd_message("Not a local file.", 2)
     end
-    open(path:match("(.+)[/\\]") or mp.get_property("working-directory"))
+    open(path:match("(.+)[/\\]") or mp.get_property("working-directory"), true)
 end
 
 -- Update once the video is far enough along. percent-pos doesn't move while paused.
