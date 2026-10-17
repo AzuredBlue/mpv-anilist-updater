@@ -1,5 +1,6 @@
 """Minimal AniList GraphQL client on the standard library."""
 
+import http.client
 import json
 import logging
 import urllib.error
@@ -126,8 +127,10 @@ class AniListClient:
                 payload = json.load(response)
         except urllib.error.HTTPError as e:
             raise AniListError(_error_message(e), e.code) from e
-        except OSError as e:
+        except (OSError, http.client.HTTPException) as e:
             raise AniListError(f"Couldn't reach AniList: {e}") from e
+        except ValueError as e:
+            raise AniListError("AniList sent an unreadable response.") from e
 
         if errors := payload.get("errors"):
             raise AniListError(errors[0].get("message", "Unknown error"))
