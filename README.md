@@ -83,9 +83,9 @@ SHOW_DETECTED_ANIME=no
   - Restricting directories only prevents the script from automatically updating AniList for files outside the specified directories. Manual actions using the keybinds (Ctrl+A, Ctrl+B, Ctrl+D, C) will still work for any file, regardless of its location.
 - **EXCLUDED_DIRECTORIES**: Comma or semicolon separated list of directories. Useful for ignoring paths inside directories from above. Example: `EXCLUDED_DIRECTORIES=D:/Torrents/Watched,D:/Anime/Planned`
 - **UPDATE_PERCENTAGE**: Number (0-100). The percentage of the video you need to watch before it updates AniList automatically. Default is `85`.
-- **CACHE_REFRESH_RATE**: Number (hours). Controls how long normal cache entries remain valid. Default is `24`. Higher values are recommended if you do not plan on modifying your watching list through AniList, but it might cause your cache to go stale.
+- **CACHE_REFRESH_RATE**: Number (hours). Controls how long normal cache entries remain valid. Entries are kept per title, so shows sharing a folder don't overwrite each other. Default is `24`. Higher values are recommended if you do not plan on modifying your watching list through AniList, but it might cause your cache to go stale.
 - **CACHE_MODE**: `NORMAL`/`SLIDING`. Default is `NORMAL`.
-  - `NORMAL`: Cache entries expire after CACHE_REFRESH_RATE except for those corrected..
+  - `NORMAL`: Cache entries expire after CACHE_REFRESH_RATE except for those corrected, which last 28 days.
   - `SLIDING`: applies sliding expiration to all cache entries when they are read. Recommended with higher CACHE_REFRESH_RATE (more than a week for seasonals) values.
 - **SET_COMPLETED_TO_REWATCHING_ON_FIRST_EPISODE**: `yes`/`no`. If `yes`, when watching episode 1 of a completed anime, set it to rewatching and update progress. Default is `no`.
 - **UPDATE_PROGRESS_WHEN_REWATCHING**: `yes`/`no`. If `yes`, allow updating progress for anime set to rewatching. Default is `yes`.
@@ -96,7 +96,7 @@ SHOW_DETECTED_ANIME=no
 - **SHOW_DETECTED_ANIME**: `yes`/`no`. If `yes`, shows the detected anime and episode when a file loads, so a wrong match can be corrected before the update. Hidden by `SILENT_MODE`. Default is `no`.
 
 > [!NOTE]
-> All boolean options must be `yes` or `no` (not `true`/`false`).
+> Boolean options are `yes` or `no`, in any letter case.
 
 ## Usage
 
@@ -105,7 +105,7 @@ This script has 4 keybinds:
 - **Ctrl + a**: Manually updates your AniList with the current episode you are watching.
 - **Ctrl + b**: Opens the AniList page of the anime you are watching on your browser. Useful to see if it guessed the anime correctly.
 - **Ctrl + d**: Opens the folder where the current video is playing. Useful if you have "your own" anime library, and navigating through folders is a pain.
-- **c**: Opens a correction overlay for the current file. Type a title to search AniList and pick the right entry with Up/Down (or paste an AniList URL/ID), optionally override the mapped episode (relative progress), change the status and set your score. Use `Ctrl+v` to paste.
+- **c**: Opens the [correction menu](#correction) for the current file, to search for the right anime, fix the episode, and change the status or score. Use `Ctrl+v` to paste.
 
 The script will automatically update your AniList when the video you are watching reaches 85% completion (or the percentage you set in the config file).
 
@@ -122,37 +122,36 @@ C script-binding correct_anime_id
 
 ## Correction
 
-In the case the script gets it wrong, there is a menu pressing `c` where you can search for the correct anime by title (or paste its AniList URL/ID) and set the episode. 
+In the case the script gets it wrong, press `c` to open the correction menu. Type a title to search AniList (or paste an AniList URL/ID), pick the right result with Up/Down, and move between fields with Tab:
 
-The same menu can set your score. It shows your current score and uses the score system you picked on AniList (100 point, 10 point decimal, 10 point, 5 star or 3 smiley): type it or use Left/Right to step it, and clear it with `0`. Setting a score needs the AniList token.
+- **Anime**: the title search. Results show format, year, episode count and your list status.
+- **Corrected episode** (optional): the episode number within that entry, if it isn't the file's number.
+- **Status**: change your list status with Left/Right.
+- **Score**: shows your current score in the score system you picked on AniList (100 point, 10 point decimal, 10 point, 5 star or 3 smiley). Type it or use Left/Right to step it, and clear it with `0`.
 
-For example, if the file is "Attack On Titan - E48" you will need to paste the entry corresponding of that episode and the corresponding episode number for that season (Attack on Titan Third Season, Episode 11)
+Press Enter to apply and Esc to cancel. Setting a score needs the AniList token.
+
+For example, if the file is "Attack On Titan - E48", search for "Attack on Titan Season 3" and set the corrected episode to 11.
+
+The correction is remembered for the other files of that show in the folder.
 
 ## How It Works
 
-The script reads the title, episode, season, year and format from the file name with its own parser, written for fansub and scene release names.
+The script reads the title, episode, season, part, year and format from the file name with its own parser, written for fansub and scene release names.
 
-If the file name starts with its episode or season, it has no title of its own, so the title comes from the folder it is in (or the one above it). If no folder has one, a leading `01 - Title` uses the text after the number.
+- If the file name has no title (`E12 - Welcome.mkv`), it comes from the folder. The season, part, year and format can also come from the folder (`Show/Season 2/`, `Show/OVA/`).
+- Extras (openings, endings, menus, `Extras` folders), `Season 00` files and decimal episodes like `05.5` are skipped, since AniList has no episode for them.
+- It then searches the title with its season and part, in your list first and then globally.
+- If the episode is higher than the season's episode count, it is treated as absolute numbering and the season is found by following the sequels from the first season.
 
-A season or format the file name doesn't give is read from its folder: `Show/Season 2/Show - 05.mkv` is season 2, and `Show/OVA/01.mkv` or `Show/Specials/01.mkv` are searched as OVAs or specials. Extras (openings, endings, menus, `Extras` folders) and `Season 00` files are skipped, since AniList has no episode for them.
-
-After that, it searches for the show both in your AniList and globally.
-
-If the torrent file has absolute numbering (only episode number), it will try to guess the season and episode by:
-
-1. From the first TV or ONA with duration > 21, attempt to build a list of sequels from the main series using relations from the API
-2. If the episode number is greater than all of those combined, it could've made a mistake or maybe the user doesn't have all necessary entries in the list, so it repeats this process with the global search from before.
-3. Once we have a filtered list of seasons in order, finding the episode is trivial.
-
-If it doesn't work properly, consider manually changing the episode number to the normal format, or updating that series manually.
+If it doesn't work properly, use the [correction menu](#correction) (`c`) to pick the right anime and episode.
 
 ---
 
-This script should work on most formats as long as the name is present in the file itself or the folder name:
+The title can be in the file name or in a folder name:
 
-`Boku no Hero Academia - 152 (1080p).mkv` will be detected as S7 E14 and updated accordingly.
-
-`E12 - Welcome [F1119374].mkv` will work if the folder that it is in has `86` in the name. If it has `86 Part 2` then it should be `Episode 1`
+- `Boku no Hero Academia - 152 (1080p).mkv` is detected as S7 E14 (absolute numbering).
+- `86/E12 - Welcome [F1119374].mkv` gets its title from the folder. In `86 Part 2/`, the same file is episode 1 of Part 2.
 
 To see which anime got detected, you can use `c`, `Ctrl+B` to launch the AniList page, or check mpv's console.
 
