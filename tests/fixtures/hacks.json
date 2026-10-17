@@ -1,0 +1,269 @@
+{
+  "H1 no country or language detection": {
+    "[Foobar] Sample Show - S01 (BD 1080p) [Dual-Audio] (Japanese, German, English Dubs) | Other Title (Season 1) (Part 1 + Part 2).mkv": [
+      "Sample Show",
+      1,
+      null,
+      null
+    ],
+    "[GM-Foo][国漫][某某传][Sample Chronicle][2026][17-20][AVC][GB][1080P]": [
+      "Sample Chronicle",
+      20,
+      2026,
+      null
+    ]
+  },
+  "H2 bare 3-4 digit episodes": {
+    "Sample Show - 152.mkv": [
+      "Sample Show",
+      152,
+      null,
+      null
+    ],
+    "Sample Show - 1100.mkv": [
+      "Sample Show",
+      1100,
+      null,
+      null
+    ],
+    "Sample/Season 2/05.mkv": [
+      "Sample Season 2",
+      5,
+      null,
+      null
+    ]
+  },
+  "H3 punctuation flattened": {
+    "[Foobar] Re:Sample S2 - 02 [1080p].mkv": [
+      "Re Sample Season 2",
+      2,
+      null,
+      null
+    ],
+    "[Foobar] Dr. Sample! - 12 END [1080p].mkv": [
+      "Dr Sample",
+      12,
+      null,
+      null
+    ],
+    "[Foobar] Sample Show wo! 3 - 05 [1080p].mkv": [
+      "Sample Show wo 3",
+      5,
+      null,
+      null
+    ]
+  },
+  "H4 dash-delimited Movie dropped": {
+    "[Foobar] Sample Show - Movie - 01 [1080p].mkv": [
+      "Sample Show",
+      1,
+      null,
+      null
+    ],
+    "Sample.Show.Movie.1080p.BDRip.x265-GRP.mkv": [
+      "Sample Show Movie",
+      1,
+      null,
+      null
+    ]
+  },
+  "H5 version suffix": {
+    "[Foobar] Sample Show E05v2 [1080p].mkv": [
+      "Sample Show",
+      5,
+      null,
+      null
+    ],
+    "[Foobar] Sample Show S2 - 05v2 (BD 1080p).mkv": [
+      "Sample Show Season 2",
+      5,
+      null,
+      null
+    ],
+    "[Foobar] Sample Show - S01E01 v2 (WEB 1080p).mkv": [
+      "Sample Show",
+      1,
+      null,
+      null
+    ],
+    "[Foobar] Sample Show - 01V2 (1080p).mkv": [
+      "Sample Show",
+      1,
+      null,
+      null
+    ]
+  },
+  "H6 number after a season marker": {
+    "[Foobar] Sample Show S2 02 [1080p].mkv": [
+      "Sample Show Season 2",
+      2,
+      null,
+      null
+    ],
+    "[Foobar] Sample Show Season 2 - 03 [1080p].mkv": [
+      "Sample Show Season 2",
+      3,
+      null,
+      null
+    ]
+  },
+  "H7 decimal episodes are skipped": {
+    "Sample Show Episode 5.5": "error",
+    "[Foobar] Sample Show - 05.5 [1080p].mkv": "error",
+    "[Foobar] Sample Show - 05 [BD 1080p FLAC 2.0].mkv": [
+      "Sample Show",
+      5,
+      null,
+      null
+    ],
+    "Sample.Show.S01E03.1080p.WEB-DL.DDP5.1.H.265-GRP.mkv": [
+      "Sample Show",
+      3,
+      null,
+      null
+    ]
+  },
+  "H8 numbers inside the title": {
+    "[Foobar] Gate Sample 0 - 01 [1080p].mkv": [
+      "Gate Sample 0",
+      1,
+      null,
+      null
+    ],
+    "[Foobar] Neko 1-2 E3 [1080p].mkv": [
+      "Neko 1 2",
+      3,
+      null,
+      null
+    ],
+    "[Foobar] 86 SAMPLE-SIX - 13 [1080p].mkv": [
+      "86 SAMPLE SIX",
+      13,
+      null,
+      null
+    ],
+    "[Foobar] 5 Meters per Second.mkv": [
+      "5 Meters per Second",
+      1,
+      null,
+      null
+    ],
+    "[Foobar] Sample Show - 02-03 [1080p].mkv": [
+      "Sample Show",
+      3,
+      null,
+      null
+    ]
+  },
+  "H9 episode first means no title in the file": {
+    "Sample Show/E12 - Welcome [F1119374].mkv": [
+      "Sample Show",
+      12,
+      null,
+      null
+    ],
+    "[Foobar] Sample Show S01/S01E01-Episode 1 [59596368].mkv": [
+      "Sample Show",
+      1,
+      null,
+      null
+    ]
+  },
+  "H10 title from the folders": {
+    "Show Season 2/01.mkv": [
+      "Show Season 2",
+      1,
+      null,
+      null
+    ],
+    "Anime/Dr. Sample/Season 2/episode 03.mkv": [
+      "Dr Sample Season 2",
+      3,
+      null,
+      null
+    ],
+    "86/E05 - Welcome.mkv": [
+      "86",
+      5,
+      null,
+      null
+    ]
+  },
+  "H11 OVA and ONA": {
+    "[Foobar] Some Show OVA - 02 [720p].mkv": [
+      "Some Show",
+      2,
+      null,
+      "OVA"
+    ],
+    "[Foobar] Some Show ONA - 03 [720p].mkv": [
+      "Some Show",
+      3,
+      null,
+      "ONA"
+    ]
+  },
+  "H12 a year is never a season": {
+    "[Foobar] Sample Show (2009) - 12 [BD 1080p].mkv": [
+      "Sample Show",
+      12,
+      2009,
+      null
+    ],
+    "[Foobar] Sample Show (2019) S02E05 [1080p].mkv": [
+      "Sample Show Season 2",
+      5,
+      2019,
+      null
+    ]
+  },
+  "H13 part in the episode title": {
+    "Sample Show S06E06 Encounter, Part 2.mkv": [
+      "Sample Show Season 6",
+      6,
+      null,
+      null
+    ],
+    "[Foobar] Sample Show Part 2 - S02E05.mkv": [
+      "Sample Show Season 2 Part 2",
+      5,
+      null,
+      null
+    ]
+  },
+  "H14 paths": {
+    "D:\\Anime\\86 Sample-Six\\E12 - Welcome [F1119374].mkv": [
+      "86 Sample Six",
+      12,
+      null,
+      null
+    ],
+    "03.mkv": "error"
+  },
+  "H15 stream titles": {
+    "Sample Show Episode 5": [
+      "Sample Show",
+      5,
+      null,
+      null
+    ],
+    "Sample Show (Dub) Episode 5": [
+      "Sample Show",
+      5,
+      null,
+      null
+    ],
+    "Sample Show Season 2 Episode 3": [
+      "Sample Show Season 2",
+      3,
+      null,
+      null
+    ],
+    "Sample Film. Episode 1": [
+      "Sample Film",
+      1,
+      null,
+      null
+    ]
+  }
+}
