@@ -1,4 +1,5 @@
 anilistToken.txt
 cache.json
 __pycache__
-.vscode
+.vscode.pytest_cache
+.ruff_cache

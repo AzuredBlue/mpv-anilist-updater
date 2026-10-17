@@ -43,3 +43,7 @@ fixable = ["ALL"]
 
 [lint.pydocstyle]
 convention = "google"
+
+[lint.per-file-ignores]
+"tests/*" = ["D", "ANN", "assert", "magic-value-comparison", "no-self-use", "import-private-name", "too-many-arguments", "unused-method-argument"]
+"anilist_updater/errors.py" = ["error-suffix-on-exception-name"]

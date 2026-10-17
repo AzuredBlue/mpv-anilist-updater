@@ -1,0 +1,123 @@
+import pytest
+
+from anilist_updater.errors import SkipUpdate
+from anilist_updater.models import FileInfo, Status
+from anilist_updater.resolve import locate_episode, main_series, refresh, resolve
+
+
+def media(anime_id, episodes, *, fmt="TV", sequel=None, duration=24, status="FINISHED", entry=None):
+    edges = [{"relationType": "SEQUEL", "node": {"id": sequel, "format": "TV"}}] if sequel else []
+    return {
+        "id": anime_id,
+        "idMal": anime_id + 1000,
+        "title": {"romaji": f"Show {anime_id}", "english": None},
+        "episodes": episodes,
+        "duration": duration,
+        "format": fmt,
+        "status": status,
+        "mediaListEntry": entry,
+        "relations": {"edges": edges},
+    }
+
+
+SEASONS = [media(1, 12, sequel=2), media(2, 24, sequel=3), media(3, None, status="RELEASING")]
+
+
+class FakeClient:
+    def __init__(self, user=(), everything=(), by_id=None):
+        self.user, self.everything, self.by_id = list(user), list(everything), by_id or {}
+
+    def search(self, title, year, formats):
+        return self.user, self.everything
+
+    def media_by_id(self, anime_id):
+        if anime_id not in self.by_id:
+            raise SkipUpdate("missing")
+        return self.by_id[anime_id]
+
+
+def test_main_series_follows_sequels_in_order():
+    shuffled = [SEASONS[0], SEASONS[2], SEASONS[1]]
+    assert [m["id"] for m in main_series(shuffled)] == [1, 2, 3]
+
+
+def test_main_series_skips_movies_but_keeps_following():
+    movie = media(10, 1, fmt="MOVIE", sequel=2)
+    first = media(1, 12, sequel=10)
+    assert [m["id"] for m in main_series([first, movie, SEASONS[1]])] == [1, 2]
+
+
+def test_main_series_stops_at_cycles_and_missing_sequels():
+    looping = [media(1, 12, sequel=2), media(2, 12, sequel=1)]
+    assert [m["id"] for m in main_series(looping)] == [1, 2]
+    assert [m["id"] for m in main_series([media(1, 12, sequel=99)])] == [1]
+
+
+def test_main_series_ignores_shorts():
+    assert main_series([media(1, 12, duration=3)]) is None
+
+
+@pytest.mark.parametrize(
+    ("absolute", "season", "relative"),
+    [(1, 1, 1), (12, 1, 12), (13, 2, 1), (36, 2, 24), (37, 3, 1), (200, 3, 164)],
+)
+def test_locate_episode(absolute, season, relative):
+    found, episode = locate_episode(SEASONS, absolute)
+    assert (found["id"], episode) == (season, relative)
+
+
+def test_locate_episode_past_known_seasons():
+    assert locate_episode(SEASONS[:2], 37) is None
+    assert locate_episode(None, 1) is None
+
+
+def test_resolve_prefers_user_list_and_reads_entry():
+    entry = {"status": "CURRENT", "progress": 3}
+    client = FakeClient(user=[media(1, 12, entry=entry)], everything=[media(9, 12)])
+    info = resolve(client, FileInfo("Show", 4))
+    assert (info.anime_id, info.episode, info.current_progress, info.current_status) == (1, 4, 3, Status.CURRENT)
+    assert (info.guessed_name, info.absolute_episode, info.mal_id) == ("Show", 4, 1001)
+
+
+def test_resolve_absolute_episode_across_seasons():
+    client = FakeClient(user=SEASONS)
+    info = resolve(client, FileInfo("Show", 15))
+    assert (info.anime_id, info.episode, info.absolute_episode) == (2, 3, 15)
+
+
+def test_resolve_falls_back_to_global_when_user_list_lacks_seasons():
+    client = FakeClient(user=SEASONS[:1], everything=SEASONS)
+    assert resolve(client, FileInfo("Show", 15)).anime_id == 2
+
+
+def test_resolve_nothing_found():
+    with pytest.raises(SkipUpdate, match="Couldn't find"):
+        resolve(FakeClient(), FileInfo("Nope", 1))
+
+
+def test_resolve_absolute_episode_out_of_range():
+    with pytest.raises(SkipUpdate, match="No valid seasons"):
+        resolve(FakeClient(user=SEASONS[:2]), FileInfo("Show", 99))
+
+
+def test_refresh_fills_episode_count_and_keeps_progress_without_entry():
+    client = FakeClient(by_id={1: media(1, 12)})
+    base = resolve(
+        FakeClient(user=[media(1, None, entry={"status": "CURRENT", "progress": 2})]), FileInfo("Show", 3)
+    )
+    refreshed = refresh(client, base)
+    assert (refreshed.total_episodes, refreshed.current_progress, refreshed.current_status) == (
+        12,
+        2,
+        Status.CURRENT,
+    )
+
+
+def test_refresh_to_another_anime_drops_old_progress():
+    client = FakeClient(by_id={2: media(2, 24)})
+    base = resolve(
+        FakeClient(user=[media(1, 12, entry={"status": "CURRENT", "progress": 2})]), FileInfo("Show", 3)
+    )
+    switched = refresh(client, base, 2)
+    assert (switched.anime_id, switched.current_progress, switched.current_status) == (2, None, None)
+    assert switched.mal_id == 1002
