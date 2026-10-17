@@ -96,7 +96,7 @@ SHOW_DETECTED_ANIME=no
 - **SHOW_DETECTED_ANIME**: `yes`/`no`. If `yes`, shows the detected anime and episode when a file loads, so a wrong match can be corrected before the update. Hidden by `SILENT_MODE`. Default is `no`.
 
 > [!NOTE]
-> Boolean options are `yes` or `no`, in any letter case.
+> All boolean options must be `yes` or `no` (not `true`/`false`).
 
 ## Usage
 
