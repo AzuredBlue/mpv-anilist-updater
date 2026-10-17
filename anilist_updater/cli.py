@@ -40,6 +40,10 @@ def _run(request: dict[str, Any]) -> Outcome:
             raise ValueError(f"Unknown action: {action}")
 
 
+def _failure(kind: str, message: str) -> dict[str, Any]:
+    return {"ok": False, "kind": kind, "message": message, "info": None}
+
+
 def handle(request: dict[str, Any]) -> dict[str, Any]:
     """Run a request and describe the result.
 
@@ -52,10 +56,10 @@ def handle(request: dict[str, Any]) -> dict[str, Any]:
     try:
         outcome = _run(request)
     except SkipUpdate as e:
-        return {"ok": False, "kind": "skip", "message": str(e), "info": None}
+        return _failure("skip", str(e))
     except Exception as e:
         log.debug("Failed", exc_info=True)
-        return {"ok": False, "kind": "error", "message": str(e) or type(e).__name__, "info": None}
+        return _failure("error", str(e) or type(e).__name__)
 
     return {
         "ok": True,
@@ -75,7 +79,7 @@ def main() -> None:
     try:
         request = json.loads(sys.stdin.buffer.read())
     except ValueError:
-        response = {"ok": False, "kind": "error", "message": "Invalid request.", "info": None}
+        response = _failure("error", "Invalid request.")
     else:
         response = handle(request)
     sys.stdout.buffer.write(json.dumps(response, ensure_ascii=False).encode())

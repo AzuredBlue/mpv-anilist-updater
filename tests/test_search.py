@@ -1,3 +1,6 @@
+import io
+import json
+
 import pytest
 
 from anilist_updater import cli
@@ -53,3 +56,16 @@ def test_search_action_returns_results_without_touching_the_cache(monkeypatch):
     response = cli.handle({"action": "search", "query": "aoashi"})
     assert response["ok"]
     assert response["results"] == [{"id": 1, "title": "aoashi"}]
+
+
+def test_invalid_request_is_an_error(monkeypatch):
+    stdout = io.BytesIO()
+    monkeypatch.setattr(cli.sys, "stdin", type("In", (), {"buffer": io.BytesIO(b"{nope")})())
+    monkeypatch.setattr(cli.sys, "stdout", type("Out", (), {"buffer": stdout})())
+    cli.main()
+    assert json.loads(stdout.getvalue()) == {
+        "ok": False,
+        "kind": "error",
+        "message": "Invalid request.",
+        "info": None,
+    }
