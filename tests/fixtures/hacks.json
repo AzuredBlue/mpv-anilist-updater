@@ -265,5 +265,237 @@
       null,
       null
     ]
+  },
+  "H16 unpadded episode ending the title": {
+    "[Foobar]_Sample_Show_10_(1280x720_Blu-ray_FLAC)_[EF6182CC].mkv": [
+      "Sample Show",
+      10,
+      null,
+      null
+    ],
+    "[Foobar] Sample Show 25 [BDRip 1920x1080 HEVC FLAC].mkv": [
+      "Sample Show",
+      25,
+      null,
+      null
+    ],
+    "Anime/Sample Show/Sample Show 12.mkv": [
+      "Sample Show",
+      12,
+      null,
+      null
+    ],
+    "[Foobar] Sample Show 01 END.mkv": [
+      "Sample Show",
+      1,
+      null,
+      null
+    ],
+    "[Foobar] Sample Detective Movie 26 [1080p].mkv": [
+      "Sample Detective Movie 26",
+      1,
+      null,
+      null
+    ],
+    "[Foobar] Sample Show 0 [1080p].mkv": [
+      "Sample Show 0",
+      1,
+      null,
+      null
+    ],
+    "[Foobar] 86 [BD 1080p].mkv": "error"
+  },
+  "H17 episode written Ep. or 2x05": {
+    "[Foobar] Sample Show - Ep. 05 [1080p].mkv": [
+      "Sample Show",
+      5,
+      null,
+      null
+    ],
+    "Sample Show 2x05.mkv": [
+      "Sample Show Season 2",
+      5,
+      null,
+      null
+    ],
+    "Sample Show - 1x01 - Name.mkv": [
+      "Sample Show",
+      1,
+      null,
+      null
+    ],
+    "[Foobar] Sample!!x2 Show - 01 [1080p].mkv": [
+      "Sample x2 Show",
+      1,
+      null,
+      null
+    ]
+  },
+  "H18 discs are not part of the title": {
+    "Sample Show Vol.1.mkv": [
+      "Sample Show",
+      1,
+      null,
+      null
+    ],
+    "Anime/Sample Show/Disc 1/01.mkv": [
+      "Sample Show",
+      1,
+      null,
+      null
+    ]
+  },
+  "H19 bracketed extras and specials": {
+    "[Foobar] Sample Show [Menu01][Ma10p_1080p][x265_flac].mkv": "error",
+    "[Foobar] Sample Show [CM01][Ma10p_1080p][x265_flac].mkv": "error",
+    "[Foobar]_Sample_Show_Play_All_(1280x720_Blu-ray_FLAC)_[ACF5D94A].mkv": "error",
+    "[Foobar] Sample Show [SP03][Ma10p_1080p][x265_flac].mkv": [
+      "Sample Show",
+      3,
+      null,
+      "SPECIAL"
+    ],
+    "[Foobar] Sample Show [TVSP][Ma10p_1080p][x265_aac].mkv": [
+      "Sample Show",
+      1,
+      null,
+      "SPECIAL"
+    ]
+  },
+  "H20 folders that name a kind of file": {
+    "Anime/Sample Show/Specials/01.mkv": [
+      "Sample Show",
+      1,
+      null,
+      "SPECIAL"
+    ],
+    "Anime/Sample Show/OVA/Sample Show - 02.mkv": [
+      "Sample Show",
+      2,
+      null,
+      "OVA"
+    ],
+    "Anime/Sample Show/Season 00/01.mkv": "error",
+    "Anime/Sample Show/Extras/Sample Show - 01.mkv": "error",
+    "Anime/Sample Show (TV + OVA)/Sample Show - 01.mkv": [
+      "Sample Show",
+      1,
+      null,
+      null
+    ]
+  },
+  "H21 native and Latin words in one title": {
+    "[Foobar] Re:ゼロから始める異世界生活 2nd season - 01 (AT-X 1280x720 x264 AAC).mp4": [
+      "Re ゼロから始める異世界生活 2nd season",
+      1,
+      null,
+      null
+    ],
+    "[Foobar] 标题 Sample Show - 05 [1080p].mkv": [
+      "Sample Show",
+      5,
+      null,
+      null
+    ]
+  },
+  "H22 only x.5 is a decimal episode": {
+    "[Foobar] Sample Show - 01 - 5.1 Surround.mkv": [
+      "Sample Show",
+      1,
+      null,
+      null
+    ]
+  },
+  "H23 title and season in brackets": {
+    "[Foobar][Sample Show S2][13][1080p].mp4": [
+      "Sample Show Season 2",
+      13,
+      null,
+      null
+    ],
+    "[Foobar] [Sample Show] - 01 [1080p][Multiple Subtitle].mkv": [
+      "Sample Show",
+      1,
+      null,
+      null
+    ],
+    "Sample Show 2nd Season 13.mkv": [
+      "Sample Show 2nd Season",
+      13,
+      null,
+      null
+    ]
+  },
+  "H24 leading number, title in the folder": {
+    "Anime/Sample Show/01. Welcome.mkv": [
+      "Sample Show",
+      1,
+      null,
+      null
+    ],
+    "Anime/Sample Show/05 Welcome.mkv": [
+      "Sample Show",
+      5,
+      null,
+      null
+    ]
+  },
+  "H25 syllable apostrophes": {
+    "[Foobar] Sample Ren'ai Show - 01 [1080p].mkv": [
+      "Sample Renai Show",
+      1,
+      null,
+      null
+    ],
+    "[Foobar] Sample Show' - 01 [1080p].mkv": [
+      "Sample Show'",
+      1,
+      null,
+      null
+    ]
+  },
+  "H26 season from the parent folder": {
+    "Anime/Sample Show/Season 2/[Foobar] Sample Show - 05 [1080p].mkv": [
+      "Sample Show Season 2",
+      5,
+      null,
+      null
+    ],
+    "Anime/Sample Show S2/[Foobar] Sample Show - 05 [1080p].mkv": [
+      "Sample Show Season 2",
+      5,
+      null,
+      null
+    ],
+    "Anime/Other Show S2/[Foobar] Sample Show - 05 [1080p].mkv": [
+      "Sample Show",
+      5,
+      null,
+      null
+    ],
+    "Anime/Sample Show/Season 2/[Foobar] Sample Show 2nd Season - 05 [1080p].mkv": [
+      "Sample Show 2nd Season",
+      5,
+      null,
+      null
+    ],
+    "Anime/Sample Show/Season 2/[Foobar] Sample Show - Sample Arc - 05 [1080p].mkv": [
+      "Sample Show Sample Arc",
+      5,
+      null,
+      null
+    ],
+    "Anime/Other/Season 2/[Foobar] Sample Show - 05 [1080p].mkv": [
+      "Sample Show",
+      5,
+      null,
+      null
+    ],
+    "[Foobar] 009 Sample Cyborg [BD].mkv": [
+      "009 Sample Cyborg",
+      1,
+      null,
+      null
+    ]
   }
 }

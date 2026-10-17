@@ -110,6 +110,21 @@ def _nth_season(client: AniListClient, file: FileInfo, formats: list[str]) -> An
     return None
 
 
+def _absolute_from_base(client: AniListClient, file: FileInfo) -> AnimeInfo | None:
+    """Count from the first season when a folder's season doesn't fit the episode ("Show S3/Show - 38").
+
+    An episode that fits the first season could belong to any season, so only a remapped one is taken.
+    """
+    if not file.base_title:
+        return None
+    log.info("Episode %s doesn't fit %s, trying the title without its folder season", file.episode, file.title)
+    try:
+        info = resolve(client, replace(file, title=file.base_title, base_title=None))
+    except SkipUpdate:
+        return None
+    return replace(info, guessed_name=file.title) if info.episode != file.episode else None
+
+
 def resolve(client: AniListClient, file: FileInfo) -> AnimeInfo:
     """Search AniList for a file's anime, preferring the user's list.
 
@@ -129,6 +144,8 @@ def resolve(client: AniListClient, file: FileInfo) -> AnimeInfo:
         if info := _nth_season(client, file, formats):
             log.info("Season %s found by counting sequels: %s", file.title, info.anime_name)
             return info
+        if info := _absolute_from_base(client, file):
+            return info
         raise SkipUpdate(f"Couldn't find an anime from this title! ({file.title}). Is it in your list?")
 
     results = user_list or everything
@@ -136,6 +153,9 @@ def resolve(client: AniListClient, file: FileInfo) -> AnimeInfo:
     if not (first.get("episodes") and file.episode > first["episodes"]):
         info = _to_info(first, file.episode, file)
         log.info("Final guessed anime: %s", info.anime_name)
+        return info
+
+    if info := _absolute_from_base(client, file):
         return info
 
     # The episode exceeds the season, so it is probably absolute. The user's list may lack some seasons.

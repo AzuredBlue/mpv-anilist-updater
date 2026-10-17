@@ -11,7 +11,7 @@ from anilist_updater.release import parse_release
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 FIXTURES = json.loads((FIXTURES_DIR / "filenames.json").read_text(encoding="utf-8"))
-# One group per workaround for a guessit quirk, so a failure names the one that broke
+# One group per quirk of release names, so a failure names the one that broke
 HACKS = [
     pytest.param(path, expected, id=f"{hack.split()[0]}-{i}")
     for hack, cases in json.loads((FIXTURES_DIR / "hacks.json").read_text(encoding="utf-8")).items()
@@ -34,8 +34,15 @@ def test_parse_path(path, expected):
 
 
 @pytest.mark.parametrize(("path", "expected"), HACKS)
-def test_guessit_workarounds(path, expected):
+def test_release_name_quirks(path, expected):
     check(path, expected)
+
+
+def test_folder_season_keeps_the_plain_title_for_absolute_episodes():
+    info = parse_path("Anime/Sample Show Season 3/Sample Show - 38.mkv")
+    assert (info.title, info.base_title) == ("Sample Show Season 3", "Sample Show")
+    assert parse_path("Anime/Sample Show/Sample Show - 38.mkv").base_title is None
+    assert parse_path("Anime/Sample Show/[Foobar] Sample Show S3 - 05.mkv").base_title is None
 
 
 def test_windows_separators():

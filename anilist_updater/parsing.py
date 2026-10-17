@@ -5,24 +5,26 @@ from dataclasses import dataclass
 
 from .errors import ParseError
 from .models import FileInfo
-from .release import Release, parse_release
+from .release import Release, fold_title, parse_release
 
 log = logging.getLogger(__name__)
 
 
 @dataclass(slots=True)
 class _Details:
-    """Season, part and year, filled from the filename first and the folders after."""
+    """Season, part, year and format, filled from the filename first and the folders after."""
 
     season: int | None = None
     part: int | None = None
     year: int | None = None
+    media_format: str | None = None
 
     def fill_from(self, release: Release) -> None:
         if self.season is None:
             self.season = release.season
         self.part = self.part or release.part
         self.year = self.year or release.year
+        self.media_format = self.media_format or release.media_format
 
 
 def _title_from_folders(parts: list[str], details: _Details) -> str:
@@ -35,6 +37,31 @@ def _title_from_folders(parts: list[str], details: _Details) -> str:
         if release.title:
             return release.title
     return ""
+
+
+def _skip_reason(release: Release, parent: Release | None) -> str | None:
+    """Why the file isn't an episode, from its name or from a parent folder like "Extras" or "Season 00"."""
+    if release.skip or parent is None:
+        return release.skip
+    if parent.skip:
+        return parent.skip
+    if parent.season == 0 and not parent.title and not (release.media_format or parent.media_format):
+        return "a season 0 special"
+    return None
+
+
+def _season_folder(parts: list[str], parent: Release | None, release: Release) -> Release | None:
+    """The folder whose season and part apply to a file with a title of its own.
+
+    That is the show's folder ("Show S2/") or a bare "Season 2/" inside it. A folder for another show, or for an
+    arc the file names itself, says nothing about this file.
+    """
+    if parent is None or not release.title:
+        return None
+    show = parent
+    if not parent.title and len(parts) > 2:
+        show = parse_release(parts[-3], folder=True)
+    return parent if fold_title(show.title or "") == fold_title(release.title) else None
 
 
 def _compose_title(title: str, details: _Details) -> str:
@@ -63,10 +90,15 @@ def parse_path(path: str) -> FileInfo:
     name = parts[-1]
     release = parse_release(name)
     log.info("File name guess: %s -> %s", name, release)
-    if release.skip:
-        raise ParseError(f"'{name}' is {release.skip}. Not updating.")
+    parent = parse_release(parts[-2], folder=True) if len(parts) > 1 else None
+    if skip := _skip_reason(release, parent):
+        raise ParseError(f"'{name}' is {skip}. Not updating.")
 
-    details = _Details(release.season, release.part, release.year)
+    details = _Details(release.season, release.part, release.year, release.media_format)
+    if parent and not parent.title:  # "OVA/", "Specials/"
+        details.media_format = details.media_format or parent.media_format
+    if folder := _season_folder(parts, parent, release):
+        details.fill_from(folder)
     # An episode or season first ("E12 - Welcome") means the filename has no title of its own
     title = release.title or _title_from_folders(parts, details)
     if not title and release.episode_title:
@@ -76,7 +108,10 @@ def parse_path(path: str) -> FileInfo:
         raise ParseError(f"Couldn't find title in filename '{name}'! Guess result: {release}")
 
     episode = 1 if release.episode is None else release.episode
-    info = FileInfo(_compose_title(title, details), episode, details.year, release.media_format)
+    composed = _compose_title(title, details)
+    # A season taken from a folder may not fit the episode ("Show S3/Show - 38" is absolute), so keep the plain title
+    inherited = (details.season, details.part) != (release.season, release.part) and composed != title
+    info = FileInfo(composed, episode, details.year, details.media_format, title if inherited else None)
     log.info(
         "Guessed: %s - E%s %s", " ".join(filter(None, (info.title, info.media_format))), episode, info.year or ""
     )

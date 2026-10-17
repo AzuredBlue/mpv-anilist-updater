@@ -24,12 +24,13 @@ def _known(cls: type, data: Mapping[str, Any]) -> dict[str, Any]:
 
 @dataclass(frozen=True, slots=True)
 class FileInfo:
-    """What the path says about the media."""
+    """What the path says about the media; `base_title` is the title without a season taken from a folder."""
 
     title: str
     episode: int
     year: int | None = None
     media_format: str | None = None
+    base_title: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

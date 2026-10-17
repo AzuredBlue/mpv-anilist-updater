@@ -100,6 +100,42 @@ def test_resolve_counts_sequels_when_the_season_title_is_unknown():
     assert (info.anime_id, info.episode, info.guessed_name) == (2, 3, "Show Season 2")
 
 
+class SeasonClient(FakeClient):
+    """The season title finds only that season; the plain title finds the whole series."""
+
+    def search(self, title, year, formats):
+        return ([], [media(2, 12)]) if title == "Show Season 2" else ([], SEASONS)
+
+
+def test_resolve_folder_season_that_cannot_hold_the_episode_is_absolute():
+    info = resolve(SeasonClient(), FileInfo("Show Season 2", 15, base_title="Show"))
+    assert (info.anime_id, info.episode, info.absolute_episode, info.guessed_name) == (2, 3, 15, "Show Season 2")
+
+
+def test_resolve_folder_season_that_holds_the_episode_is_kept():
+    info = resolve(SeasonClient(), FileInfo("Show Season 2", 5, base_title="Show"))
+    assert (info.anime_id, info.episode) == (2, 5)
+
+
+class UnnamedSeasonsClient(FakeClient):
+    """AniList knows the show, but no title ending in a season number."""
+
+    def search(self, title, year, formats):
+        return ([], []) if "Season" in title else ([], self.everything)
+
+
+def test_resolve_folder_season_not_on_anilist_counts_from_the_first_season():
+    seasons = [media(1, 12, sequel=2), media(2, 12, sequel=3), media(3, 12)]
+    info = resolve(UnnamedSeasonsClient(everything=seasons), FileInfo("Show Season 3", 30, base_title="Show"))
+    assert (info.anime_id, info.episode, info.guessed_name) == (3, 6, "Show Season 3")
+
+
+def test_resolve_folder_season_not_on_anilist_is_not_guessed_from_the_first_season():
+    seasons = [media(1, 12, sequel=2), media(2, 12)]
+    with pytest.raises(SkipUpdate, match="Couldn't find"):
+        resolve(UnnamedSeasonsClient(everything=seasons), FileInfo("Show Season 5", 3, base_title="Show"))
+
+
 def test_resolve_season_beyond_the_known_ones_is_not_found():
     with pytest.raises(SkipUpdate, match="Couldn't find"):
         resolve(TitleClient(everything=SEASONS[:1]), FileInfo("Show Season 2", 1))

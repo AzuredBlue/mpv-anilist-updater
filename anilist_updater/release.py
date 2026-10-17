@@ -24,6 +24,7 @@ FORMATS = {
     "Special": "SPECIAL",
     "Specials": "SPECIAL",
     "SP": "SPECIAL",
+    "TVSP": "SPECIAL",
 }
 ROMAN = {"I": 1, "II": 2, "III": 3, "IV": 4, "V": 5, "VI": 6, "VII": 7, "VIII": 8, "IX": 9, "X": 10}
 CJK_NUMBERS = {digit: number for number, digit in enumerate("一二三四五六七八九十", 1)}
@@ -51,6 +52,8 @@ _HANGUL = re.compile(r"[ᄀ-ᇿ가-힯]")
 _NOISE = re.compile(r"[\\/:!*?\"<>|._\-~\[\](){}\x00。、・「」『』]")
 _TRAILING = re.compile(r"(?:\s+(?:v\d+|subbed|dubbed|raws?))+$", re.IGNORECASE)
 _PREFIX = re.compile(r"^(?:REPACK|PROPER)\s+", re.IGNORECASE)
+# "Ren'ai" separates syllables; AniList spells it "Renai" and finds nothing with the apostrophe
+_SYLLABLE_BREAK = re.compile(r"(?<=[nN])'(?=[aeiouyAEIOUY])")
 
 # " - Movie" after a title only confuses the search ("Hyakuemu - Movie").
 _MOVIE = re.compile(r"\s-\s+Movie\b", re.IGNORECASE)
@@ -60,15 +63,21 @@ _TECH = re.compile(
     r"|BD|WEB-?DL|WEB-?Rip|HDTV|DVD(?:Rip)?|Remux)\b",
     re.IGNORECASE,
 )
-_EXTRA = re.compile(r"\b(?:NC(?:OP|ED)\d*|Creditless)\b", re.IGNORECASE)
+_EXTRA = re.compile(r"\b(?:NC(?:OP|ED)\d*|Creditless|Play All)\b", re.IGNORECASE)
+# Bracketed extras of a BD release: "[Menu01]", "[CM02]", "[PV]"
+_EXTRA_GROUP = re.compile(r"(?:Menu|CM|PV|IV|Preview|Trailer|Making|Interview)\d*", re.IGNORECASE)
+_EXTRA_FOLDER = re.compile(
+    r"Extras?|Bonus|Featurettes|Trailers?|Scans|Soundtracks?|CDs?|Menus?|Creditless", re.IGNORECASE
+)
 # Extras named for what they are: "Shiki OP", "Jetix Opening", "Series Menu - 01"
 _EXTRA_TITLE = re.compile(r"\b(?:OP|ED|PV|CM|Menu|Opening|Ending|Trailer|Storyboards?|Preview)\s*\d*$")
 
 # Episode markers; the earliest one in the text wins, the first listed on a tie. `last` is the end of a range
 # ("E01-E03", "02-03") and `ver` the "v2" of a revised release.
-# "Episode 5.5", "- 06.5": recaps and specials between episodes, which AniList has no number for ("2.0" is audio)
+# "Episode 5.5", "- 06.5": recaps and specials between episodes, which AniList has no number for
+# ("2.0" is audio, "- 3.33 You Can (Not) Redo" a film's number)
 _DECIMAL_EPISODE = re.compile(
-    r"(?:\bE(?:P|pisode)?\.?\s*|\s-\s)(?P<ep>\d+)\.(?P<dec>[1-9]\d*)(?:v\d)?(?=\s|\x00|$)", re.IGNORECASE
+    r"(?:\bE(?:P|pisode)?\.?\s*|\s-\s)(?P<ep>\d+)\.(?P<dec>5)(?:v\d)?(?=\s|\x00|$)", re.IGNORECASE
 )
 # "S01E05", "S01E05v2", "S01E01E02", "S01E01-03"
 _SEASON_EPISODE = re.compile(
@@ -80,7 +89,9 @@ _SEASON_NUMBER = re.compile(
     r"\b(?:Season\s*|S)(?P<season>\d{1,2})(?:\s+|\s*-\s*)(?P<ep>\d{1,4})(?:\s?v(?P<ver>\d+))?(?!\w)", re.IGNORECASE
 )
 # "E05", "EP05v2", "Episode 5"
-_EPISODE_WORD = re.compile(r"\b(?:E|EP|Episode)[ .]?(?P<ep>\d{1,4})(?:v(?P<ver>\d+))?(?!\w)", re.IGNORECASE)
+_EPISODE_WORD = re.compile(r"\b(?:E|EP|Episode)\.?\s*(?P<ep>\d{1,4})(?:v(?P<ver>\d+))?(?!\w)", re.IGNORECASE)
+# "2x05": season, then episode
+_SEASON_X_EPISODE = re.compile(r"\b(?P<season>\d{1,2})x(?P<ep>\d{2,3})(?:v(?P<ver>\d+))?(?!\w)", re.IGNORECASE)
 # "第05话", "#05"
 _EPISODE_MARK = re.compile(r"(?:第\s*|#\s*)(?P<ep>\d{1,4})(?:\s*[话話集回]|(?!\w))")
 # " - 05", " - 05v2", " - 152", " - 01-02", " - 01 ~ 26": a dash with spaces, so "07-Ghost" and "K-On" never match
@@ -91,6 +102,7 @@ _DASH_EPISODE = re.compile(
 _MARKERS = {
     "decimal": _DECIMAL_EPISODE,
     "season+episode": _SEASON_EPISODE,
+    "season x episode": _SEASON_X_EPISODE,
     "season number": _SEASON_NUMBER,
     "episode word": _EPISODE_WORD,
     "episode mark": _EPISODE_MARK,
@@ -103,13 +115,22 @@ _BRACKETED_EPISODE = re.compile(r"(?P<ep>\d{1,4})(?:v\d+)?(?:\s*[-~]\s*(?P<last>
 _AFTER_GAP = re.compile(
     rf"{_GAP}\s*(?P<ep>\d{{1,4}})(?:v\d+)?(?:\s*[-~]\s*(?P<last>\d{{1,4}}))?(?=\s*(?:{_GAP}|\+|$))", re.IGNORECASE
 )
-_PADDED_EPISODE = re.compile(rf"(?<=\s)(?P<ep>0\d{{1,3}})(?:v\d+)?\s*(?={_GAP}|$)", re.IGNORECASE)
-_LEADING_EPISODE = re.compile(r"\s*(?P<ep>0\d{1,3})(?:v\d+)?\s+-\s+(?=\S)", re.IGNORECASE)
+_PADDED_EPISODE = re.compile(
+    rf"(?<=\s)(?P<ep>0\d{{1,3}}|[1-9]\d)(?:v\d+)?(?:\s+(?:END|RAW))?\s*(?={_GAP}|$)", re.IGNORECASE
+)
+# "Detective Conan Movie 26" is part of the title
+_NUMBERED_WORD = re.compile(r"\b(?:Movie|Film|Part|Pt|Vol|Volume|No|Cour)\.?\s*$", re.IGNORECASE)
+_LEADING_EPISODE = re.compile(r"\s*(?P<ep>0\d{1,3})(?:v\d+)?(?:\s+-\s+|\.\s+|(?<=\b0\d)\s+)(?=\S)", re.IGNORECASE)
 _LONE_NUMBER = re.compile(r"(?P<ep>\d{1,4})(?:v\d+)?", re.IGNORECASE)
 
-_SEASON = re.compile(r"\b(?:Season\s*|S)(?P<n>\d{1,2})\b(?:\s*-\s*S\d{1,2}\b)?", re.IGNORECASE)
+# Not after an ordinal: "2nd Season 13" is the second season's thirteenth episode
+_SEASON = re.compile(
+    r"(?<![0-9](?:st|nd|rd|th)\s)\b(?:Season\s*|S)(?P<n>\d{1,2})\b(?:\s*-\s*S\d{1,2}\b)?", re.IGNORECASE
+)
 _SEASON_CJK = re.compile(r"第\s*(?P<n>[一二三四五六七八九十\d]+)\s*[季期]|(?P<k>\d+)\s*[期기]")
 _PART = re.compile(r"\b(?:Part|Pt)\.?\s*(?P<n>\d{1,2}|[IVX]{1,4})\b", re.IGNORECASE)
+# A disc's number, never part of the title
+_VOLUME = re.compile(r"\b(?:Vol(?:ume)?|Dis[ck])\.?\s*\d+\b", re.IGNORECASE)
 _YEAR = re.compile(r"(?<=\s)(?P<year>(?:19[5-9]|20[0-3])\d)(?:\s*-\s*(?:19|20)\d\d)?(?![\w-])")
 # "OVA 2", "OVA 11v2", "OVA 01-19"
 _FORMAT = re.compile(
@@ -126,7 +147,7 @@ _GROUP_SEASON = re.compile(
     r"(?:Season\s*|S)(?P<season>\d{1,2})(?:\s*(?:Pt|Part)\.?\s*(?P<part>\d{1,2}))?", re.IGNORECASE
 )
 _GROUP_YEAR = re.compile(r"(?P<year>(?:19[5-9]|20[0-3])\d)(?:\s*-\s*(?:19|20)\d\d)?")
-_GROUP_FORMAT = re.compile(r"(?P<format>OVA|OAV|OAD|ONA)\s*(?P<n>\d{0,2})")
+_GROUP_FORMAT = re.compile(r"(?P<format>OVA|OAV|OAD|ONA|TVSP|SP|Specials?)\s*(?P<n>\d{0,2})")
 # Bracketed tags that can't be the title of an all-bracket name
 _TAG = re.compile(r"GB|BIG5|CHT|CHS|MP4|MKV|AAC|FLAC|OPUS|Multi[- ]?Subs?|Dual[- ]?Audio", re.IGNORECASE)
 
@@ -199,6 +220,11 @@ class _Segment:
     extra: bool = False
     episode_title: str = ""  # the text after a leading "01 - ", when the name has no title of its own
     groups: list[str] = field(default_factory=list)
+
+
+def fold_title(title: str) -> str:
+    """A title as compared across spellings: no punctuation, spacing or case."""
+    return re.sub(r"\W", "", title).casefold()
 
 
 def _number(value: str) -> int | None:
@@ -313,11 +339,17 @@ def _season_from(text: str) -> int | None:
 
 
 def _clean_title(text: str) -> str:
-    """Flatten punctuation the way the search expects and keep Latin words over CJK ones."""
-    title = " ".join(_NOISE.sub(" ", _PREFIX.sub("", text.strip())).split()).strip(" ,")
+    """Flatten punctuation the way the search expects and keep Latin words over CJK ones.
+
+    CJK words go only when the Latin ones form a single run ("Title 标题"); "Re ゼロから始める異世界生活 2nd season" is
+    one native title, and without its Japanese words it finds another show.
+    """
+    title = " ".join(_NOISE.sub(" ", _PREFIX.sub("", _SYLLABLE_BREAK.sub("", text.strip()))).split()).strip(" ,")
     if _CJK.search(title) and not _HANGUL.search(title):
-        latin = [word for word in title.split() if not _CJK.search(word)]
-        title = " ".join(latin) or title
+        words = title.split()
+        latin = [i for i, word in enumerate(words) if not _CJK.search(word)]
+        if latin and latin[-1] - latin[0] + 1 == len(latin):
+            title = " ".join(words[i] for i in latin)
     return _TRAILING.sub("", title)
 
 
@@ -325,7 +357,10 @@ def _analyse(text: str, groups: list[str], *, folder: bool) -> _Segment:
     """Read one alternative: where the title ends, and the markers before and after it."""
     segment = _Segment(groups=groups)
     text = _TECH.split(_MOVIE.sub(" ", text), maxsplit=1)[0]
-    segment.extra = bool(_EXTRA.search(text) or any(_EXTRA.search(group) for group in groups))
+    segment.extra = bool(
+        _EXTRA.search(text)
+        or any(_EXTRA.search(group) or _EXTRA_GROUP.fullmatch(group.strip()) for group in groups)
+    )
 
     log.debug("    searched zone: %r", text)
 
@@ -364,6 +399,8 @@ def _analyse(text: str, groups: list[str], *, folder: bool) -> _Segment:
     if match := _PART.search(region):
         segment.part = _number(match["n"])
         stops["part"] = match.start()
+    if match := _VOLUME.search(region):
+        stops["volume"] = match.start()
     if (match := _YEAR.search(region)) and region[: match.start()].strip():
         segment.year = int(match["year"])
         stops["year"] = match.start()
@@ -388,9 +425,24 @@ def _analyse(text: str, groups: list[str], *, folder: bool) -> _Segment:
         if _LATIN.search(tail):
             log.debug("    OVA with its own title: %r after the disc number %s", tail, segment.episode)
             segment.title, segment.episode = f"{segment.title} {tail}", 1
+    # "[Group] [Oshi no Ko] - 01": the title is the bracket before the marker
+    if not segment.title and marker and (count := region.count(_GAP)):
+        segment.title, season, part = _strip_season(_title_from_groups(groups[:count]))
+        segment.season = segment.season if segment.season is not None else season
+        segment.part = segment.part or part
     for group in groups:
         _read_group(segment, group.strip())
     return segment
+
+
+def _trailing_episode(region: str) -> re.Match[str] | None:
+    """A number ending the title; without a leading zero it needs a title before it, and not "Movie 26"."""
+    match = _PADDED_EPISODE.search(region)
+    if match and not match["ep"].startswith("0"):
+        before = region[: match.start()]
+        if not before.strip(_LEADING) or _NUMBERED_WORD.search(before):
+            return None
+    return match
 
 
 def _fall_back(segment: _Segment, text: str, region: str, format_match: re.Match[str] | None) -> int | None:
@@ -405,7 +457,7 @@ def _fall_back(segment: _Segment, text: str, region: str, format_match: re.Match
         (match := _AFTER_GAP.search(text)) and (episode := _bare_episode(match)) is not None
     ):
         segment.episode = episode
-    elif match := _PADDED_EPISODE.search(region):
+    elif match := _trailing_episode(region):
         segment.episode = int(match["ep"])
         return match.start()
     elif match := _LEADING_EPISODE.match(region) or _LONE_NUMBER.fullmatch(region.replace(_GAP, " ").strip()):
@@ -426,15 +478,32 @@ def _read_group(segment: _Segment, group: str) -> None:
         segment.year = int(match["year"])
     elif (match := _GROUP_FORMAT.fullmatch(group)) and segment.media_format is None:
         segment.media_format = FORMATS[match["format"]]
+        if match["n"] and not segment.marked and segment.episode is None:
+            segment.episode = int(match["n"])
 
 
 def _title_from_groups(groups: list[str]) -> str:
     """Names made only of brackets ("[Group][国漫][Title][2025]...") keep the title in one of them."""
     for group in groups:
         words = _clean_title(group)
-        if len(_LATIN.findall(words)) >= 3 and not _TECH.search(words) and not _TAG.fullmatch(words):
+        if (
+            len(_LATIN.findall(words)) >= 3
+            and not _TECH.search(words)
+            and not _TAG.fullmatch(words)
+            and not _CRC.fullmatch(words)
+        ):
             return words
     return ""
+
+
+def _strip_season(title: str) -> tuple[str, int | None, int | None]:
+    """Take "S2" and "Part 2" out of a title found in a bracket, where `_analyse` never looked."""
+    season = part = None
+    if match := _SEASON.search(title):
+        season, title = int(match["n"]), title[: match.start()] + title[match.end() :]
+    if match := _PART.search(title):
+        part, title = _number(match["n"]), title[: match.start()] + title[match.end() :]
+    return " ".join(title.split()), season, part
 
 
 def parse_release(name: str, *, folder: bool = False) -> Release:
@@ -483,8 +552,11 @@ def parse_release(name: str, *, folder: bool = False) -> Release:
 
     title = next((segment.title for segment in used if _LATIN.search(segment.title)), "")
     title = title or next((segment.title for segment in used if segment.title), "")
+    grouped_season = grouped_part = None
     if not title and not used[marked].marked:
-        title = _title_from_groups([group for segment in used for group in segment.groups])
+        title, grouped_season, grouped_part = _strip_season(
+            _title_from_groups([group for segment in used for group in segment.groups])
+        )
 
     episode = (
         used[marked].episode
@@ -493,8 +565,8 @@ def parse_release(name: str, *, folder: bool = False) -> Release:
     )
     # Without an episode the name describes a pack or a movie, and any alternative may carry the details
     pool = used if any(s.marked for s in segments) else segments
-    season = next((s.season for s in pool if s.season is not None), None)
-    part = next((s.part for s in pool if s.part is not None), None)
+    season = next((s.season for s in pool if s.season is not None), grouped_season)
+    part = next((s.part for s in pool if s.part is not None), grouped_part)
     year = next((s.year for s in pool if s.year is not None), None)
     # A format can sit in a trailing alternative: "... | Title | Other title (S02E00) (OVA 2)"
     media_format = next((s.media_format for s in pool if s.media_format), None) or next(
@@ -502,11 +574,13 @@ def parse_release(name: str, *, folder: bool = False) -> Release:
     )
 
     skip = None
-    if decimal:
+    if folder:
+        skip = "an extra, not an episode" if _EXTRA_FOLDER.fullmatch(text.strip()) else None
+    elif decimal:
         skip = "a special between episodes"
     elif any(segment.extra for segment in used):
         skip = "an extra, not an episode"
-    elif season == 0 and media_format is None and not folder:
+    elif season == 0 and media_format is None:
         skip = "a season 0 special"
     body = text[text.find("]") + 1 :] if release_group and text.lstrip().startswith("[") else text
     release = Release(

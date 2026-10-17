@@ -134,6 +134,8 @@ The script reads the title, episode, season, year and format from the file name 
 
 If the file name starts with its episode or season, it has no title of its own, so the title comes from the folder it is in (or the one above it). If no folder has one, a leading `01 - Title` uses the text after the number.
 
+A season or format the file name doesn't give is read from its folder: `Show/Season 2/Show - 05.mkv` is season 2, and `Show/OVA/01.mkv` or `Show/Specials/01.mkv` are searched as OVAs or specials. Extras (openings, endings, menus, `Extras` folders) and `Season 00` files are skipped, since AniList has no episode for them.
+
 After that, it searches for the show both in your AniList and globally.
 
 If the torrent file has absolute numbering (only episode number), it will try to guess the season and episode by:
