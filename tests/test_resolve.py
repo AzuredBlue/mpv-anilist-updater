@@ -96,7 +96,7 @@ class TitleClient(FakeClient):
 
 
 def test_resolve_counts_sequels_when_the_season_title_is_unknown():
-    info = resolve(TitleClient(everything=SEASONS), FileInfo("Show Season 2", 3))
+    info = resolve(TitleClient(everything=SEASONS), FileInfo("Show", 3, season=2))
     assert (info.anime_id, info.episode, info.guessed_name) == (2, 3, "Show Season 2")
 
 
@@ -108,12 +108,12 @@ class SeasonClient(FakeClient):
 
 
 def test_resolve_folder_season_that_cannot_hold_the_episode_is_absolute():
-    info = resolve(SeasonClient(), FileInfo("Show Season 2", 15, base_title="Show"))
+    info = resolve(SeasonClient(), FileInfo("Show", 15, season=2, folder_season=True))
     assert (info.anime_id, info.episode, info.absolute_episode, info.guessed_name) == (2, 3, 15, "Show Season 2")
 
 
 def test_resolve_folder_season_that_holds_the_episode_is_kept():
-    info = resolve(SeasonClient(), FileInfo("Show Season 2", 5, base_title="Show"))
+    info = resolve(SeasonClient(), FileInfo("Show", 5, season=2, folder_season=True))
     assert (info.anime_id, info.episode) == (2, 5)
 
 
@@ -126,16 +126,128 @@ class UnnamedSeasonsClient(FakeClient):
 
 def test_resolve_folder_season_not_on_anilist_counts_from_the_first_season():
     seasons = [media(1, 12, sequel=2), media(2, 12, sequel=3), media(3, 12)]
-    info = resolve(UnnamedSeasonsClient(everything=seasons), FileInfo("Show Season 3", 30, base_title="Show"))
+    info = resolve(UnnamedSeasonsClient(everything=seasons), FileInfo("Show", 30, season=3, folder_season=True))
     assert (info.anime_id, info.episode, info.guessed_name) == (3, 6, "Show Season 3")
 
 
 def test_resolve_folder_season_not_on_anilist_is_not_guessed_from_the_first_season():
     seasons = [media(1, 12, sequel=2), media(2, 12)]
     with pytest.raises(SkipUpdate, match="Couldn't find"):
-        resolve(UnnamedSeasonsClient(everything=seasons), FileInfo("Show Season 5", 3, base_title="Show"))
+        resolve(UnnamedSeasonsClient(everything=seasons), FileInfo("Show", 3, season=5, folder_season=True))
 
 
 def test_resolve_season_beyond_the_known_ones_is_not_found():
     with pytest.raises(SkipUpdate, match="Couldn't find"):
-        resolve(TitleClient(everything=SEASONS[:1]), FileInfo("Show Season 2", 1))
+        resolve(TitleClient(everything=SEASONS[:1]), FileInfo("Show", 1, season=2))
+
+
+def test_resolve_later_season_prefers_a_real_season_over_its_specials():
+    client = FakeClient(everything=[media(5, 3, fmt="SPECIAL"), media(2, 12)])
+    assert resolve(client, FileInfo("Show", 3, season=2)).anime_id == 2
+
+
+def test_resolve_keeps_the_first_result_when_the_file_names_a_part_or_a_format():
+    client = FakeClient(everything=[media(5, 3, fmt="SPECIAL"), media(2, 12)])
+    assert resolve(client, FileInfo("Show", 1, season=2, part=1)).anime_id == 5
+    assert resolve(client, FileInfo("Show", 1, season=2, media_format="SPECIAL")).anime_id == 5
+
+
+class NumberedClient(FakeClient):
+    """AniList knows "Show" as a short series, so episode 100 fits no season; `answer` is what "Show 100" finds."""
+
+    def __init__(self, answer):
+        super().__init__()
+        self.answer, self.queries = answer, []
+
+    def search(self, title, year, formats):
+        self.queries.append(title)
+        return ([], self.answer) if title == "Show 100" else ([], [media(1, 12)])
+
+
+def test_resolve_title_ending_in_a_number_is_found_again_with_it():
+    info = resolve(NumberedClient([media(100, 12)]), FileInfo("Show", 100))
+    assert (info.anime_id, info.episode, info.absolute_episode, info.guessed_name) == (100, 1, 100, "Show")
+
+
+def test_resolve_title_with_another_number_is_not_taken_for_the_episode_number():
+    client = NumberedClient([media(7, 12)])
+    with pytest.raises(SkipUpdate, match="No valid seasons"):
+        resolve(client, FileInfo("Show", 100))
+    assert client.queries == ["Show", "Show 100"]
+
+
+class RecordingClient(FakeClient):
+    def __init__(self):
+        super().__init__()
+        self.queries = []
+
+    def search(self, title, year, formats):
+        self.queries.append(title)
+        return super().search(title, year, formats)
+
+
+def test_resolve_title_not_found_at_all_is_not_searched_again_with_the_episode_number():
+    client = RecordingClient()
+    with pytest.raises(SkipUpdate, match="Couldn't find"):
+        resolve(client, FileInfo("Show", 2))
+    assert client.queries == ["Show"]
+
+
+class OutOfRangeClient(FakeClient):
+    """ "Show" is found, but its one season is too short for the episode; "Show 13" names another entry."""
+
+    def search(self, title, year, formats):
+        return ([], [media(13, 12)]) if title == "Show 13" else ([], [media(1, 12)])
+
+
+def test_resolve_small_episode_past_the_seasons_is_read_as_part_of_the_title():
+    info = resolve(OutOfRangeClient(), FileInfo("Show", 13))
+    assert (info.anime_id, info.episode, info.absolute_episode) == (13, 1, 13)
+
+
+class SpecialsOnlyClient(FakeClient):
+    """ "Show Season 2" matches only the specials; the plain title finds the whole series."""
+
+    def search(self, title, year, formats):
+        return ([], [media(5, 3, fmt="SPECIAL")]) if title == "Show Season 2" else ([], SEASONS)
+
+
+def test_resolve_later_season_with_only_specials_found_counts_sequels():
+    assert resolve(SpecialsOnlyClient(), FileInfo("Show", 3, season=2)).anime_id == 2
+
+
+def test_resolve_later_season_with_only_specials_found_and_no_sequels_keeps_them():
+    client = FakeClient(everything=[media(5, 3, fmt="SPECIAL")])
+    assert resolve(client, FileInfo("Show", 1, season=2)).anime_id == 5
+
+
+class FormatClient(FakeClient):
+    def __init__(self):
+        super().__init__(everything=[media(1, 12)])
+        self.formats = None
+
+    def search(self, title, year, formats):
+        self.formats = formats
+        return super().search(title, year, formats)
+
+
+def test_resolve_tv_hint_searches_tv_and_short_series():
+    client = FormatClient()
+    resolve(client, FileInfo("Show", 1, media_format="TV"))
+    assert client.formats == ["TV", "TV_SHORT"]
+
+
+class YearClient(FakeClient):
+    """The year filter leaves one season of the chain."""
+
+    def search(self, title, year, formats):
+        return ([], [SEASONS[1]]) if year else ([], SEASONS)
+
+
+def test_resolve_absolute_episode_ignores_a_year_that_fits_one_season_only():
+    info = resolve(YearClient(), FileInfo("Show", 40, year=2023))
+    assert (info.anime_id, info.episode) == (3, 4)
+
+
+def test_resolve_keeps_the_year_when_the_episode_fits():
+    assert resolve(YearClient(), FileInfo("Show", 5, year=2023)).anime_id == 2

@@ -35,10 +35,10 @@ class Service:
     def info(self, path: str) -> Outcome:
         """Detect the anime and episode for a file, from the cache when it knows the directory."""
         file = parse_path(path)
-        entry = self.cache.get(path, file.title)
+        entry = self.cache.get(path, file.query)
         cached = entry.info_for(file.episode) if entry else None
         if cached:
-            log.info('Using cached data for "%s": %s', file.title, cached.anime_id)
+            log.info('Using cached data for "%s": %s', file.query, cached.anime_id)
 
         info = cached or resolve(self.client, file)
 
@@ -73,7 +73,7 @@ class Service:
         """
         if info is None:
             file = parse_path(path)
-            info = AnimeInfo(episode=file.episode, guessed_name=file.title, absolute_episode=file.episode)
+            info = AnimeInfo(episode=file.episode, guessed_name=file.query, absolute_episode=file.episode)
 
         changes = []
         id_changed = info.anime_id != correction.anime_id

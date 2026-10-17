@@ -3,12 +3,16 @@
     "[Foobar] Sample Show - S01 (BD 1080p) [Dual-Audio] (Japanese, German, English Dubs) | Other Title (Season 1) (Part 1 + Part 2).mkv": [
       "Sample Show",
       1,
+      1,
+      null,
       null,
       null
     ],
     "[GM-Foo][国漫][某某传][Sample Chronicle][2026][17-20][AVC][GB][1080P]": [
       "Sample Chronicle",
       20,
+      null,
+      null,
       2026,
       null
     ]
@@ -18,25 +22,33 @@
       "Sample Show",
       152,
       null,
+      null,
+      null,
       null
     ],
     "Sample Show - 1100.mkv": [
       "Sample Show",
       1100,
       null,
+      null,
+      null,
       null
     ],
     "Sample/Season 2/05.mkv": [
-      "Sample Season 2",
+      "Sample",
       5,
+      2,
+      null,
       null,
       null
     ]
   },
   "H3 punctuation flattened": {
     "[Foobar] Re:Sample S2 - 02 [1080p].mkv": [
-      "Re Sample Season 2",
+      "Re Sample",
       2,
+      2,
+      null,
       null,
       null
     ],
@@ -44,11 +56,15 @@
       "Dr Sample",
       12,
       null,
+      null,
+      null,
       null
     ],
     "[Foobar] Sample Show wo! 3 - 05 [1080p].mkv": [
       "Sample Show wo 3",
       5,
+      null,
+      null,
       null,
       null
     ]
@@ -58,13 +74,17 @@
       "Sample Show",
       1,
       null,
+      null,
+      null,
       null
     ],
     "Sample.Show.Movie.1080p.BDRip.x265-GRP.mkv": [
-      "Sample Show Movie",
+      "Sample Show",
       1,
       null,
-      null
+      null,
+      null,
+      "MOVIE"
     ]
   },
   "H5 version suffix": {
@@ -72,17 +92,23 @@
       "Sample Show",
       5,
       null,
+      null,
+      null,
       null
     ],
     "[Foobar] Sample Show S2 - 05v2 (BD 1080p).mkv": [
-      "Sample Show Season 2",
+      "Sample Show",
       5,
+      2,
+      null,
       null,
       null
     ],
     "[Foobar] Sample Show - S01E01 v2 (WEB 1080p).mkv": [
       "Sample Show",
       1,
+      1,
+      null,
       null,
       null
     ],
@@ -90,19 +116,25 @@
       "Sample Show",
       1,
       null,
+      null,
+      null,
       null
     ]
   },
   "H6 number after a season marker": {
     "[Foobar] Sample Show S2 02 [1080p].mkv": [
-      "Sample Show Season 2",
+      "Sample Show",
       2,
+      2,
+      null,
       null,
       null
     ],
     "[Foobar] Sample Show Season 2 - 03 [1080p].mkv": [
-      "Sample Show Season 2",
+      "Sample Show",
       3,
+      2,
+      null,
       null,
       null
     ]
@@ -114,11 +146,15 @@
       "Sample Show",
       5,
       null,
+      null,
+      null,
       null
     ],
     "Sample.Show.S01E03.1080p.WEB-DL.DDP5.1.H.265-GRP.mkv": [
       "Sample Show",
       3,
+      1,
+      null,
       null,
       null
     ]
@@ -128,11 +164,15 @@
       "Gate Sample 0",
       1,
       null,
+      null,
+      null,
       null
     ],
     "[Foobar] Neko 1-2 E3 [1080p].mkv": [
       "Neko 1 2",
       3,
+      null,
+      null,
       null,
       null
     ],
@@ -140,17 +180,23 @@
       "86 SAMPLE SIX",
       13,
       null,
+      null,
+      null,
       null
     ],
     "[Foobar] 5 Meters per Second.mkv": [
       "5 Meters per Second",
       1,
       null,
+      null,
+      null,
       null
     ],
     "[Foobar] Sample Show - 02-03 [1080p].mkv": [
       "Sample Show",
       3,
+      null,
+      null,
       null,
       null
     ]
@@ -160,31 +206,41 @@
       "Sample Show",
       12,
       null,
+      null,
+      null,
       null
     ],
     "[Foobar] Sample Show S01/S01E01-Episode 1 [59596368].mkv": [
       "Sample Show",
       1,
+      1,
+      null,
       null,
       null
     ]
   },
   "H10 title from the folders": {
     "Show Season 2/01.mkv": [
-      "Show Season 2",
+      "Show",
       1,
+      2,
+      null,
       null,
       null
     ],
     "Anime/Dr. Sample/Season 2/episode 03.mkv": [
-      "Dr Sample Season 2",
+      "Dr Sample",
       3,
+      2,
+      null,
       null,
       null
     ],
     "86/E05 - Welcome.mkv": [
       "86",
       5,
+      null,
+      null,
       null,
       null
     ]
@@ -194,11 +250,15 @@
       "Some Show",
       2,
       null,
+      null,
+      null,
       "OVA"
     ],
     "[Foobar] Some Show ONA - 03 [720p].mkv": [
       "Some Show",
       3,
+      null,
+      null,
       null,
       "ONA"
     ]
@@ -207,26 +267,34 @@
     "[Foobar] Sample Show (2009) - 12 [BD 1080p].mkv": [
       "Sample Show",
       12,
+      null,
+      null,
       2009,
       null
     ],
     "[Foobar] Sample Show (2019) S02E05 [1080p].mkv": [
-      "Sample Show Season 2",
+      "Sample Show",
       5,
+      2,
+      null,
       2019,
       null
     ]
   },
   "H13 part in the episode title": {
     "Sample Show S06E06 Encounter, Part 2.mkv": [
-      "Sample Show Season 6",
+      "Sample Show",
       6,
+      6,
+      null,
       null,
       null
     ],
     "[Foobar] Sample Show Part 2 - S02E05.mkv": [
-      "Sample Show Season 2 Part 2",
+      "Sample Show",
       5,
+      2,
+      2,
       null,
       null
     ]
@@ -235,6 +303,8 @@
     "D:\\Anime\\86 Sample-Six\\E12 - Welcome [F1119374].mkv": [
       "86 Sample Six",
       12,
+      null,
+      null,
       null,
       null
     ],
@@ -245,23 +315,31 @@
       "Sample Show",
       5,
       null,
+      null,
+      null,
       null
     ],
     "Sample Show (Dub) Episode 5": [
       "Sample Show",
       5,
       null,
+      null,
+      null,
       null
     ],
     "Sample Show Season 2 Episode 3": [
-      "Sample Show Season 2",
+      "Sample Show",
       3,
+      2,
+      null,
       null,
       null
     ],
     "Sample Film. Episode 1": [
       "Sample Film",
       1,
+      null,
+      null,
       null,
       null
     ]
@@ -271,11 +349,15 @@
       "Sample Show",
       10,
       null,
+      null,
+      null,
       null
     ],
     "[Foobar] Sample Show 25 [BDRip 1920x1080 HEVC FLAC].mkv": [
       "Sample Show",
       25,
+      null,
+      null,
       null,
       null
     ],
@@ -283,11 +365,15 @@
       "Sample Show",
       12,
       null,
+      null,
+      null,
       null
     ],
     "[Foobar] Sample Show 01 END.mkv": [
       "Sample Show",
       1,
+      null,
+      null,
       null,
       null
     ],
@@ -295,11 +381,15 @@
       "Sample Detective Movie 26",
       1,
       null,
+      null,
+      null,
       null
     ],
     "[Foobar] Sample Show 0 [1080p].mkv": [
       "Sample Show 0",
       1,
+      null,
+      null,
       null,
       null
     ],
@@ -310,23 +400,31 @@
       "Sample Show",
       5,
       null,
+      null,
+      null,
       null
     ],
     "Sample Show 2x05.mkv": [
-      "Sample Show Season 2",
+      "Sample Show",
       5,
+      2,
+      null,
       null,
       null
     ],
     "Sample Show - 1x01 - Name.mkv": [
       "Sample Show",
       1,
+      1,
+      null,
       null,
       null
     ],
     "[Foobar] Sample!!x2 Show - 01 [1080p].mkv": [
       "Sample x2 Show",
       1,
+      null,
+      null,
       null,
       null
     ]
@@ -336,11 +434,15 @@
       "Sample Show",
       1,
       null,
+      null,
+      null,
       null
     ],
     "Anime/Sample Show/Disc 1/01.mkv": [
       "Sample Show",
       1,
+      null,
+      null,
       null,
       null
     ]
@@ -353,11 +455,15 @@
       "Sample Show",
       3,
       null,
+      null,
+      null,
       "SPECIAL"
     ],
     "[Foobar] Sample Show [TVSP][Ma10p_1080p][x265_aac].mkv": [
       "Sample Show",
       1,
+      null,
+      null,
       null,
       "SPECIAL"
     ]
@@ -367,11 +473,15 @@
       "Sample Show",
       1,
       null,
+      null,
+      null,
       "SPECIAL"
     ],
     "Anime/Sample Show/OVA/Sample Show - 02.mkv": [
       "Sample Show",
       2,
+      null,
+      null,
       null,
       "OVA"
     ],
@@ -381,19 +491,25 @@
       "Sample Show",
       1,
       null,
+      null,
+      null,
       null
     ]
   },
   "H21 native and Latin words in one title": {
     "[Foobar] Re:ゼロから始める異世界生活 2nd season - 01 (AT-X 1280x720 x264 AAC).mp4": [
-      "Re ゼロから始める異世界生活 2nd season",
+      "Re ゼロから始める異世界生活",
       1,
+      2,
+      null,
       null,
       null
     ],
     "[Foobar] 标题 Sample Show - 05 [1080p].mkv": [
       "Sample Show",
       5,
+      null,
+      null,
       null,
       null
     ]
@@ -403,13 +519,17 @@
       "Sample Show",
       1,
       null,
+      null,
+      null,
       null
     ]
   },
   "H23 title and season in brackets": {
     "[Foobar][Sample Show S2][13][1080p].mp4": [
-      "Sample Show Season 2",
+      "Sample Show",
       13,
+      2,
+      null,
       null,
       null
     ],
@@ -417,11 +537,15 @@
       "Sample Show",
       1,
       null,
+      null,
+      null,
       null
     ],
     "Sample Show 2nd Season 13.mkv": [
-      "Sample Show 2nd Season",
+      "Sample Show",
       13,
+      2,
+      null,
       null,
       null
     ]
@@ -431,11 +555,15 @@
       "Sample Show",
       1,
       null,
+      null,
+      null,
       null
     ],
     "Anime/Sample Show/05 Welcome.mkv": [
       "Sample Show",
       5,
+      null,
+      null,
       null,
       null
     ]
@@ -445,25 +573,33 @@
       "Sample Renai Show",
       1,
       null,
+      null,
+      null,
       null
     ],
     "[Foobar] Sample Show' - 01 [1080p].mkv": [
       "Sample Show'",
       1,
       null,
+      null,
+      null,
       null
     ]
   },
   "H26 season from the parent folder": {
     "Anime/Sample Show/Season 2/[Foobar] Sample Show - 05 [1080p].mkv": [
-      "Sample Show Season 2",
+      "Sample Show",
       5,
+      2,
+      null,
       null,
       null
     ],
     "Anime/Sample Show S2/[Foobar] Sample Show - 05 [1080p].mkv": [
-      "Sample Show Season 2",
+      "Sample Show",
       5,
+      2,
+      null,
       null,
       null
     ],
@@ -471,11 +607,15 @@
       "Sample Show",
       5,
       null,
+      null,
+      null,
       null
     ],
     "Anime/Sample Show/Season 2/[Foobar] Sample Show 2nd Season - 05 [1080p].mkv": [
-      "Sample Show 2nd Season",
+      "Sample Show",
       5,
+      2,
+      null,
       null,
       null
     ],
@@ -483,11 +623,15 @@
       "Sample Show Sample Arc",
       5,
       null,
+      null,
+      null,
       null
     ],
     "Anime/Other/Season 2/[Foobar] Sample Show - 05 [1080p].mkv": [
       "Sample Show",
       5,
+      null,
+      null,
       null,
       null
     ],
@@ -495,7 +639,658 @@
       "009 Sample Cyborg",
       1,
       null,
+      null,
+      null,
       null
+    ]
+  },
+  "H27 bare episodes of 100 or more": {
+    "[Foobar]_Sample_Show_225_[C63D149C].avi": [
+      "Sample Show",
+      225,
+      null,
+      null,
+      null,
+      null
+    ],
+    "[Foobar] Sample Show 1098 VOSTFR FHD (1920x1080).mp4": [
+      "Sample Show",
+      1098,
+      null,
+      null,
+      null,
+      null
+    ],
+    "[Foobar] Sample Show 603 VOSTFR PS VITA (960x544) V2.mp4": [
+      "Sample Show",
+      603,
+      null,
+      null,
+      null,
+      null
+    ],
+    "Sample Show 727.mkv": [
+      "Sample Show",
+      727,
+      null,
+      null,
+      null,
+      null
+    ],
+    "[Foobar] Sample Show 1080 [BD].mkv": [
+      "Sample Show 1080",
+      1,
+      null,
+      null,
+      null,
+      null
+    ],
+    "[Foobar] Sample Show 2 [ABCD1234].mkv": [
+      "Sample Show",
+      2,
+      null,
+      null,
+      null,
+      null
+    ],
+    "[Foobar] Sample Show 2 [1080p][ABCD1234].mkv": [
+      "Sample Show 2",
+      1,
+      null,
+      null,
+      null,
+      null
+    ],
+    "[Foobar] Sample Show 10 v2 [DVD][C83D206B].mkv": [
+      "Sample Show",
+      10,
+      null,
+      null,
+      null,
+      null
+    ],
+    "[Foobar] Sample Show.13": [
+      "Sample Show",
+      13,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "H28 letter suffixes": {
+    "[Foobar] Sample Show - 111c [1080p].mkv": [
+      "Sample Show",
+      111,
+      null,
+      null,
+      null,
+      null
+    ],
+    "[Foobar] Sample Show - 09a (DVD) [49874745].mkv": [
+      "Sample Show",
+      9,
+      null,
+      null,
+      null,
+      null
+    ],
+    "[Foobar]_Sample_Show_-_01b_[4D5EC315].avi": [
+      "Sample Show",
+      1,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "H29 a number in the episode title": {
+    "[Foobar] Sample Show - 116 - 360 Degrees of Vision [1080p].mkv": [
+      "Sample Show",
+      116,
+      null,
+      null,
+      null,
+      null
+    ],
+    "[Foobar] Sample Show - 100 Years Quest - 05 (1080p) [ABCD1234].mkv": [
+      "Sample Show 100 Years Quest",
+      5,
+      null,
+      null,
+      null,
+      null
+    ],
+    "[Foobar] Sample Show 34 - At the End of Darkness [781219F1].mkv": [
+      "Sample Show",
+      34,
+      null,
+      null,
+      null,
+      null
+    ],
+    "[Foobar] 12 - Sample Show [BD][720p].mp4": [
+      "Sample Show",
+      12,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "H30 episode ranges": {
+    "[Foobar] Sample Show - 01+02 [720p].mkv": [
+      "Sample Show",
+      2,
+      null,
+      null,
+      null,
+      null
+    ],
+    "[Foobar] Sample Show - 01v2-03v2 (1280x720 h264 AAC)": [
+      "Sample Show",
+      3,
+      null,
+      null,
+      null,
+      null
+    ],
+    "[Foobar] Sample Show #1-4 (1280x720 x264 AAC).mp4": [
+      "Sample Show",
+      4,
+      null,
+      null,
+      null,
+      null
+    ],
+    "Sample Show ep. 1-5": [
+      "Sample Show",
+      5,
+      null,
+      null,
+      null,
+      null
+    ],
+    "Sample Show Episode 121-125 [1080p]": [
+      "Sample Show",
+      125,
+      null,
+      null,
+      null,
+      null
+    ],
+    "Sample_Show_13-15_[BD_1080p]": [
+      "Sample Show",
+      15,
+      null,
+      null,
+      null,
+      null
+    ],
+    "[Foobar].Sample.Show.493-498.&.500-507.(CX.1280x720.x264.AAC)": [
+      "Sample Show",
+      507,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "H31 seasons spelled out": {
+    "[Foobar] Sample Show 2nd Season 24 (Blu-Ray 1080p)": [
+      "Sample Show",
+      24,
+      2,
+      null,
+      null,
+      null
+    ],
+    "Sample Show Temporada 1 Episodio 009 Dual Latino [B3B4970E].mkv": [
+      "Sample Show",
+      9,
+      1,
+      null,
+      null,
+      null
+    ],
+    "[Foobar] Sample Show - s01s02": [
+      "Sample Show",
+      1,
+      2,
+      null,
+      null,
+      null
+    ],
+    "[Foobar] Sample Show - s01ova02": [
+      "Sample Show",
+      2,
+      1,
+      null,
+      null,
+      null
+    ],
+    "[Foobar] Sample Show 87 (S4-24) [1080p HEVC Multi-Subs]": [
+      "Sample Show",
+      24,
+      4,
+      null,
+      null,
+      null
+    ],
+    "[04x01] Sample Show": [
+      "Sample Show",
+      1,
+      4,
+      null,
+      null,
+      null
+    ],
+    "[Foobar] Sample Show (Season 1-3) (Dual Audio)": [
+      "Sample Show",
+      1,
+      3,
+      null,
+      null,
+      null
+    ]
+  },
+  "H32 episode counted in a bracket": {
+    "Sample_Show_R2_TV_[20_of_25]_[ru_jp]_[HDTV]": [
+      "Sample Show R2",
+      20,
+      null,
+      null,
+      null,
+      "TV"
+    ],
+    "[Foobar]-(Sample.Show)-[Ep.24]-[x264+OGG]": [
+      "Sample Show",
+      24,
+      null,
+      null,
+      null,
+      null
+    ],
+    "【Foobar】★【Sample Show】[24（END）][GB][720P_MP4]": [
+      "Sample Show",
+      24,
+      null,
+      null,
+      null,
+      null
+    ],
+    "[Foobar][Sample Show][02][BIG][X264_AAC][720P].mp4": [
+      "Sample Show",
+      2,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "H33 brackets inside the title": {
+    "[Foobar]_Sample(DSA)_-_05_-_[x264_ogg]_[585d9971]": [
+      "Sample DSA",
+      5,
+      null,
+      null,
+      null,
+      null
+    ],
+    "Sample_Show_1.11_You_Are_(Not)_Alone_(2009)_[1080p,BluRay,x264]_-_GRP.mkv": [
+      "Sample Show 1 11 You Are Not Alone",
+      1,
+      null,
+      null,
+      2009,
+      null
+    ],
+    "[Foobar] Sample Show [Other] Part - 01 [BAD09C76].mkv": [
+      "Sample Show Other Part",
+      1,
+      null,
+      null,
+      null,
+      null
+    ],
+    "[Foobar] Sample Show (REVERSE) - Letter Bee - 29 [5203142B].mkv": [
+      "Sample Show REVERSE Letter Bee",
+      29,
+      null,
+      null,
+      null,
+      null
+    ],
+    "[Foobar] Sample Show (TV) - 02 [720p]": [
+      "Sample Show",
+      2,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "H34 titles from odd places": {
+    "Episode 14 Sample Show Is Here (saison 2) VOSTFR": [
+      "Sample Show Is Here",
+      14,
+      2,
+      null,
+      null,
+      null
+    ],
+    "[Sample Show HD REMASTER Edition][07][Big5][720p][AVC_AAC][encoded by Foobar].mp4": [
+      "Sample Show HD REMASTER Edition",
+      7,
+      null,
+      null,
+      null,
+      null
+    ],
+    "Foobar.[Group]_Sample_Show_-_01v2_[720p][69A307A2].mkv": [
+      "Sample Show",
+      1,
+      null,
+      null,
+      null,
+      null
+    ],
+    "37 [Group]_Sample_Show_-_37v2_[FINAL]_[XviD][6FA7D273].avi": [
+      "Sample Show",
+      37,
+      null,
+      null,
+      null,
+      null
+    ],
+    "]group] sample show - 12 [bd 1920x1080 x265 10bit 5.1 aac]": [
+      "sample show",
+      12,
+      null,
+      null,
+      null,
+      null
+    ],
+    "[ Sample Show S02E10 1080p WEB-DL x264-GRP ]": [
+      "Sample Show",
+      10,
+      2,
+      null,
+      null,
+      null
+    ],
+    "sample-show!-03-your-song": [
+      "sample show",
+      3,
+      null,
+      null,
+      null,
+      null
+    ],
+    "[Foobar] 中文配 - 样本 Sample Show (Season 1-3) (Dub)": [
+      "Sample Show",
+      1,
+      3,
+      null,
+      null,
+      null
+    ]
+  },
+  "H35 extras and decimals": {
+    "[Foobar]_Sample_Show_OP4a_(1280x720_Blu-Ray_FLAC)_[327A2375].mkv": "error",
+    "[Foobar] Sample Show - EDv2 [1080p] [x265]": "error",
+    "[Foobar] Sample Show - clean ending": "error",
+    "[Foobar] Sample Show - PV [D1A15D2C].mkv": "error",
+    "[Foobar]_Sample_Show_Magikarte_02.5_[902BB314].mkv": "error",
+    "[Foobar]Sample.Show.EP07.5(BD.720p.AAC)[C37580F8].mkv": "error",
+    "[Foobar] Sample Show - 04.1 (DVD)[B6CE8458].mkv": "error",
+    "[Foobar] Sample Show - Special A 01 (H.264) [C83164B9].mkv": [
+      "Sample Show Special A",
+      1,
+      null,
+      null,
+      null,
+      null
+    ],
+    "[Foobar] Special A 01 (H.264) [C83164B9].mkv": [
+      "Special A",
+      1,
+      null,
+      null,
+      null,
+      null
+    ],
+    "[Foobar] Sample Show - EX01 [BD][h264-720p_AAC][3E56EE18].mkv": [
+      "Sample Show",
+      1,
+      null,
+      null,
+      null,
+      "SPECIAL"
+    ],
+    "[Foobar] sample show - sp01 [bd][720p-aac]": [
+      "sample show",
+      1,
+      null,
+      null,
+      null,
+      "SPECIAL"
+    ]
+  },
+  "H36 paths": {
+    "Sample Show/1/01.mkv": [
+      "Sample Show",
+      1,
+      1,
+      null,
+      null,
+      null
+    ],
+    "Sample Show/2/[Foobar] Sample Show - 01.mkv": [
+      "Sample Show",
+      1,
+      null,
+      null,
+      null,
+      null
+    ],
+    "Anime/Sample Show/[Foobar] Sample Show - Episode 3 - A / Humanity's Comeback, Part 1": [
+      "Sample Show",
+      3,
+      null,
+      null,
+      null,
+      null
+    ],
+    "Anime/Sample Show/[Foobar] Sample Show - 05 [720p/MKV]": [
+      "Sample Show",
+      5,
+      null,
+      null,
+      null,
+      null
+    ],
+    "Anime/Sample Show/Sample Show 312v1 [720p/mkv]-Group.mkv": [
+      "Sample Show",
+      312,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "H37 a bracket before an episode range ends the title": {
+    "[Foobar] Sample Show (4Kids ENG) 01-78 + Specials (480i BD x264)/01.mkv": [
+      "Sample Show",
+      1,
+      null,
+      null,
+      null,
+      null
+    ],
+    "[Foobar] Sample Show (4Kids ENG) 01-78 + Specials (480i BD x264)/52.mkv": [
+      "Sample Show",
+      52,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "H38 a numbered word before a dash stays in the title": {
+    "[Foobar] Sample Show Movie 12 - Subtitle.mkv": [
+      "Sample Show Movie 12 Subtitle",
+      1,
+      null,
+      null,
+      null,
+      null
+    ],
+    "[Foobar] Sample Show Part 2 - Subtitle [1080p].mkv": [
+      "Sample Show",
+      1,
+      null,
+      2,
+      null,
+      null
+    ],
+    "[Foobar] Sample Show 34 - Subtitle [1080p].mkv": [
+      "Sample Show",
+      34,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "H39 format words need capitals to open or sit before a title word": {
+    "[Foobar] Ona - 01 [1080p].mkv": [
+      "Ona",
+      1,
+      null,
+      null,
+      null,
+      null
+    ],
+    "[Foobar] Ova no Hon - 01 [1080p].mkv": [
+      "Ova no Hon",
+      1,
+      null,
+      null,
+      null,
+      null
+    ],
+    "[Foobar] Sample Show - ova [BD].mkv": [
+      "Sample Show",
+      1,
+      null,
+      null,
+      null,
+      "OVA"
+    ],
+    "[Foobar] Sample Show ova 2 [BD].mkv": [
+      "Sample Show",
+      2,
+      null,
+      null,
+      null,
+      "OVA"
+    ]
+  },
+  "H40 a numeric folder is a season only as a single digit": {
+    "Anime/86/S01E01.mkv": [
+      "86",
+      1,
+      1,
+      null,
+      null,
+      null
+    ],
+    "Anime/86/E01.mkv": [
+      "86",
+      1,
+      null,
+      null,
+      null,
+      null
+    ],
+    "Anime/86/01.mkv": [
+      "86",
+      1,
+      null,
+      null,
+      null,
+      null
+    ],
+    "Sample Show/1/S01E01.mkv": [
+      "Sample Show",
+      1,
+      1,
+      null,
+      null,
+      null
+    ],
+    "Sample Show/2/E05.mkv": [
+      "Sample Show",
+      5,
+      2,
+      null,
+      null,
+      null
+    ]
+  },
+  "H41 a trailing TV is a format, Complete stays": {
+    "[Foobar] Sample Show TV - 01 [1080p].mkv": [
+      "Sample Show",
+      1,
+      null,
+      null,
+      null,
+      "TV"
+    ],
+    "[foobar] sample_show_tv_-_02_[720p].mkv": [
+      "sample show",
+      2,
+      null,
+      null,
+      null,
+      "TV"
+    ],
+    "[Foobar] Sample Show Advent Children Complete [BD 1080p].mkv": [
+      "Sample Show Advent Children Complete",
+      1,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "H42 a lowercase format word before title words": {
+    "[Foobar] Sample Show ova no hon - 01 [1080p].mkv": [
+      "Sample Show ova no hon",
+      1,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "H43 a trailing Movie is the format": {
+    "Sample.Show.Movie.1080p.BluRay.x264-GROUP.mkv": [
+      "Sample Show",
+      1,
+      null,
+      null,
+      null,
+      "MOVIE"
+    ],
+    "[Foobar] Sample Show the Movie [BD 1080p].mkv": [
+      "Sample Show",
+      1,
+      null,
+      null,
+      null,
+      "MOVIE"
     ]
   }
 }

@@ -1,6 +1,7 @@
 """Turn a media path into a title, episode, year and format: the filename first, then its folders for a title."""
 
 import logging
+import re
 from dataclasses import dataclass
 
 from .errors import ParseError
@@ -27,16 +28,37 @@ class _Details:
         self.media_format = self.media_format or release.media_format
 
 
+def _split_path(path: str) -> list[str]:
+    """Split on separators, but not inside brackets ("[720p/MKV]") or spaced out ("Title / Other title")."""
+    parts, depth, start = [], 0, 0
+    path = path.replace("\\", "/")
+    for i, char in enumerate(path):
+        if char in "[({":
+            depth += 1
+        elif char in "])}":
+            depth = max(depth - 1, 0)
+        elif char == "/" and not depth and not (path[i - 1 : i].isspace() and path[i + 1 : i + 2].isspace()):
+            parts.append(path[start:i])
+            start = i + 1
+    return [*parts, path[start:]]
+
+
 def _title_from_folders(parts: list[str], details: _Details) -> str:
     """Look for the title in the parent folder, then the grandparent."""
+    number = ""  # "Show/1/" is the season's number, unless it is all there is or the file says another ("86/")
     for folder in reversed(parts[:-1][-2:]):
+        if re.fullmatch(r"\d|0\d", folder.strip()) and details.season in {None, int(folder)}:
+            number = number or folder.strip()
+            continue
         release = parse_release(folder, folder=True)
         log.info("Folder guess: %s -> %s", folder, release)
 
         details.fill_from(release)
         if release.title:
+            if number and details.season is None:
+                details.season = int(number)
             return release.title
-    return ""
+    return number
 
 
 def _skip_reason(release: Release, parent: Release | None) -> str | None:
@@ -64,16 +86,6 @@ def _season_folder(parts: list[str], parent: Release | None, release: Release) -
     return parent if fold_title(show.title or "") == fold_title(release.title) else None
 
 
-def _compose_title(title: str, details: _Details) -> str:
-    """Append what AniList titles carry: season and part."""
-    words = [title]
-    if details.season is not None and (details.season > 1 or details.part):
-        words.append(f"Season {details.season}")
-    if details.part:
-        words.append(f"Part {details.part}")
-    return " ".join(words)
-
-
 def parse_path(path: str) -> FileInfo:
     """Extract title, episode, year and format from a media path.
 
@@ -86,7 +98,7 @@ def parse_path(path: str) -> FileInfo:
     Raises:
         ParseError: If the file isn't an episode to record, or neither the filename nor its folders have a title.
     """
-    parts = path.replace("\\", "/").split("/")
+    parts = _split_path(path)
     name = parts[-1]
     release = parse_release(name)
     log.info("File name guess: %s -> %s", name, release)
@@ -108,12 +120,13 @@ def parse_path(path: str) -> FileInfo:
         raise ParseError(f"Couldn't find title in filename '{name}'! Guess result: {release}")
 
     episode = 1 if release.episode is None else release.episode
-    composed = _compose_title(title, details)
-    # A season taken from a folder may not fit the episode ("Show S3/Show - 38" is absolute), so keep the plain title
-    inherited = (details.season, details.part) != (release.season, release.part) and composed != title
-    info = FileInfo(composed, episode, details.year, details.media_format, title if inherited else None)
+    # A season taken from a folder may not fit the episode ("Show S3/Show - 38" is absolute)
+    inherited = (details.season, details.part) != (release.season, release.part)
+    info = FileInfo(
+        title, episode, details.season, details.part, details.year, details.media_format, folder_season=inherited
+    )
     log.info(
-        "Guessed: %s - E%s %s", " ".join(filter(None, (info.title, info.media_format))), episode, info.year or ""
+        "Guessed: %s - E%s %s", " ".join(filter(None, (info.query, info.media_format))), episode, info.year or ""
     )
     return info
 

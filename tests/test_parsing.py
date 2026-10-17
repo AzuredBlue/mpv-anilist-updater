@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from anilist_updater.errors import ParseError
+from anilist_updater.models import FileInfo
 from anilist_updater.parsing import parse_path
 from anilist_updater.release import parse_release
 
@@ -25,7 +26,7 @@ def check(path, expected):
             parse_path(path)
         return
     info = parse_path(path)
-    assert [info.title, info.episode, info.year, info.media_format] == expected
+    assert [info.title, info.episode, info.season, info.part, info.year, info.media_format] == expected
 
 
 @pytest.mark.parametrize(("path", "expected"), FIXTURES.items())
@@ -40,9 +41,9 @@ def test_release_name_quirks(path, expected):
 
 def test_folder_season_keeps_the_plain_title_for_absolute_episodes():
     info = parse_path("Anime/Sample Show Season 3/Sample Show - 38.mkv")
-    assert (info.title, info.base_title) == ("Sample Show Season 3", "Sample Show")
-    assert parse_path("Anime/Sample Show/Sample Show - 38.mkv").base_title is None
-    assert parse_path("Anime/Sample Show/[Foobar] Sample Show S3 - 05.mkv").base_title is None
+    assert (info.title, info.season, info.folder_season) == ("Sample Show", 3, True)
+    assert not parse_path("Anime/Sample Show/Sample Show - 38.mkv").folder_season
+    assert not parse_path("Anime/Sample Show/[Foobar] Sample Show S3 - 05.mkv").folder_season
 
 
 def test_windows_separators():
@@ -53,7 +54,7 @@ def test_windows_separators():
 def test_each_file_of_a_series_gets_its_own_episode(episode):
     name = f"[Foobar] Sample Show S2 - {episode:02}v2 (BD 1080p) [ABCD1234].mkv"
     info = parse_path(name)
-    assert (info.title, info.episode) == ("Sample Show Season 2", episode)
+    assert (info.title, info.season, info.episode) == ("Sample Show", 2, episode)
 
 
 def test_alternative_titles_pick_the_latin_one():
@@ -96,3 +97,12 @@ def test_leading_number_keeps_the_text_after_it_as_a_last_resort():
     release = parse_release("03 - Sample Show.mkv")
     assert (release.title, release.episode, release.episode_title) == (None, 3, "Sample Show")
     assert parse_release("E12 - Welcome.mkv").episode_title is None
+
+
+def test_title_stays_plain_and_the_query_adds_season_and_part():
+    info = parse_path("[Foobar] Sample Show S2 Part 2 - 05 [1080p].mkv")
+    assert (info.title, info.season, info.part) == ("Sample Show", 2, 2)
+    assert info.query == "Sample Show Season 2 Part 2"
+    assert FileInfo("Sample Show", 1).query == "Sample Show"
+    assert FileInfo("Sample Show", 1, season=1).query == "Sample Show"
+    assert FileInfo("Sample Show", 1, season=1, part=2).query == "Sample Show Season 1 Part 2"

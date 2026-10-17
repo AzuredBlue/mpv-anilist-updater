@@ -24,13 +24,25 @@ def _known(cls: type, data: Mapping[str, Any]) -> dict[str, Any]:
 
 @dataclass(frozen=True, slots=True)
 class FileInfo:
-    """What the path says about the media; `base_title` is the title without a season taken from a folder."""
+    """What the path says about the media; `folder_season` says the season and part came from a folder."""
 
     title: str
     episode: int
+    season: int | None = None
+    part: int | None = None
     year: int | None = None
     media_format: str | None = None
-    base_title: str | None = None
+    folder_season: bool = False
+
+    @property
+    def query(self) -> str:
+        """The title as AniList names it: with the season and part, when they tell it apart."""
+        words = [self.title]
+        if self.season is not None and (self.season > 1 or self.part):
+            words.append(f"Season {self.season}")
+        if self.part:
+            words.append(f"Part {self.part}")
+        return " ".join(words)
 
 
 @dataclass(frozen=True, slots=True)
