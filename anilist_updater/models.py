@@ -33,15 +33,24 @@ class FileInfo:
     year: int | None = None
     media_format: str | None = None
     folder_season: bool = False
+    absolute: int | None = None
+    alt_title: str | None = None  # another name the file gives, to search when the title finds nothing
+    folder_title: str | None = (
+        None  # the parent folder's title when it extends the file's ("Initial D Fifth Stage")
+    )
+    marks: str = ""  # the "!" or "!!" the title ends with, to tell "K-ON!" from "K-ON!!"
+    arc: str | None = None  # the arc a season folder names ("Season 02 (Part 03) - Stardust Crusaders")
 
     @property
     def query(self) -> str:
         """The title as AniList names it: with the season and part, when they tell it apart."""
         words = [self.title]
-        if self.season is not None and (self.season > 1 or self.part):
+        # AniList names the first part of a season like the whole season, but "Kizumonogatari Part 1" keeps its part
+        part = self.part if self.part and (self.part > 1 or self.season is None) else None
+        if self.season is not None and (self.season > 1 or part):
             words.append(f"Season {self.season}")
-        if self.part:
-            words.append(f"Part {self.part}")
+        if part:
+            words.append(f"Part {part}")
         return " ".join(words)
 
 

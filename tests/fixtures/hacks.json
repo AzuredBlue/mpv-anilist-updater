@@ -76,7 +76,7 @@
       null,
       null,
       null,
-      null
+      "MOVIE"
     ],
     "Sample.Show.Movie.1080p.BDRip.x265-GRP.mkv": [
       "Sample Show",
@@ -867,7 +867,7 @@
       1,
       null,
       null,
-      null
+      "OVA"
     ],
     "[Foobar] Sample Show 87 (S4-24) [1080p HEVC Multi-Subs]": [
       "Sample Show",
@@ -1291,6 +1291,178 @@
       null,
       null,
       "MOVIE"
+    ]
+  },
+  "H44 a dashed Movie is the format": {
+    "[Foobar] Sample Show - Movie [1080p][ABCD1234].mkv": [
+      "Sample Show",
+      1,
+      null,
+      null,
+      null,
+      "MOVIE"
+    ]
+  },
+  "H45 a pack's OVA list is not the episode's format": {
+    "Sample Show - Part 3 - Final + OVA (BD 1080p)/[Foobar] Sample Show - 25 - Final (BD 1080p) [4948569E].mkv": [
+      "Sample Show",
+      25,
+      null,
+      null,
+      null,
+      null
+    ],
+    "Sample Show S01-S02+OVA+SP 1080p x265-GRP/S01E01-Pilot [ABCD1234].mkv": [
+      "Sample Show",
+      1,
+      1,
+      null,
+      null,
+      null
+    ]
+  },
+  "H46 season and part together": {
+    "Sample Show S01P02 1080p BDRip x265-GRP/S01E12-Pilot [ABCD1234].mkv": [
+      "Sample Show",
+      12,
+      1,
+      2,
+      null,
+      null
+    ]
+  },
+  "H47 numbered folders order a pack and are no title": {
+    "Sample Show S01-S02+OVA+SP 1080p x265-GRP/01. Season 1 + Special/S01E01-Pilot [ABCD1234].mkv": [
+      "Sample Show",
+      1,
+      1,
+      null,
+      null,
+      null
+    ],
+    "Sample Show S01-S02+OVA+SP 1080p x265-GRP/02. OVA/S01OAD01-Pilot [ABCD1234].mkv": [
+      "Sample Show",
+      1,
+      1,
+      null,
+      null,
+      "OVA"
+    ],
+    "Sample Show S01-S02+OVA+SP 1080p x265-GRP/03. Season 2 Part 01 + Special/S02E04-Pilot [ABCD1234].mkv": [
+      "Sample Show",
+      4,
+      2,
+      1,
+      null,
+      null
+    ]
+  },
+  "H48 the absolute number beside the season's episode": {
+    "[Foobar] Sample Show S2 [02(14)][Ma10p_1080p][x265_flac].mkv": [
+      "Sample Show",
+      2,
+      2,
+      null,
+      null,
+      null
+    ]
+  },
+  "H49 a season 0 special named by its folder": {
+    "Sample Show - Side Story/[Foobar] Sample Show - S00E01 (BD 1080p).mkv": [
+      "Sample Show Side Story",
+      1,
+      null,
+      null,
+      null,
+      "SPECIAL"
+    ]
+  },
+  "H50 SPE is a special": {
+    "[Foobar] Sample Show - SPE03 [BDRip 1080p].mkv": [
+      "Sample Show",
+      3,
+      null,
+      null,
+      null,
+      "SPECIAL"
+    ]
+  },
+  "H51 a decimal episode that names its format is that format's only episode": {
+    "[Foobar] Sample Show - 19.5 - Ketsu OVA (BD 1080p) [A971AEAB].mkv": [
+      "Sample Show",
+      1,
+      null,
+      null,
+      null,
+      "OVA"
+    ],
+    "[Foobar] Sample Show - 02.5 (BD 1080p).mkv": "error"
+  },
+  "H52 a hyphen glued to a word does not end the title's number": {
+    "[Foobar] Sample Show - 3-nen Z-gumi - 02 (1080p) [1F6790B3].mkv": [
+      "Sample Show 3 nen Z gumi",
+      2,
+      null,
+      null,
+      null,
+      null
+    ],
+    "[Foobar] Sample Show - 05-Subtitle.mkv": [
+      "Sample Show",
+      5,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "H54 episode 0 is a prologue, unless it numbers a film": {
+    "S02E00-Guardian Fitz [F94A097E].mkv": "error",
+    "[Foobar] Sample Show - 00 (1080p).mkv": "error",
+    "Sample Show Episode 0.mkv": "error",
+    "[Foobar] Sample Show - Movie 00 [1080p].mkv": [
+      "Sample Show",
+      0,
+      null,
+      null,
+      null,
+      "MOVIE"
+    ]
+  },
+  "H55 a dash glued to a zero-padded number is the episode": {
+    "[Foobar] Sample Show  -011 - Some Title.mkv": [
+      "Sample Show",
+      11,
+      null,
+      null,
+      null,
+      null
+    ],
+    "[Foobar] Sample Show -05 [1080p].mkv": [
+      "Sample Show",
+      5,
+      null,
+      null,
+      null,
+      null
+    ],
+    "Sample Show -2000 BD.mkv": [
+      "Sample Show 2000",
+      1,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "H53 season and episode glued to the title": {
+    "SampleShowS04E01.mkv": [
+      "SampleShow",
+      1,
+      4,
+      null,
+      null,
+      null
     ]
   }
 }

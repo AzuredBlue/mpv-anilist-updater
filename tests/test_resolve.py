@@ -1,9 +1,11 @@
+from dataclasses import replace
+
 import pytest
 from fakes import SEASONS, FakeClient, media
 
 from anilist_updater.errors import SkipUpdate
 from anilist_updater.models import FileInfo, Status
-from anilist_updater.resolve import locate_episode, main_series, refresh, resolve
+from anilist_updater.resolve import TIMES_SIGN, locate_episode, main_series, refresh, resolve
 
 
 def test_main_series_follows_sequels_in_order():
@@ -377,3 +379,407 @@ def test_resolve_absolute_episode_does_not_count_a_movie_between_seasons():
     ]
     with pytest.raises(SkipUpdate):
         resolve(client, FileInfo("Show", 25))
+
+
+def test_resolve_user_list_hit_that_does_not_name_the_title_loses_to_the_global_one():
+    client = FakeClient(user=[media(9, 12, title="Other Show")], everything=[media(1, 13, title="K-ON!")])
+    assert resolve(client, FileInfo("K ON", 2)).anime_id == 1
+
+
+def test_resolve_user_list_is_kept_when_both_name_the_title_alike():
+    client = FakeClient(user=[media(9, 12, title="Show Two")], everything=[media(1, 12, title="Show Three")])
+    assert resolve(client, FileInfo("Show", 2)).anime_id == 9
+    client = FakeClient(user=[media(9, 12, title="Show")], everything=[media(1, 12, title="Show")])
+    assert resolve(client, FileInfo("Show", 2)).anime_id == 9
+
+
+def test_resolve_entry_called_exactly_like_the_title_goes_before_longer_ones():
+    fan_letter = media(1, 1, fmt="SPECIAL", title="Show Fan Letter")
+    client = FakeClient(everything=[fan_letter, media(2, 100, title="Show")])
+    assert resolve(client, FileInfo("Show", 1)).anime_id == 2
+
+
+class AliasClient(FakeClient):
+    """AniList needs every word, and knows the show by a shorter name."""
+
+    def search(self, title, year, formats):
+        return ([], [media(1, 12, title="Hai to Gensou no Grimgar")]) if title == "Hai to Gensou" else ([], [])
+
+
+def test_resolve_title_with_an_extra_subtitle_is_searched_shortened():
+    assert resolve(AliasClient(), FileInfo("Hai to Gensou Ashes and Illusions", 1)).anime_id == 1
+
+
+def test_resolve_shortened_search_keeps_at_least_two_words():
+    with pytest.raises(SkipUpdate, match="Couldn't find"):
+        resolve(AliasClient(), FileInfo("Hai Ashes and Illusions", 1))
+
+
+class GraphClient(FakeClient):
+    """Search finds the latest season only; the earlier ones come by ID."""
+
+    def __init__(self, found, seasons):
+        super().__init__(everything=found)
+        self.seasons = {m["id"]: m for m in seasons}
+
+    def related(self, ids):
+        return {i: self.seasons[i] for i in ids if i in self.seasons}
+
+    def search(self, title, year, formats):
+        return ([], self.everything) if title == "Show Bloom" else ([], [])
+
+
+BLOOM = [media(1, 12), media(2, 12, sequel=3, prequel=1), media(3, 12, prequel=2, title="Show Bloom")]
+
+
+def test_resolve_season_in_the_title_is_checked_by_counting_the_seasons_before_it():
+    client = GraphClient(BLOOM[2:], BLOOM)
+    assert resolve(client, FileInfo("Show Bloom", 1, season=3)).anime_id == 3
+
+
+def test_resolve_title_naming_a_later_season_exactly_wins_over_the_season_number():
+    assert resolve(GraphClient(BLOOM[2:], BLOOM), FileInfo("Show Bloom", 1, season=2)).anime_id == 3
+
+
+def test_resolve_shortened_title_is_not_taken_for_a_season_it_is_not():
+    with pytest.raises(SkipUpdate):
+        resolve(GraphClient(BLOOM[:1], BLOOM), FileInfo("Show Bloom", 1, season=3))
+
+
+def test_main_series_fetches_the_relations_the_results_lack():
+    seasons = [media(1, 12, sequel=2), media(2, 12, prequel=1)]
+    assert [m["id"] for m in main_series(seasons[:1], fetch=lambda _ids: {2: seasons[1]})] == [1, 2]
+
+
+def test_resolve_absolute_number_beside_the_episode_picks_the_season_it_falls_in():
+    client = FakeClient(everything=SEASONS)
+    assert (info := resolve(client, FileInfo("Show", 3, season=1, absolute=15))).anime_id == 2
+    assert (info.episode, info.absolute_episode) == (3, 3)
+
+
+def test_resolve_absolute_number_in_one_long_entry_is_that_entry():
+    client = FakeClient(everything=[media(1, 170)])
+    assert (info := resolve(client, FileInfo("Show", 12, season=2, absolute=63))).anime_id == 1
+    assert info.episode == 63
+
+
+def test_resolve_episode_past_the_first_hit_is_found_in_a_remake_of_the_same_name():
+    client = FakeClient(everything=[media(1, 14, title="Show"), media(2, 28, title="Show (2009)")])
+    assert resolve(client, FileInfo("Show", 16)).anime_id == 2
+    assert resolve(client, FileInfo("Show", 2)).anime_id == 1
+
+
+def test_resolve_special_with_a_tv_slot_number_is_the_only_episode_of_its_entry():
+    client = FakeClient(everything=[media(5, 1, fmt="OVA", title="Show Special")])
+    info = resolve(client, FileInfo("Show", 14, media_format="SPECIAL"))
+    assert (info.anime_id, info.episode) == (5, 1)
+
+
+def test_resolve_ova_searches_its_own_format_and_the_special_one_only_when_it_finds_nothing():
+    client = FormatClient()
+    resolve(client, FileInfo("Show", 1, media_format="OVA"))
+    assert client.formats == ["OVA"]
+
+    class OtherKindClient(FakeClient):
+        def search(self, title, year, formats):
+            return ([], [media(5, 1, fmt="SPECIAL", title="Show")]) if formats == ["SPECIAL"] else ([], [])
+
+    assert resolve(OtherKindClient(), FileInfo("Show", 1, media_format="OVA")).anime_id == 5
+
+    class BothClient(FakeClient):
+        def search(self, title, year, formats):
+            kind = formats[0]
+            return ([], [media(5 if kind == "SPECIAL" else 6, 2, fmt=kind, title="Show")])
+
+    assert resolve(BothClient(), FileInfo("Show", 1, media_format="OVA")).anime_id == 6
+
+
+class ContinuedClient(FakeClient):
+    """The season's own title finds that season only; the next one comes by ID."""
+
+    def related(self, ids):
+        return {3: media(3, 12, prequel=2)} if 3 in ids else {}
+
+    def search(self, title, year, formats):
+        return ([], [media(2, 12, sequel=3, prequel=1)]) if title == "Show Season 2" else ([], [])
+
+
+def test_resolve_season_numbering_goes_on_into_the_next_entry():
+    info = resolve(ContinuedClient(), FileInfo("Show", 20, season=2))
+    assert (info.anime_id, info.episode, info.absolute_episode) == (3, 8, 20)
+    assert resolve(ContinuedClient(), FileInfo("Show", 5, season=2)).anime_id == 2
+
+
+class AltNameClient(FakeClient):
+    def search(self, title, year, formats):
+        return ([], [media(1, 12, title="Other Name")]) if title == "Other Name" else ([], [])
+
+
+def test_resolve_other_name_in_the_file_is_searched_when_the_title_finds_nothing():
+    assert resolve(AltNameClient(), FileInfo("Primary Name", 1, alt_title="Other Name")).anime_id == 1
+    with pytest.raises(SkipUpdate):
+        resolve(AltNameClient(), FileInfo("Primary Name", 1))
+
+
+def test_resolve_season_count_crosses_an_ova_between_seasons():
+    seasons = [
+        media(1, 12, sequel=2),
+        media(2, 12, sequel=4, prequel=1),
+        media(4, 1, fmt="OVA", sequel=3, prequel=2),
+        media(3, 12, prequel=4, title="Show Bloom"),
+    ]
+    assert resolve(GraphClient(seasons[3:], seasons), FileInfo("Show Bloom", 1, season=3)).anime_id == 3
+
+
+class PartClient(FakeClient):
+    """ "Show Season 2 Part 2" finds the second part; its files go on numbering from the first."""
+
+    def related(self, ids):
+        return {1: media(1, 12, sequel=2), 2: media(2, 12, prequel=1, sequel=3), 3: media(3, 12, prequel=2)}
+
+    def search(self, title, year, formats):
+        return ([], [media(2, 12, prequel=1, sequel=3)]) if "Part 2" in title else ([], [])
+
+
+def test_resolve_part_numbering_goes_on_from_the_earlier_part():
+    assert (info := resolve(PartClient(), FileInfo("Show", 14, season=2, part=2))).anime_id == 2
+    assert info.episode == 2
+    assert resolve(PartClient(), FileInfo("Show", 5, season=2, part=2)).episode == 5
+
+
+def test_resolve_shortened_search_is_not_a_guess_for_a_file_that_names_a_format():
+    with pytest.raises(SkipUpdate):
+        resolve(AliasClient(), FileInfo("Hai to Gensou Ashes and Illusions", 1, media_format="OVA"))
+
+
+def test_resolve_one_word_other_name_is_too_vague_to_search():
+    with pytest.raises(SkipUpdate):
+        resolve(AltNameClient(), FileInfo("Primary Name", 1, alt_title="Other"))
+
+
+def test_resolve_tv_series_naming_the_title_goes_before_a_one_off_with_that_synonym():
+    crossover = media(1, 1, fmt="ONA", title="Show x Town")
+    crossover["synonyms"] = ["Show"]
+    client = FakeClient(everything=[crossover, media(2, 13, title="Show Season 1")])
+    assert resolve(client, FileInfo("Show", 1, season=1)).anime_id == 2
+    assert resolve(client, FileInfo("Show", 1, media_format="ONA")).anime_id == 1
+
+
+def test_resolve_entry_titled_exactly_like_the_search_stays_before_a_tv_series():
+    client = FakeClient(everything=[media(1, 110, fmt="OVA", title="Show"), media(2, 12, title="Show New Thesis")])
+    assert resolve(client, FileInfo("Show", 1)).anime_id == 1
+
+
+def test_resolve_season_one_in_the_name_goes_back_to_the_first_season():
+    client = FakeClient(
+        everything=[media(2, 12, prequel=1, title="Show Two"), media(1, 12, sequel=2, title="Show")]
+    )
+    assert resolve(client, FileInfo("Show", 3, season=1)).anime_id == 1
+
+
+class ArcClient(FakeClient):
+    """The title is the arc's own name: counting the chain would land on the third entry, a different arc."""
+
+    def search(self, title, year, formats):
+        seasons = [
+            media(1, 12, sequel=2),
+            media(2, 12, prequel=1, sequel=3),
+            media(3, 12, prequel=2, title="Show Three"),
+            media(4, 12, prequel=2, title="Show Arc"),
+        ]
+        return ([], seasons) if title == "Show Arc" else ([], [])
+
+
+def test_resolve_season_is_the_entry_the_title_names_not_the_third_one_counted():
+    assert resolve(ArcClient(), FileInfo("Show Arc", 1, season=3)).anime_id == 4
+
+
+def test_resolve_entry_with_the_exact_synonym_goes_before_one_that_only_ranks_higher():
+    named = media(2, 11, title="Show New World")
+    named["synonyms"] = ["Show Season 3"]
+    client = FakeClient(everything=[media(1, 13, title="Show Future Part 3"), named])
+    assert resolve(client, FileInfo("Show", 1, season=3)).anime_id == 2
+
+
+def test_resolve_numbering_goes_on_from_the_earlier_entries_of_the_title():
+    client = FakeClient(
+        everything=[media(1, 8, sequel=2, title="Show Prelude"), media(2, 8, prequel=1, title="Show Frost")]
+    )
+    assert (info := resolve(client, FileInfo("Show Frost", 10))).anime_id == 2
+    assert info.episode == 2
+    assert resolve(client, FileInfo("Show Frost", 5)).episode == 5
+    with pytest.raises(SkipUpdate):
+        resolve(client, FileInfo("Show Frost", 30))
+
+
+def test_resolve_films_numbered_like_episodes_are_counted_along_their_series():
+    client = FakeClient(
+        everything=[
+            media(3, 1, fmt="MOVIE", prequel=2, title="Show III"),
+            media(2, 1, fmt="MOVIE", prequel=1, sequel=3, title="Show II"),
+            media(1, 1, fmt="MOVIE", sequel=2, title="Show I"),
+        ]
+    )
+    assert [resolve(client, FileInfo("Show", n)).anime_id for n in (2, 3)] == [2, 3]
+    with pytest.raises(SkipUpdate):
+        resolve(client, FileInfo("Show", 4))
+
+
+class SubtitleClient(FakeClient):
+    """AniList names the show only by its subtitle: the franchise word of the release is no part of it."""
+
+    def search(self, title, year, formats):
+        named = media(5, 12, title="3-nen Z-gumi Ginpachi-sensei")
+        unrelated = media(6, 12, title="3-nen Z-gumi Ginpachi-sensei Plus")
+        named["synonyms"] = ["Show: Zany Class"]
+        return ([], [unrelated, named]) if title == "3 nen Z gumi Ginpachi sensei" else ([], [])
+
+
+def test_resolve_title_without_its_first_words_is_searched_when_the_whole_finds_nothing():
+    assert resolve(SubtitleClient(), FileInfo("Show 3 nen Z gumi Ginpachi sensei", 2)).anime_id == 5
+    ova = FileInfo("Show 3 nen Z gumi Ginpachi sensei", 2, media_format="OVA")
+    assert resolve(SubtitleClient(), ova).anime_id == 5
+    with pytest.raises(SkipUpdate):
+        resolve(SubtitleClient(), FileInfo("Other 3 nen Z gumi Ginpachi sensei", 2))
+    with pytest.raises(SkipUpdate):  # too short to be more than a coincidence
+        resolve(SubtitleClient(), FileInfo("Show of the Ring", 2))
+
+
+class HonorificClient(FakeClient):
+    """AniList spells the honorific apart: "Show Oji-san" for the release's "Show Ojisan"."""
+
+    def search(self, title, year, formats):
+        return ([], [media(7, 13, title="Show Oji-san")]) if title == "Show Oji san" else ([], [])
+
+
+def test_resolve_honorific_glued_to_its_name_is_searched_apart_when_the_whole_finds_nothing():
+    assert resolve(HonorificClient(), FileInfo("Show Ojisan", 3)).anime_id == 7
+
+
+class WordsClient(FakeClient):
+    """AniList's English title has more words in between than the file's other name."""
+
+    def search(self, title, year, formats):
+        film = media(9, 1, fmt="MOVIE", title="Show Gaiden")
+        film["title"]["english"] = "Show: Legend of Raoh: Chapter of Death in Love"
+        return ([], [film]) if title == "Legend of Raoh Death in Love" else ([], [])
+
+
+def test_resolve_other_name_is_found_by_its_words_but_not_a_shorter_one():
+    file = FileInfo("Show 1", 1, media_format="MOVIE", alt_title="Legend of Raoh Death in Love")
+    assert resolve(WordsClient(), file).anime_id == 9
+    with pytest.raises(SkipUpdate):
+        resolve(WordsClient(), replace(file, alt_title="Legend of Raoh"))
+
+
+class ArcFolderClient(FakeClient):
+    """The folder names the arc; AniList splits it into two entries and the file numbers straight through."""
+
+    def search(self, title, year, formats):
+        if title == "Show Stardust":
+            return [], [
+                media(1, 24, sequel=2, title="Show: Stardust"),
+                media(2, 24, prequel=1, title="Show: Stardust 2"),
+            ]
+        if title == "Show Missing":
+            return [], [media(5, 12, title="Show")]
+        return [], []
+
+
+def test_resolve_arc_of_the_season_folder_is_searched_and_its_numbering_goes_on():
+    assert (info := resolve(ArcFolderClient(), FileInfo("Show", 37, season=2, arc="Stardust"))).anime_id == 2
+    assert info.episode == 13
+    assert resolve(ArcFolderClient(), FileInfo("Show", 17, season=2, arc="Stardust")).anime_id == 1
+
+
+def test_resolve_arc_that_no_entry_names_is_no_answer():
+    with pytest.raises(SkipUpdate):
+        resolve(ArcFolderClient(), FileInfo("Show", 3, season=2, arc="Missing"))
+
+
+def test_resolve_exclamation_marks_of_the_file_pick_between_entries_that_tie():
+    client = FakeClient(
+        everything=[media(1, 13, title="Show!"), media(2, 26, title="Show!!"), media(3, 12, title="Show?")]
+    )
+    assert resolve(client, FileInfo("Show", 1, marks="!!")).anime_id == 2
+    assert resolve(client, FileInfo("Show", 1, marks="!")).anime_id == 1
+    assert resolve(client, FileInfo("Show", 1)).anime_id == 1
+    assert resolve(client, FileInfo("Show", 1, marks="?!")).anime_id == 1
+
+
+def test_resolve_number_past_the_series_is_the_one_episode_ova_named_after_it():
+    extra = media(2, 1, fmt="OVA", title="Show OVA")
+    extra["synonyms"] = ["Show Episode 13", "Show Episode 13.5"]
+    client = FakeClient(everything=[media(1, 12, sequel=2, title="Show"), extra])
+    assert (info := resolve(client, FileInfo("Show", 13))).anime_id == 2
+    assert info.episode == 1
+    assert resolve(client, FileInfo("Show", 5)).anime_id == 1
+    with pytest.raises(SkipUpdate):
+        resolve(client, FileInfo("Show", 14))
+
+
+class FolderTitleClient(FakeClient):
+    """AniList calls the season by its stage name, which only the folder gives."""
+
+    def search(self, title, year, formats):
+        stage = media(5, 14, prequel=4, title="Show Fifth Stage")
+        return (
+            ([], [media(4, 24, sequel=5, title="Show Fourth Stage"), stage])
+            if title == "Show Fifth Stage"
+            else ([], [])
+        )
+
+
+def test_resolve_folder_title_that_goes_on_from_the_file_title_is_searched_when_the_whole_finds_nothing():
+    file = FileInfo("Show", 7, season=5, folder_title="Show Fifth Stage")
+    assert (info := resolve(FolderTitleClient(), file)).anime_id == 5
+    assert info.episode == 7
+    with pytest.raises(SkipUpdate):
+        resolve(FolderTitleClient(), FileInfo("Show", 7, season=5))
+
+
+class TimesClient(FakeClient):
+    """AniList writes the sequel mark with a times sign, which a search for "X2" doesn't find but for a one-off."""
+
+    def search(self, title, year, formats):
+        if title == "Show X2 Ketsu":
+            return [], [media(9, 1, fmt="OVA", title="Show Ketsu: Extra")]
+        return (
+            ([], [media(8, 12, title=f"Show{TIMES_SIGN}2 Ketsu")])
+            if title == f"Show {TIMES_SIGN}2 Ketsu"
+            else ([], [])
+        )
+
+
+def test_resolve_x2_of_the_name_is_searched_as_the_times_sign_when_the_first_search_fits_nothing():
+    assert resolve(TimesClient(), FileInfo("Show X2 Ketsu", 3)).anime_id == 8
+    assert resolve(TimesClient(), FileInfo("Show X2 Ketsu", 1, media_format="OVA")).anime_id == 9
+    with pytest.raises(SkipUpdate):
+        resolve(TimesClient(), FileInfo("Show Max Ketsu", 3))
+
+
+def test_resolve_walk_back_to_the_first_season_keeps_the_exclamation_marks_of_the_file():
+    sequel = media(2, 26, prequel=1, title="Show!!")
+    client = FakeClient(everything=[sequel, media(1, 13, sequel=2, title="Show!")])
+    assert resolve(client, FileInfo("Show", 1, marks="!!")).anime_id == 2
+    assert resolve(client, FileInfo("Show", 1)).anime_id == 1
+    both = FakeClient(
+        everything=[media(2, 12, prequel=1, title="Show Two!"), media(1, 12, sequel=2, title="Show!")]
+    )
+    assert resolve(both, FileInfo("Show", 1, marks="!")).anime_id == 1
+
+
+def test_resolve_title_with_the_files_year_is_not_walked_back_to_the_first_season():
+    seasons = [media(1, 12, sequel=2, title="Show"), media(2, 12, prequel=1, title="Show (2018)")]
+    assert resolve(FakeClient(everything=[seasons[1], seasons[0]]), FileInfo("Show", 7, year=2018)).anime_id == 2
+    assert resolve(FakeClient(everything=[seasons[1], seasons[0]]), FileInfo("Show", 7)).anime_id == 1
+
+
+def test_resolve_title_with_year_and_later_season_targets_the_later_season():
+    # E.g. Ranma 1/2 (2024) Season 2 should not be hijacked by the dated Season 1 entry
+    seasons = [
+        media(1, 12, sequel=2, title="Show (2024)"),
+        media(2, 12, prequel=1, title="Show Season 2"),
+    ]
+    client = FakeClient(everything=seasons)
+    assert resolve(client, FileInfo("Show", 6, season=2, year=2024)).anime_id == 2

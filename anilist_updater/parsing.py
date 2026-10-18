@@ -2,13 +2,19 @@
 
 import logging
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from .errors import ParseError
 from .models import FileInfo
-from .release import Release, fold_title, parse_release
+from .release import VIDEO_EXTENSIONS, Release, fold_title, parse_release
 
 log = logging.getLogger(__name__)
+
+# "Studio Ghibli - Movie 00 - Nausicaa": the film's own title comes after the number
+_MOVIE_SUBTITLE = re.compile(r"\bMovie\s*\d{1,2}\s*-\s*(?P<subtitle>[^\W\d_][^\[\(]+)", re.IGNORECASE)
+
+
+_ARC_FOLDER = re.compile(r"Season\s*\d{1,2}\s*(?:\(Part[^)]*\))?\s*-?\s*(?P<arc>[^\W\d_][^\[\(]*)", re.IGNORECASE)
 
 
 @dataclass(slots=True)
@@ -72,6 +78,44 @@ def _skip_reason(release: Release, parent: Release | None) -> str | None:
     return None
 
 
+def _alt_title(name: str, release: Release) -> str | None:
+    """The other name of the show in the file: a bracketed one, or the title after "Movie 01 -"."""
+    stem, _, extension = name.rpartition(".")
+    if match := _MOVIE_SUBTITLE.search(stem if extension.lower() in VIDEO_EXTENSIONS else name):
+        alt = match["subtitle"]
+    else:
+        alt = next((a for a in release.alt_titles if re.search(r"[^\W\d_]{3}", a)), "")
+    return " ".join(re.split(r"[^\w']+", alt.replace("`", "'"))).strip(" '") or None
+
+
+def _folder_title(parent: Release | None, release: Release) -> str | None:
+    """The parent folder's title when it goes on from the file's own ("Initial D Fifth Stage/Initial D - S05E07")."""
+    if not (parent and parent.title and release.title):
+        return None
+    title = re.sub(
+        r"^\d{1,2}\s+(?=[^\W\d])", "", parent.title
+    )  # "09 - Initial D Fifth Stage": the index orders folders
+    return title if title.casefold().startswith(f"{release.title.casefold()} ") else None
+
+
+def _arc(parts: list[str], release: Release) -> str | None:
+    """The arc named by the season folder of a file that has its own title."""
+    if len(parts) < 2 or not release.title:
+        return None
+    match = _ARC_FOLDER.fullmatch(parts[-2].strip())
+    return " ".join(re.split(r"[^\w']+", match["arc"])).strip(" '") or None if match else None
+
+
+def _named_special(release: Release, parent: Release | None) -> Release | None:
+    """The special of "Show - S00E01" inside "Show - Subtitle/": the folder names it, and AniList lists it on its own."""
+    if release.season != 0 or not release.skip or not (parent and parent.title and release.title):
+        return None
+    own, folder = fold_title(release.title), fold_title(parent.title)
+    if folder == own or not folder.startswith(own):
+        return None
+    return replace(release, title=parent.title, season=None, media_format="SPECIAL", skip=None)
+
+
 def _season_folder(parts: list[str], parent: Release | None, release: Release) -> Release | None:
     """The folder whose season and part apply to a file with a title of its own.
 
@@ -103,6 +147,7 @@ def parse_path(path: str) -> FileInfo:
     release = parse_release(name)
     log.info("File name guess: %s -> %s", name, release)
     parent = parse_release(parts[-2], folder=True) if len(parts) > 1 else None
+    release = _named_special(release, parent) or release
     if skip := _skip_reason(release, parent):
         raise ParseError(f"'{name}' is {skip}. Not updating.")
 
@@ -125,7 +170,18 @@ def parse_path(path: str) -> FileInfo:
     # A season taken from a folder may not fit the episode ("Show S3/Show - 38" is absolute)
     inherited = (details.season, details.part) != (release.season, release.part)
     info = FileInfo(
-        title, episode, details.season, details.part, details.year, details.media_format, folder_season=inherited
+        title,
+        episode,
+        details.season,
+        details.part,
+        details.year,
+        details.media_format,
+        folder_season=inherited,
+        absolute=release.absolute,
+        alt_title=_alt_title(name, release),
+        folder_title=_folder_title(parent, release),
+        marks=release.marks,
+        arc=_arc(parts, release),
     )
     log.info(
         "Guessed: %s - E%s %s", " ".join(filter(None, (info.query, info.media_format))), episode, info.year or ""

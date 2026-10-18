@@ -21,6 +21,7 @@ _MEDIA_FIELDS = """
     fragment MediaFields on Media {
         id
         title { romaji english }
+        synonyms
         episodes
         duration
         format
@@ -29,6 +30,15 @@ _MEDIA_FIELDS = """
         relations { edges { relationType node { id format } } }
     }
 """
+
+_BY_IDS = (
+    _MEDIA_FIELDS
+    + """
+    query($ids: [Int]) {
+        Page(page: 1, perPage: 50) { media(id_in: $ids, type: ANIME) { ...MediaFields } }
+    }
+"""
+)
 
 
 def _search_query(count: int) -> str:
@@ -112,6 +122,7 @@ class AniListClient:
         self._searches: dict[
             tuple[str, int | None, tuple[str, ...]], tuple[list[dict[str, Any]], list[dict[str, Any]]]
         ] = {}
+        self._entries: dict[int, dict[str, Any]] = {}
 
     @classmethod
     def from_token_file(cls, path: Path = TOKEN_PATH) -> Self:
@@ -175,6 +186,18 @@ class AniListClient:
         """
         self.prefetch([(title, year)], formats)
         return self._searches[title, year, tuple(formats)]
+
+    def related(self, ids: list[int]) -> dict[int, dict[str, Any]]:
+        """Fetch entries by ID in one request, for the prequels and sequels a search didn't return.
+
+        Returns:
+            dict[int, dict[str, Any]]: The entries AniList knows, by ID.
+        """
+        wanted = [i for i in dict.fromkeys(ids) if i not in self._entries][:50]
+        if wanted:
+            for media in self._post(_BY_IDS, {"ids": wanted})["Page"]["media"]:
+                self._entries[media["id"]] = media
+        return {i: self._entries[i] for i in ids if i in self._entries}
 
     def search_titles(self, query: str) -> list[dict[str, Any]]:
         """Look up anime by title for the correction overlay, in one light request.

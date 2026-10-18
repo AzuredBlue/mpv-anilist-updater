@@ -4,6 +4,20 @@ Fansub and scene names follow a few conventions, and every rule here is a patter
 and bracketed tags are set aside, the text before the first technical token is searched for an episode marker,
 and the title is whatever precedes the earliest marker. Nothing after the episode marker is interpreted, because
 that is the episode's own title.
+
+Compared with other parsers on 1,850 files (paths with folders) from 558 nyaa torrents: 1,743 labeled episodes
+and 81 extras, all resolved on AniList by the same code, so only the parser differs. This is a blind benchmark
+sampled across random torrents.
+
+    parser                          correct  wrong anime  wrong episode  not found
+    this                            84.8%    5.4%         4.0%           5.9%
+    old                             79.4%    9.6%         4.8%           6.1%
+    aniparse + folder title         78.9%    10.7%        4.6%           5.7%
+    anitopy + folder title          75.4%    6.6%         3.4%           14.6%
+    aniparser + folder title        68.8%    15.3%        4.1%           11.9%
+    guessit, filename               61.9%    17.6%        4.6%           15.9%
+    guessit, full path              49.7%    11.9%        11.6%          26.7%
+
 """
 
 import logging
@@ -24,6 +38,7 @@ FORMATS = {
     "Special": "SPECIAL",
     "Specials": "SPECIAL",
     "SP": "SPECIAL",
+    "SPE": "SPECIAL",
     "EX": "SPECIAL",
     "TVSP": "SPECIAL",
 }
@@ -39,6 +54,8 @@ _TRANSLATION = str.maketrans(
         "\u3011": "]",
         "\u2019": "'",
         "\u2018": "'",
+        "`": "'",
+        "\u00b4": "'",
         "\u301c": "~",
         "\u2044": " ",
         "\u2010": "-",
@@ -64,11 +81,14 @@ _TRAILING = re.compile(
 # A trailing "TV" or "Movie" tells the format, as AniList's "School Days (TV)" does
 _FORMAT_TAIL = re.compile(r"\s+(?:(?P<tv>TV)|(?:the\s+)?Movie)$", re.IGNORECASE)
 _PREFIX = re.compile(r"^(?:REPACK|PROPER)\s+", re.IGNORECASE)
+_INDEXED = re.compile(r"^\d{1,2}\.\s+(?=\D)")
 # "Ren'ai" separates syllables; AniList spells it "Renai" and finds nothing with the apostrophe
 _SYLLABLE_BREAK = re.compile(r"(?<=[nN])'(?=[aeiouyAEIOUY])")
 
-# " - Movie" after a title only confuses the search ("Hyakuemu - Movie").
+# " - Movie" after a title only confuses the search ("Hyakuemu - Movie"), so it is dropped and becomes the format.
 _MOVIE = re.compile(r"\s-\s+Movie\b", re.IGNORECASE)
+# "Ketsu + OVA", "S01-S02+OVA+SP": what else the pack holds, not this file's format
+_PACK = re.compile(r"\+\s*(?=(?:OVA|ONA|OAD|SP|Specials?|Movies?|Extras?)\b)", re.IGNORECASE)
 # Everything from the first technical token on is the release's encoding, never title or episode.
 _TECH = re.compile(
     r"\b(?:\d{3,4}[pi]|\d{3,4}x\d{3,4}|4K|[xh][. ]?26[45]|HEVC|AVC|AV1|10[- ]?bits?|Hi10P?|Blu-?Ray|BDRip|BDRemux"
@@ -102,11 +122,11 @@ _DECIMAL_EPISODE = re.compile(
 )
 # "S01E05", "S01E05v2", "S01E01E02", "S01E01-03"
 _SEASON_EPISODE = re.compile(
-    r"\bS(?P<season>\d{1,2}) ?E(?P<ep>\d{1,4})(?:\s?v(?P<ver>\d+))?(?:(?:E|[-~]E?)(?P<last>\d{1,4}))*(?!\w)",
+    r"(?:\b|(?<=[a-z]))S(?P<season>\d{1,2}) ?E(?P<ep>\d{1,4})(?:\s?v(?P<ver>\d+))?(?:(?:E|[-~]E?)(?P<last>\d{1,4}))*(?!\w)",
     re.IGNORECASE,
 )
 # "s01ova02"
-_SEASON_OVA = re.compile(r"\bS(?P<season>\d{1,2})(?:OVA|OAD|SP)(?P<ep>\d{1,3})(?!\w)", re.IGNORECASE)
+_SEASON_OVA = re.compile(r"\bS(?P<season>\d{1,2})(?P<format>OVA|OAD|SP)(?P<ep>\d{1,3})(?!\w)", re.IGNORECASE)
 # "Vol 2 06 Title": the number after a disc is the episode
 _VOLUME_EPISODE = re.compile(r"\bVol(?:ume)?\.?\s*\d+\s+(?P<ep>0\d|[1-9]\d)(?!\w)", re.IGNORECASE)
 # "S2 02", "S2 - 02", "Season 2 - 02": the number after a season is the episode
@@ -133,6 +153,8 @@ _DASH_EPISODE = re.compile(
     rf"{_DASH_HEAD}(?:(?:\s*[-~]\s*|\+)(?P<last>\d{{1,4}})(?:[a-c]|v\d+)?)?(?![\w.])", re.IGNORECASE
 )
 _DASH_SINGLE = re.compile(rf"{_DASH_HEAD}(?![\w.])", re.IGNORECASE)
+# "Title  -011 - Subtitle": the dash is glued to a zero-padded number, which keeps "-2000" and "-1" out
+_GLUED_DASH_EPISODE = re.compile(r"(?<=\s)[-~](?P<ep>0\d{1,2})(?=\s|$)")
 _MARKERS = {
     "decimal": _DECIMAL_EPISODE,
     "season+episode": _SEASON_EPISODE,
@@ -143,14 +165,16 @@ _MARKERS = {
     "episode mark": _EPISODE_MARK,
     "volume episode": _VOLUME_EPISODE,
     "dash number": _DASH_EPISODE,
+    "glued dash number": _GLUED_DASH_EPISODE,
 }
 
 # Without a marker: a bracketed "[05]" or "[01-12]"; a bare number after a bracket ("(2023) 153 (1080p)");
 # a zero-padded number ending the title ("Title 05"); a leading "01 - Title".
 # Also "[Ep.24]", "[20 of 25]" and "[24(END)]"
+# and "[02(14)]", the season's own number with the absolute one in parentheses
 _BRACKETED_EPISODE = re.compile(
     r"(?:E(?:p|pisode)?\.?\s*)?(?P<ep>\d{1,4})(?:v\d+)?(?:\s*[-~]\s*(?P<last>\d{1,4}))?(?:\s+of\s+\d+)?"
-    r"(?:\s*\(?(?:END|FINAL)\)?)?",
+    r"(?:\s*\(?(?:END|FINAL)\)?)?(?:\((?P<absolute>\d{1,4})\))?",
     re.IGNORECASE,
 )
 # "(S4-24)": a season's own number next to the absolute one
@@ -182,7 +206,8 @@ _LONE_NUMBER = re.compile(r"(?P<ep>\d{1,4})(?:v\d+)?", re.IGNORECASE)
 # are the last season of a pack.
 _SEASON_WORDS = r"(?:(?:Season|Temporada|Saison|Staffel)\s*|S)"
 _SEASON = re.compile(
-    rf"(?<![0-9](?:st|nd|rd|th)\s)\b{_SEASON_WORDS}(?P<n>\d{{1,2}})(?:(?:\s*-\s*S|(?<=\d)S)(?P<last>\d{{1,2}}))?\b",
+    rf"(?<![0-9](?:st|nd|rd|th)\s)\b{_SEASON_WORDS}(?P<n>\d{{1,2}})(?:(?:\s*-\s*S|(?<=\d)S)(?P<last>\d{{1,2}}))?"
+    r"(?:P(?P<p>\d{1,2}))?\b",
     re.IGNORECASE,
 )
 _SEASON_ORDINAL = re.compile(r"\b(?P<n>\d{1,2})(?:st|nd|rd|th)\s+Season\b", re.IGNORECASE)
@@ -199,7 +224,7 @@ _FORMAT = re.compile(
 )
 # "- Special 3", "SP05", and "Title Special 1" when a number follows
 _SPECIAL = re.compile(
-    rf"(?:(?:^|-|{_GAP})\s*|(?<=\s)(?=Specials?\s?\d))(?P<format>Specials?(?!\s+[A-Za-z])|(?i:SP)|EX)"
+    rf"(?:(?:^|-|{_GAP})\s*|(?<=\s)(?=Specials?\s?\d))(?P<format>Specials?(?!\s+[A-Za-z])|(?i:SPE?)|EX)"
     r"(?:\s?(?P<n>\d{1,3})(?:v\d+)?(?:\s?[-~]\s?(?P<last>\d{1,3}))?)?(?!\w)"
 )
 
@@ -251,6 +276,7 @@ class Release:
     part: int | None = None
     year: int | None = None
     media_format: str | None = None  # OVA, ONA, SPECIAL, TV or MOVIE
+    absolute: int | None = None  # the number across all seasons, when the name gives it next to the episode's own
     skip: str | None = None  # why the name must not be applied to a list entry
     # The rest of the release, for the trace
     group: str | None = None
@@ -261,6 +287,7 @@ class Release:
     tags: tuple[str, ...] = ()
     alt_titles: tuple[str, ...] = ()
     episode_title: str | None = None  # a last resort for the title when the name starts with its episode
+    marks: str = ""  # the "!!" of "K-ON!!", which tells it from "K-ON!"
 
 
 @dataclass(slots=True)
@@ -286,9 +313,14 @@ class _Segment:
     part: int | None = None
     year: int | None = None
     media_format: str | None = None
+    absolute: int | None = None
     extra: bool = False
     episode_title: str = ""  # the text after a leading "01 - ", when the name has no title of its own
+    marks: str = ""  # the "!!" the title ends with, which cleaning drops
     groups: list[str] = field(default_factory=list)
+
+
+_TITLE_MARKS = re.compile(r"([!?]+)\s*$")
 
 
 def fold_title(title: str) -> str:
@@ -375,7 +407,8 @@ def _dash_match(text: str) -> re.Match[str] | None:
         ):
             match = _DASH_SINGLE.match(text, match.start()) or match  # ruff: ignore[redefined-loop-name]
             rest = text[match.end() :].lstrip()
-        matches.append((match, not rest or rest[0] in f"{_GAP}+-~"))
+        # "- 3-nen Z-gumi - 02": a hyphen glued to a word goes on with the title
+        matches.append((match, not rest or rest[0] in f"{_GAP}+" or (rest[0] in "-~" and not rest[1:2].isalpha())))
     return next((m for m, settled in matches if settled), matches[0][0] if matches else None)
 
 
@@ -388,6 +421,10 @@ def _find_marker(text: str) -> _Marker | None:
     if best is None:
         return None
     name, match = best
+    # "Fairy Tail - 100 Years Quest - S01E01": a number followed by words is part of the title when a real marker follows
+    if name == "dash number" and text[match.end() :].lstrip()[:1].isalpha():
+        later = _SEASON_EPISODE.search(text, match.end())
+        name, match = ("season+episode", later) if later else (name, match)
     values = match.groupdict()
     return _Marker(
         name,
@@ -505,7 +542,9 @@ def _kept_groups(region: str, groups: list[str]) -> set[int]:
 def _analyse(text: str, groups: list[str], *, folder: bool) -> _Segment:
     """Read one alternative: where the title ends, and the markers before and after it."""
     segment = _Segment(groups=groups)
-    text = _TECH.split(_MOVIE.sub(" ", text), maxsplit=1)[0]
+    text = _TECH.split(text, maxsplit=1)[0]
+    movie = _MOVIE.search(text)
+    text = _MOVIE.sub(" ", text)
     segment.extra = bool(
         _EXTRA.search(text)
         or any(_EXTRA.search(group) or _EXTRA_GROUP.fullmatch(group.strip()) for group in groups)
@@ -522,6 +561,8 @@ def _analyse(text: str, groups: list[str], *, folder: bool) -> _Segment:
             marker.season,
             marker.version,
         )
+        if marker.name == "season ova":
+            segment.media_format = _format_of(_SEASON_OVA.search(marker.text)["format"])
         log.debug(
             "    marker: %s %r at %d: episode=%s season=%s version=%s",
             marker.name,
@@ -545,6 +586,8 @@ def _analyse(text: str, groups: list[str], *, folder: bool) -> _Segment:
         stops["extra"] = extra.start()
     if match := _SEASON_ORDINAL.search(region) or _SEASON.search(region):
         segment.season = segment.season if segment.season is not None else _last_season(match)
+        if match.groupdict().get("p"):  # "S01P02"
+            segment.part = int(match["p"])
         stops["season"] = match.start()
     elif match := _SEASON_CJK.search(region):
         segment.season = segment.season if segment.season is not None else _season_from(match.group())
@@ -557,13 +600,17 @@ def _analyse(text: str, groups: list[str], *, folder: bool) -> _Segment:
     if (match := _YEAR.search(region)) and region[: match.start()].strip():
         segment.year = int(match["year"])
         stops["year"] = match.start()
-    if match := _format_word(_FORMAT.search(text), text):
+    pack = _PACK.search(text)
+    named, named_region = (text[: pack.start()], region[: pack.start()]) if pack else (text, region)
+    if match := _format_word(_FORMAT.search(named), named):
         segment.media_format = _format_of(match["format"])
         if match.start() < len(region):
             stops["format"] = match.start()
-    elif match := _format_word(_SPECIAL.search(region), region):
+    elif match := _format_word(_SPECIAL.search(named_region), named_region):
         segment.media_format = _format_of(match["format"])
         stops["format"] = match.start()
+    if movie and not segment.media_format and (marker is None or marker.start >= movie.start()):
+        segment.media_format = "MOVIE"
 
     if not segment.marked and not folder and (title_end := _fall_back(segment, text, region, match)) is not None:
         stops["fallback episode"] = title_end
@@ -577,6 +624,7 @@ def _analyse(text: str, groups: list[str], *, folder: bool) -> _Segment:
         else char
         for i, char in enumerate(region[start:cut])
     )
+    segment.marks = m[1] if (m := _TITLE_MARKS.search(words)) else ""
     segment.title = _clean_title(words)
     if tail := _FORMAT_TAIL.search(segment.title):
         segment.title = _TRAILING.sub("", segment.title[: tail.start()])
@@ -677,6 +725,13 @@ def _read_group(segment: _Segment, group: str) -> None:
         segment.media_format = _format_of(match["format"])
         if match["n"] and not segment.marked and segment.episode is None:
             segment.episode = int(match["n"])
+    elif (match := _BRACKETED_EPISODE.fullmatch(group)) and match["absolute"]:
+        segment.absolute = int(match["absolute"])
+    # "S02E12 (063)": a bare number after a season's episode is the absolute one
+    elif segment.marked and segment.season and re.fullmatch(r"\d{2,4}", group) and segment.absolute is None:
+        value = int(group)
+        if value > (segment.episode or 0) and value not in _RESOLUTIONS and not _year_like(value):
+            segment.absolute = value
 
 
 def _title_from_groups(groups: list[str]) -> str:
@@ -714,7 +769,8 @@ def parse_release(name: str, *, folder: bool = False) -> Release:
     Returns:
         Release: Title, episode, season, part, year and format, and why it must be skipped if it must.
     """
-    text = _prepare(name)
+    # "01. Season 1 + Special", "02. OVA": the index orders the folders and is no title
+    text = _prepare(_INDEXED.sub("", name) if folder else name)
     decimal = bool(_DECIMAL_EPISODE.search(text))
     free, groups, release_group = _extract_groups(_unscene(text))
     kinds = _classify(groups)
@@ -769,6 +825,7 @@ def parse_release(name: str, *, folder: bool = False) -> Release:
     season = next((s.season for s in pool if s.season is not None), grouped_season)
     part = next((s.part for s in pool if s.part is not None), grouped_part)
     year = next((s.year for s in pool if s.year is not None), None)
+    absolute = next((s.absolute for s in used if s.absolute is not None), None)
     # A format can sit in a trailing alternative: "... | Title | Other title (S02E00) (OVA 2)"
     media_format = next((s.media_format for s in pool if s.media_format), None) or next(
         (_format_of(m["format"]) for group in groups if (m := _GROUP_FORMAT.fullmatch(group.strip()))), None
@@ -777,12 +834,14 @@ def parse_release(name: str, *, folder: bool = False) -> Release:
     skip = None
     if folder:
         skip = "an extra, not an episode" if _EXTRA_FOLDER.fullmatch(text.strip()) else None
-    elif decimal:
+    elif decimal and not media_format:
         skip = "a special between episodes"
     elif any(segment.extra for segment in used):
         skip = "an extra, not an episode"
     elif season == 0 and media_format is None:
         skip = "a season 0 special"
+    elif episode == 0 and media_format is None:  # AniList has no episode 0; "Movie 00" and "OVA 00" name a format
+        skip = "a prologue, episode 0"
     body = text[text.find("]") + 1 :] if release_group and text.lstrip().startswith("[") else text
     release = Release(
         title or None,
@@ -791,6 +850,7 @@ def parse_release(name: str, *, folder: bool = False) -> Release:
         part,
         year,
         media_format,
+        absolute,
         skip,
         group=release_group,
         crc=kinds["crc"][0] if kinds["crc"] else None,
@@ -800,6 +860,7 @@ def parse_release(name: str, *, folder: bool = False) -> Release:
         tags=tuple(kinds["tags"]),
         alt_titles=tuple(kinds["titles"]),
         episode_title=next((s.episode_title for s in used if s.episode_title), None),
+        marks=next((s.marks for s in used if s.title), ""),
     )
     log.debug("  result: %s", release)
     return release

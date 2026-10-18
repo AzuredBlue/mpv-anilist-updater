@@ -99,6 +99,50 @@ def test_leading_number_keeps_the_text_after_it_as_a_last_resort():
     assert parse_release("E12 - Welcome.mkv").episode_title is None
 
 
+@pytest.mark.parametrize(
+    ("path", "absolute"),
+    [
+        ("[Foobar] Sample Show S2 [02(14)][Ma10p_1080p][x265_flac].mkv", 14),
+        ("[Foobar] Sample Show - S02E12 (063).mkv", 63),
+        ("[Foobar] Sample Show - S02E12 (1080p).mkv", None),
+        ("[Foobar] Sample Show - S02E12 [1080].mkv", None),
+        ("[Foobar] Sample Show - 12 (063).mkv", None),
+    ],
+)
+def test_absolute_number_beside_the_episode(path, absolute):
+    assert parse_path(path).absolute == absolute
+
+
+@pytest.mark.parametrize(
+    ("path", "title", "alt_title"),
+    [
+        ("[Foobar] Sample Show (Other Name) - 03 [1080p].mkv", "Sample Show", "Other Name"),
+        (
+            "[Foobar] Sample Show - Fujiko Mine`s Lie (Mine Fujiko) [BD].mkv",
+            "Sample Show Fujiko Mine's Lie",
+            "Mine Fujiko",
+        ),
+        (
+            "[Foobar] Sample Studio - Movie 00 - Wind Valley [BD 1080p].mkv",
+            "Sample Studio 00 Wind Valley",
+            "Wind Valley",
+        ),
+        ("[Foobar] Sample Show Movie 01 - First Part - Initiation.mkv", None, "First Part Initiation"),
+        (
+            "[Foobar] Sample Studio - Movie 04 - Kiki's Service [BD 1080p].mkv",
+            "Sample Studio 04 Kiki's Service",
+            "Kiki's Service",
+        ),
+        ("Sample Show - Movie 1-The Legend of Raoh (2006) BD 1080p.mkv", None, "The Legend of Raoh"),
+        ("[Foobar] Sample Show - 03 [1080p].mkv", "Sample Show", None),
+    ],
+)
+def test_other_name_of_the_show(path, title, alt_title):
+    info = parse_path(path)
+    assert info.alt_title == alt_title
+    assert title is None or info.title == title
+
+
 def test_title_stays_plain_and_the_query_adds_season_and_part():
     info = parse_path("[Foobar] Sample Show S2 Part 2 - 05 [1080p].mkv")
     assert (info.title, info.season, info.part) == ("Sample Show", 2, 2)
@@ -106,3 +150,53 @@ def test_title_stays_plain_and_the_query_adds_season_and_part():
     assert FileInfo("Sample Show", 1).query == "Sample Show"
     assert FileInfo("Sample Show", 1, season=1).query == "Sample Show"
     assert FileInfo("Sample Show", 1, season=1, part=2).query == "Sample Show Season 1 Part 2"
+    assert FileInfo("Sample Show", 1, part=1).query == "Sample Show Part 1"
+    assert FileInfo("Sample Show", 1, season=2, part=1).query == "Sample Show Season 2"
+    assert FileInfo("Sample Show", 1, season=1, part=1).query == "Sample Show"
+
+
+@pytest.mark.parametrize(
+    ("path", "arc"),
+    [
+        ("Show/Season 02 (Part 03) - Stardust Crusaders/Show (2012) S02E37.mkv", "Stardust Crusaders"),
+        ("Show/Season 2 - Soul Society Arc/Show - S02E03.mkv", "Soul Society Arc"),
+        ("Show/Season 2/Show - S02E03.mkv", None),
+        ("Show/Season 3 Roberta's Blood Trail/Show - 026.mkv", "Roberta's Blood Trail"),
+        ("Show/Season 3/Show - 026.mkv", None),
+    ],
+)
+def test_arc_named_by_the_season_folder(path, arc):
+    assert parse_path(path).arc == arc
+
+
+@pytest.mark.parametrize(
+    ("path", "marks"),
+    [
+        ("[Foobar] Sample Show!! [01][1080p].mkv", "!!"),
+        ("[Foobar] Sample Show! - 03 [1080p].mkv", "!"),
+        ("[Foobar] Sample Show - 03 [1080p].mkv", ""),
+        ("[Foobar] Sample Show - 03! [1080p].mkv", ""),
+    ],
+)
+def test_marks_the_title_ends_with(path, marks):
+    assert parse_path(path).marks == marks
+
+
+@pytest.mark.parametrize(
+    ("path", "folder_title"),
+    [
+        ("[Foobar] 09 - Sample Show Fifth Stage/[Foobar] Sample Show - S05E07.mkv", "Sample Show Fifth Stage"),
+        ("Sample Show Collection/Sample Show - 03.mkv", "Sample Show Collection"),
+        ("Sample Show/Sample Show - 03.mkv", None),
+        ("Sample Showcase/Sample Show - 03.mkv", None),
+        ("Other/Sample Show - 03.mkv", None),
+    ],
+)
+def test_folder_title_that_goes_on_from_the_file_title(path, folder_title):
+    assert parse_path(path).folder_title == folder_title
+
+
+def test_number_followed_by_words_stays_in_the_title_when_a_season_episode_follows():
+    release = parse_release("[Foobar] Sample Show - 100 Years Quest - S01E01v2.mkv")
+    assert (release.title, release.season, release.episode) == ("Sample Show 100 Years Quest", 1, 1)
+    assert parse_release("[Foobar] Sample Show - 100 Years Quest - 05.mkv").episode == 5
