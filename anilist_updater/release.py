@@ -10,7 +10,7 @@ and 81 extras, all resolved on AniList by the same code, so only the parser diff
 sampled across random torrents.
 
     parser                          correct  wrong anime  wrong episode  not found
-    this                            84.8%    5.4%         4.0%           5.9%
+    this                            85.5%    4.6%         4.0%           5.9%
     old                             79.4%    9.6%         4.8%           6.1%
     aniparse + folder title         78.9%    10.7%        4.6%           5.7%
     anitopy + folder title          75.4%    6.6%         3.4%           14.6%
@@ -212,6 +212,8 @@ _SEASON = re.compile(
 )
 _SEASON_ORDINAL = re.compile(r"\b(?P<n>\d{1,2})(?:st|nd|rd|th)\s+Season\b", re.IGNORECASE)
 _SEASON_CJK = re.compile(r"第\s*(?P<n>[一二三四五六七八九十\d]+)\s*[季期]|(?P<k>\d+)\s*[期기]")
+_ROMAN_SEASON = {"II": 2, "III": 3, "IV": 4}
+_SEASON_ROMAN = re.compile(r"(?<!\bLupin)(?:\s+|-)(?P<roman>II|III|IV)\s*$", re.ASCII)
 _PART = re.compile(r"\b(?:Part|Pt)\.?\s*(?P<n>\d{1,2}|[IVX]{1,4})\b", re.IGNORECASE)
 # A disc's number, never part of the title
 _VOLUME = re.compile(r"\b(?:Vol(?:ume)?|Dis[ck])\.?\s*\d+(?:v\d+)?\b", re.IGNORECASE)
@@ -497,6 +499,8 @@ def _season_from(text: str) -> int | None:
     if match := _SEASON_CJK.search(text):
         value = match["n"] or match["k"]
         return int(value) if value.isdigit() else CJK_NUMBERS.get(value)
+    if match := _SEASON_ROMAN.search(text):
+        return _ROMAN_SEASON[match["roman"].upper()]
     return None
 
 
@@ -591,6 +595,9 @@ def _analyse(text: str, groups: list[str], *, folder: bool) -> _Segment:
         stops["season"] = match.start()
     elif match := _SEASON_CJK.search(region):
         segment.season = segment.season if segment.season is not None else _season_from(match.group())
+        stops["season"] = match.start()
+    elif match := _SEASON_ROMAN.search(region):
+        segment.season = segment.season if segment.season is not None else _ROMAN_SEASON[match["roman"].upper()]
         stops["season"] = match.start()
     if match := _PART.search(region):
         segment.part = _number(match["n"])
@@ -754,6 +761,8 @@ def _strip_season(title: str) -> tuple[str, int | None, int | None]:
     season = part = None
     if match := _SEASON_ORDINAL.search(title) or _SEASON.search(title):
         season, title = _last_season(match), title[: match.start()] + title[match.end() :]
+    elif match := _SEASON_ROMAN.search(title):
+        season, title = _ROMAN_SEASON[match["roman"].upper()], title[: match.start()] + title[match.end() :]
     if match := _PART.search(title):
         part, title = _number(match["n"]), title[: match.start()] + title[match.end() :]
     return " ".join(title.split()), season, part

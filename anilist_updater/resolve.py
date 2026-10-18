@@ -376,6 +376,10 @@ def _alternatives(file: FileInfo) -> list[str]:
         texts += [f"{title} Season {season}" if season > 1 else title]
         texts += [f"{title} Part {part}"] if part > 1 else []
     texts.append(title)
+    if season in {2: "II", 3: "III", 4: "IV"}:
+        roman = {2: "II", 3: "III", 4: "IV"}[season]
+        texts.append(f"{title} {roman}")
+        texts.append(f"{title} {season}nd Season" if season == 2 else f"{title} {season}rd Season")
     texts.append(_HONORIFIC.sub(r"\1 \2", title))  # AniList spells "Isekai Ojisan" as "Isekai Oji-san"
     texts.append(_TIMES.sub(TIMES_SIGN, title))  # and "Durarara X2 Ketsu" with a times sign
     if file.alt_title and len(file.alt_title.split()) > 1:

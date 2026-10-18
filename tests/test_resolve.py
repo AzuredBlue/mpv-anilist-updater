@@ -783,3 +783,9 @@ def test_resolve_title_with_year_and_later_season_targets_the_later_season():
     ]
     client = FakeClient(everything=seasons)
     assert resolve(client, FileInfo("Show", 6, season=2, year=2024)).anime_id == 2
+
+
+def test_resolve_season_resolves_when_entry_title_has_roman_numeral():
+    entry = media(2, 12, title="Show II")
+    client = FakeClient(everything=[entry])
+    assert resolve(client, FileInfo("Show", 3, season=2)).anime_id == 2

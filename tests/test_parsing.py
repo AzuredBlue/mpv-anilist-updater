@@ -200,3 +200,18 @@ def test_number_followed_by_words_stays_in_the_title_when_a_season_episode_follo
     release = parse_release("[Foobar] Sample Show - 100 Years Quest - S01E01v2.mkv")
     assert (release.title, release.season, release.episode) == ("Sample Show 100 Years Quest", 1, 1)
     assert parse_release("[Foobar] Sample Show - 100 Years Quest - 05.mkv").episode == 5
+
+
+@pytest.mark.parametrize(
+    ("path", "title", "season", "episode"),
+    [
+        ("[Erai-raws] Tensei Shitara Ken Deshita II - 03.mkv", "Tensei Shitara Ken Deshita", 2, 3),
+        ("[HorribleSubs] Sword Art Online II - 01.mkv", "Sword Art Online", 2, 1),
+        ("[Erai-raws] Mushoku Tensei III - 13.mkv", "Mushoku Tensei", 3, 13),
+        ("[Erai-raws] Sample Show IV - 02.mkv", "Sample Show", 4, 2),
+        ("[SubsPlease] Lupin III - 01.mkv", "Lupin III", None, 1),
+    ],
+)
+def test_roman_numeral_season_parsing(path, title, season, episode):
+    info = parse_path(path)
+    assert (info.title, info.season, info.episode) == (title, season, episode)
