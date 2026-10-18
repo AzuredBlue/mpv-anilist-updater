@@ -215,3 +215,17 @@ def test_number_followed_by_words_stays_in_the_title_when_a_season_episode_follo
 def test_roman_numeral_season_parsing(path, title, season, episode):
     info = parse_path(path)
     assert (info.title, info.season, info.episode) == (title, season, episode)
+
+
+def test_bracket_typo_in_release_group():
+    release = parse_release("[Mites[ Clannad - After Story - 05 [1080p].mp4")
+    assert (release.group, release.title, release.episode) == ("Mites", "Clannad After Story", 5)
+
+
+def test_bare_episode_number_before_quoted_episode_title():
+    release = parse_release("[FMA1394] Fullmetal Alchemist 18 'Marcoh's Notes' [US BD].mkv")
+    assert (release.title, release.episode, release.episode_title) == (
+        "Fullmetal Alchemist",
+        18,
+        "Marcoh's Notes",
+    )

@@ -10,13 +10,13 @@ and 81 extras, all resolved on AniList by the same code, so only the parser diff
 sampled across random torrents.
 
     parser                          correct  wrong anime  wrong episode  not found
-    this                            85.5%    4.6%         4.0%           5.9%
-    old                             79.4%    9.6%         4.8%           6.1%
-    aniparse + folder title         78.9%    10.7%        4.6%           5.7%
-    anitopy + folder title          75.4%    6.6%         3.4%           14.6%
-    aniparser + folder title        68.8%    15.3%        4.1%           11.9%
-    guessit, filename               61.9%    17.6%        4.6%           15.9%
-    guessit, full path              49.7%    11.9%        11.6%          26.7%
+    this                            88.6%    4.6%         1.0%           5.7%
+    old                             82.5%    9.0%         2.4%           6.1%
+    aniparse + folder title         82.0%    10.0%        2.2%           5.7%
+    anitopy + folder title          78.5%    5.9%         1.0%           14.6%
+    aniparser + folder title        71.5%    14.6%        2.1%           11.9%
+    guessit, filename               64.6%    16.9%        2.6%           15.9%
+    guessit, full path              52.4%    11.2%        9.6%           26.7%
 
 """
 
@@ -199,6 +199,9 @@ _LEADING_EPISODE = re.compile(
 )
 # "Monster 34 - At the End of Darkness", "The Animatrix 08 A Detective Story"
 _TITLE_NUMBER_DASH = re.compile(r"(?<=\S\s)(?P<ep>0\d{1,2}|[1-9]\d{1,3})\s+-\s+(?=[^\W\d])")
+_QUOTED_EPISODE = re.compile(
+    r"(?<=\S\s)(?P<ep>0\d{1,2}|[1-9]\d{1,2})\s+['\"“](?P<title>.+?)['\"”](?:\s*(?:$|\x00))"
+)
 _PADDED_WORDS = re.compile(r"(?<=\S\s)(?P<ep>0\d{1,2})\s+(?=[A-Z])")
 _LONE_NUMBER = re.compile(r"(?P<ep>\d{1,4})(?:v\d+)?", re.IGNORECASE)
 
@@ -374,11 +377,11 @@ def _extract_groups(text: str) -> tuple[str, list[str], str | None]:
     # "EvoBot.[Group] Title", "37 [Group] Title": something glued before the group is no part of the name
     if (glued := _GLUED_PREFIX.match(text)) and _classify([glued["group"]])["titles"]:
         text = text[glued.end() :]
-    if text.startswith("[") and "]" in text:
-        end = text.find("]")
-        first = text[1:end].strip()
-        if not (_BRACKETED_EPISODE.fullmatch(first) or _GROUP_SEASON_EPISODE.fullmatch(first)):
-            release_group, text = first or None, text[end + 1 :]
+    if text.startswith("["):
+        if m := re.match(r"^\[(?P<group>[^\[\]]+)[\[\]]", text):
+            first = m["group"].strip()
+            if not (_BRACKETED_EPISODE.fullmatch(first) or _GROUP_SEASON_EPISODE.fullmatch(first)):
+                release_group, text = first or None, text[m.end() :]
     elif (broken := re.match(r"\s*\]?([^\[\]]+)\]", text)) and "[" not in text[: broken.end()]:
         release_group, text = broken[1].strip() or None, text[broken.end() :]  # "]group] Title"
     groups: list[str] = []
@@ -716,6 +719,9 @@ def _fall_back(segment: _Segment, text: str, region: str, format_match: re.Match
         segment.episode, end = int(match["ep"]), 0
         if match.re is _LEADING_EPISODE:
             segment.episode_title = _clean_title(region[match.end() :].split(_GAP, maxsplit=1)[0])
+    elif (match := _QUOTED_EPISODE.search(region)) and not _NUMBERED_WORD.search(region[: match.start()]):
+        segment.episode, end = int(match["ep"]), match.start()
+        segment.episode_title = _clean_title(match["title"])
     elif (match := _PADDED_WORDS.search(region)) and not _NUMBERED_WORD.search(region[: match.start()]):
         segment.episode, end = int(match["ep"]), match.start()
     return end

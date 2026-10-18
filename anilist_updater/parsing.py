@@ -40,7 +40,7 @@ def _split_path(path: str) -> list[str]:
     path = path.replace("\\", "/")
     for i, char in enumerate(path):
         if char in "[({":
-            depth += 1
+            depth = min(depth + 1, 1)
         elif char in "])}":
             depth = max(depth - 1, 0)
         elif char == "/" and not depth and not (path[i - 1 : i].isspace() and path[i + 1 : i + 2].isspace()):
