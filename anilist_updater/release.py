@@ -4,20 +4,6 @@ Fansub and scene names follow a few conventions, and every rule here is a patter
 and bracketed tags are set aside, the text before the first technical token is searched for an episode marker,
 and the title is whatever precedes the earliest marker. Nothing after the episode marker is interpreted, because
 that is the episode's own title.
-
-Compared with other parsers on 1,850 files (paths with folders) from 558 nyaa torrents: 1,743 labeled episodes
-and 81 extras, all resolved on AniList by the same code, so only the parser differs. This is a blind benchmark
-sampled across random torrents.
-
-    parser                          correct  wrong anime  wrong episode  not found
-    this                            88.6%    4.6%         1.0%           5.7%
-    old                             82.5%    9.0%         2.4%           6.1%
-    aniparse + folder title         82.0%    10.0%        2.2%           5.7%
-    anitopy + folder title          78.5%    5.9%         1.0%           14.6%
-    aniparser + folder title        71.5%    14.6%        2.1%           11.9%
-    guessit, filename               64.6%    16.9%        2.6%           15.9%
-    guessit, full path              52.4%    11.2%        9.6%           26.7%
-
 """
 
 import logging
@@ -354,7 +340,7 @@ def _number(value: str) -> int | None:
 
 
 def _prepare(name: str) -> str:
-    name = unicodedata.normalize("NFKC", name).translate(_TRANSLATION)
+    name = unicodedata.normalize("NFKC", name.translate(_TRANSLATION))
     stem, dot, extension = name.rpartition(".")
     if dot and extension.lower() in VIDEO_EXTENSIONS:
         name = stem

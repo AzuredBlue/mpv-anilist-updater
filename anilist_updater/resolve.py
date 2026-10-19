@@ -589,6 +589,8 @@ def _fit(results: list[Media], first: Media, file: FileInfo, graph: _Graph) -> A
     """The entry for the file when its episode fits the best result, a remake of it or its part; else None."""
     if file.media_format in SINGLE_FORMATS and first.get("episodes") == 1:  # "Show - 14 (Special)" is its only one
         return _to_info(first, 1, file)
+    if not file.media_format and (film := _movie_series(first, file, graph)):
+        return film
     if not (first.get("episodes") and file.episode > first["episodes"]):
         return _to_info(first, file.episode, file)
     if remake := _remake(results, first, file.episode):
@@ -597,9 +599,19 @@ def _fit(results: list[Media], first: Media, file: FileInfo, graph: _Graph) -> A
     return _to_info(first, relative, file) if relative and relative <= first["episodes"] else None
 
 
+def _with_alt_title(results: list[Media], file: FileInfo) -> list[Media]:
+    """An entry titled "Title (Other)" after the file's own name and bracketed one goes first ("Nekomonogatari (Black)")."""
+    if not file.alt_title:
+        return results
+    named = next((m for m in results if _score(m, f"{file.title} {file.alt_title}") == EXACT), None)
+    return [named, *(m for m in results if m is not named)] if named else results
+
+
 def _resolve_title(client: AniListClient, file: FileInfo, formats: list[str]) -> AnimeInfo:
     user_list, everything = client.search(file.query, file.year, formats)
-    results = _choose(user_list, everything, file.query, series=not file.media_format, marks=file.marks)
+    results = _with_alt_title(
+        _choose(user_list, everything, file.query, series=not file.media_format, marks=file.marks), file
+    )
     if not results and file.media_format in {
         "OVA",
         "SPECIAL",
@@ -656,6 +668,8 @@ def _resolve_title(client: AniListClient, file: FileInfo, formats: list[str]) ->
             season, relative = located
             if title and not _names(season, title):  # a title that names one season doesn't count on into the next
                 continue
+            if file.season and season is not first and not _names(season, file.title):
+                continue  # nor does a season's own numbering go on into a differently named entry
             info = _to_info(season, relative, file)
             log.info("Final guessed anime: %s", info.anime_name)
             log.info("Absolute episode %s corresponds to episode: %s", file.episode, relative)

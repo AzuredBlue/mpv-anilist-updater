@@ -807,3 +807,27 @@ def test_resolve_folder_season_numbers_are_absolute_when_they_land_past_the_firs
 
 def test_resolve_episode_without_folder_season_stays_in_the_first_season():
     assert resolve(FolderSeasonClient(), FileInfo("Show", 5)).anime_id == 1
+
+
+def test_resolve_numbered_films_ranked_last_first_pick_the_film_by_number():
+    films = [
+        media(3, 1, fmt="MOVIE", prequel=2, title="Show III"),
+        media(1, 1, fmt="MOVIE", sequel=2, title="Show I"),
+        media(2, 1, fmt="MOVIE", sequel=3, prequel=1, title="Show II"),
+    ]
+    assert [resolve(FakeClient(everything=films), FileInfo("Show", n)).anime_id for n in (1, 2, 3)] == [1, 2, 3]
+
+
+def test_resolve_season_numbering_does_not_go_on_into_a_differently_named_entry():
+    seasons = [media(1, 12, sequel=2, title="Owari"), media(2, 4, prequel=1, title="Tsuki")]
+    with pytest.raises(SkipUpdate):
+        resolve(FakeClient(everything=seasons), FileInfo("Owari", 13, season=1))
+
+
+def test_resolve_bracketed_name_picks_the_entry_titled_with_it():
+    series = media(1, 26, title="Monogatari Second Season")
+    series["synonyms"] = ["Nekomonogatari White"]
+    black = media(2, 4, title="Nekomonogatari (Kuro)")
+    black["title"]["english"] = "Nekomonogatari Black"
+    info = resolve(FakeClient(everything=[series, black]), FileInfo("Nekomonogatari", 4, alt_title="Black"))
+    assert info.anime_id == 2

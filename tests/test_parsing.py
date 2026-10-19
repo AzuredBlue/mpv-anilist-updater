@@ -261,3 +261,7 @@ def test_bracket_inside_group_is_kept_in_the_group(text):
 def test_episode_zero_is_skipped():
     with pytest.raises(ParseError):
         parse_path("[Group] Show - 00 [1080p].mkv")
+
+
+def test_acute_accent_is_an_apostrophe():
+    assert parse_release("[Group] Anime\u00b4s Title - 05.mkv").title == "Anime's Title"
