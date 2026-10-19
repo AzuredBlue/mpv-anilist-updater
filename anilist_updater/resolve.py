@@ -3,8 +3,9 @@
 import logging
 import re
 from collections import UserDict
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from dataclasses import replace
+from itertools import takewhile
 from typing import Any
 
 from .api import AniListClient, media_title
@@ -51,8 +52,12 @@ def _season_formats(media: Media) -> set[str]:
     return MAIN_FORMATS if _is_series_start(media) else SEASON_FORMATS
 
 
+def _all_names(media: Media) -> list[str]:
+    return [name for name in [*media["title"].values(), *media.get("synonyms", [])] if name]
+
+
 def _titles(media: Media) -> list[str]:
-    return [fold_title(name) for name in [*media["title"].values(), *media.get("synonyms", [])] if name]
+    return [fold_title(name) for name in _all_names(media)]
 
 
 def _names(media: Media, title: str | None) -> bool:
@@ -74,9 +79,7 @@ def _has_words(media: Media, text: str) -> bool:
     """Whether one title of the entry has every word of a longer text, in any order ("Legend of Raoh: Chapter of Death")."""
     words = set(re.findall(r"\w+", text.lower()))
     return len(words) >= MIN_WORDS_IN_OTHER_NAME and any(
-        words <= set(re.findall(r"\w+", name.lower()))
-        for name in [*media["title"].values(), *media.get("synonyms", [])]
-        if name
+        words <= set(re.findall(r"\w+", name.lower())) for name in _all_names(media)
     )
 
 
@@ -89,8 +92,8 @@ def _has_marks(media: Media, marks: str) -> bool:
 def _has_phrase(media: Media, text: str) -> bool:
     """Whether the text is a run of whole words of one title of the entry ("of the Ring" is not in "of the Rings")."""
     words = re.findall(r"\w+", text.casefold())
-    for name in [*media["title"].values(), *media.get("synonyms", [])]:
-        tokens = re.findall(r"\w+", (name or "").casefold())
+    for name in _all_names(media):
+        tokens = re.findall(r"\w+", name.casefold())
         if any(tokens[i : i + len(words)] == words for i in range(len(tokens) - len(words) + 1)):
             return True
     return False
@@ -146,6 +149,15 @@ def _related(media: Media, relation: str, by_id: dict[int, Media]) -> list[Media
     if isinstance(by_id, _Graph):
         by_id.load(ids)
     return [by_id[i] for i in ids if i in by_id]
+
+
+def _sole_prequels(media: Media, graph: _Graph) -> Iterator[Media]:
+    # The prequels back from an entry, one at a time; the walk ends where an entry has none or several.
+    cursor, seen = media, {media["id"]}
+    while len(earlier := [p for p in _related(cursor, "PREQUEL", graph) if p["id"] not in seen]) == 1:
+        cursor = earlier[0]
+        seen.add(cursor["id"])
+        yield cursor
 
 
 def _loses_marks(media: Media, by_id: dict[int, Media], marks: str) -> bool:
@@ -368,12 +380,8 @@ def _without_year(client: AniListClient, file: FileInfo) -> AnimeInfo | None:
 
 def _depth(media: Media, graph: _Graph) -> int:
     """How many main seasons lead to this one, itself included."""
-    depth, cursor, seen = 1, media, {media["id"]}
-    while len(prequels := [p for p in _related(cursor, "PREQUEL", graph) if p["id"] not in seen]) == 1:
-        cursor = prequels[0]
-        seen.add(cursor["id"])
-        depth += cursor["format"] in SEASON_FORMATS  # an OVA or movie between seasons is crossed, not counted
-    return depth
+    # an OVA or movie between seasons is crossed, not counted
+    return 1 + sum(prequel["format"] in SEASON_FORMATS for prequel in _sole_prequels(media, graph))
 
 
 def _alternatives(file: FileInfo) -> list[str]:
@@ -388,8 +396,7 @@ def _alternatives(file: FileInfo) -> list[str]:
         texts += [f"{title} Season {season}" if season > 1 else title]
         texts += [f"{title} Part {part}"] if part > 1 else []
     texts.append(title)
-    if season in {2: "II", 3: "III", 4: "IV"}:
-        roman = {2: "II", 3: "III", 4: "IV"}[season]
+    if roman := {2: "II", 3: "III", 4: "IV"}.get(season):
         texts.append(f"{title} {roman}")
         texts.append(f"{title} {season}nd Season" if season == 2 else f"{title} {season}rd Season")
     texts.append(_HONORIFIC.sub(r"\1 \2", title))  # AniList spells "Isekai Ojisan" as "Isekai Oji-san"
@@ -584,10 +591,8 @@ def _after_earlier_parts(first: Media, file: FileInfo, graph: _Graph) -> int | N
 
 def _continued(first: Media, file: FileInfo, graph: _Graph) -> AnimeInfo | None:
     """The entry named by the title when the file's numbering goes on from its prequels ("Ketsu [28]" is episode 4)."""
-    offset, cursor, seen = 0, first, {first["id"]}
-    while len(earlier := [p for p in _related(cursor, "PREQUEL", graph) if p["id"] not in seen]) == 1:
-        cursor = earlier[0]
-        seen.add(cursor["id"])
+    offset = 0
+    for cursor in _sole_prequels(first, graph):
         if cursor["format"] not in SEASON_FORMATS:
             continue
         if not cursor.get("episodes"):
@@ -613,11 +618,10 @@ def _numbered_extra(results: list[Media], file: FileInfo) -> AnimeInfo | None:
     """The one-episode OVA or special that AniList names after the number ("... Episode 13") of a file past the series."""
     number = re.compile(rf"(?<![\d.])episode\s*{file.episode}(?![\d.])", re.IGNORECASE)
     for media in results:
-        names = [*media["title"].values(), *media.get("synonyms", [])]
         if (
             media["format"] in SINGLE_FORMATS
             and media.get("episodes") == 1
-            and any(number.search(n or "") for n in names)
+            and any(number.search(name) for name in _all_names(media))
         ):
             log.info("Number %s is an episode of its own on AniList: %s", file.episode, media_title(media))
             return _to_info(media, 1, file)
@@ -633,12 +637,8 @@ def _movie_series(first: Media, file: FileInfo, graph: _Graph) -> AnimeInfo | No
         _score(first, file.title) == EXACT or (file.alt_title and _names(first, file.alt_title))
     ):
         return None
-    films, seen = [first], {first["id"]}
-    while len(earlier := [p for p in _related(films[0], "PREQUEL", graph) if p["id"] not in seen]) == 1:
-        if earlier[0]["format"] != "MOVIE":
-            break
-        seen.add(earlier[0]["id"])
-        films.insert(0, earlier[0])
+    earlier = takewhile(lambda film: film["format"] == "MOVIE", _sole_prequels(first, graph))
+    films = [*reversed(list(earlier)), first]
     if file.episode > len(films):
         return None
     film = films[file.episode - 1]
@@ -682,10 +682,8 @@ def _resolve_title(client: AniListClient, file: FileInfo, formats: list[str]) ->
     results = _with_alt_title(
         _choose(user_list, everything, file.query, series=not file.media_format, marks=file.marks), file
     )
-    if not results and file.media_format in {
-        "OVA",
-        "SPECIAL",
-    }:  # AniList files the same kind of extra under either
+    # AniList files the same kind of extra under either
+    if not results and file.media_format in {"OVA", "SPECIAL"}:
         other = "SPECIAL" if file.media_format == "OVA" else "OVA"
         results = [
             m for m in _choose(*client.search(file.query, file.year, [other]), file.query) if _score(m, file.query)
@@ -710,18 +708,18 @@ def _resolve_title(client: AniListClient, file: FileInfo, formats: list[str]) ->
         and next((m for m in results if _score(m, f"{file.title} ({file.year})") == EXACT), None)
     )
     first = dated or first
+    graph = _Graph([*everything, *results], _fetcher(client))
     seasons = _season_formats(first)
     if not (dated or (file.season or 0) > 1 or file.part) and first["format"] in seasons:
         # AniList may rank a later season first; the user's list can lack the ones between
-        by_id = _Graph([*everything, *results], _fetcher(client))
         started = first
         first = _first_season(
-            first, by_id, file.title, seasons, lambda m: _watching(m) or _loses_marks(m, by_id, file.marks)
+            first, graph, file.title, seasons, lambda m: _watching(m) or _loses_marks(m, graph, file.marks)
         )
         # "One Punch Man (2025) - 05" is the season that began in 2025, not the first season of the show
         if _pinned_by_year(started, first, file):
             first = started
-    if info := _fit(results, first, file, _Graph([*everything, *results], _fetcher(client))):
+    if info := _fit(results, first, file, graph):
         log.info("Final guessed anime: %s", info.anime_name)
         return info
 
@@ -748,7 +746,6 @@ def _resolve_title(client: AniListClient, file: FileInfo, formats: list[str]) ->
             log.info("Final guessed anime: %s", info.anime_name)
             log.info("Absolute episode %s corresponds to episode: %s", file.episode, relative)
             return info
-    graph = _Graph([*everything, *results], _fetcher(client))
     if info := (
         _continued(first, file, graph)
         or _movie_series(first, file, graph)

@@ -236,7 +236,6 @@ _SEASON = re.compile(
 )
 _SEASON_ORDINAL = re.compile(r"\b(?P<n>\d{1,2})(?:st|nd|rd|th)\s+Season\b", re.IGNORECASE)
 _SEASON_CJK = re.compile(r"第\s*(?P<n>[一二三四五六七八九十\d]+)\s*[季期]|(?P<k>\d+)\s*[期기]")
-_ROMAN_SEASON = {"II": 2, "III": 3, "IV": 4}
 _SEASON_ROMAN = re.compile(
     r"(?<!\bLupin)(?<!\bPart)(?<!\bPt)(?<!\bPart\.)(?<!\bPt\.)(?:\s+|-)(?P<roman>II|III|IV)\s*$", re.ASCII
 )
@@ -526,15 +525,9 @@ def _last_season(match: re.Match[str]) -> int:
     return int(match.groupdict().get("last") or match["n"])
 
 
-def _season_from(text: str) -> int | None:
-    if match := _SEASON_ORDINAL.search(text) or _SEASON.search(text):
-        return _last_season(match)
-    if match := _SEASON_CJK.search(text):
-        value = match["n"] or match["k"]
-        return int(value) if value.isdigit() else CJK_NUMBERS.get(value)
-    if match := _SEASON_ROMAN.search(text):
-        return _ROMAN_SEASON[match["roman"].upper()]
-    return None
+def _cjk_season(match: re.Match[str]) -> int | None:
+    value = match["n"] or match["k"]
+    return int(value) if value.isdigit() else CJK_NUMBERS.get(value)
 
 
 def _clean_title(text: str) -> str:
@@ -635,10 +628,10 @@ def _analyse(text: str, groups: list[str], *, folder: bool) -> _Segment:
             segment.part = int(match["p"])
         stops["season"] = match.start()
     elif match := _SEASON_CJK.search(region):
-        segment.season = segment.season if segment.season is not None else _season_from(match.group())
+        segment.season = segment.season if segment.season is not None else _cjk_season(match)
         stops["season"] = match.start()
     elif match := _SEASON_ROMAN.search(region):
-        segment.season = segment.season if segment.season is not None else _ROMAN_SEASON[match["roman"].upper()]
+        segment.season = segment.season if segment.season is not None else ROMAN[match["roman"]]
         stops["season"] = match.start()
     part_at = None
     if match := _PART.search(region):
@@ -819,7 +812,7 @@ def _strip_season(title: str) -> tuple[str, int | None, int | None]:
     if match := _SEASON_ORDINAL.search(title) or _SEASON.search(title):
         season, title = _last_season(match), title[: match.start()] + title[match.end() :]
     elif match := _SEASON_ROMAN.search(title):
-        season, title = _ROMAN_SEASON[match["roman"].upper()], title[: match.start()] + title[match.end() :]
+        season, title = ROMAN[match["roman"]], title[: match.start()] + title[match.end() :]
     if match := _PART.search(title):
         part, title = _number(match["n"]), title[: match.start()] + title[match.end() :]
     return " ".join(title.split()), season, part

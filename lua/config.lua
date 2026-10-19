@@ -21,11 +21,12 @@ local CONF_HEADER = [[# anilistUpdater Configuration
 # DIRECTORIES=D:/Torrents;D:/Anime
 ]]
 
--- Every option and its default, in the order of the generated .conf.
+-- Every option and its default, in the order of the generated .conf. The Python side takes whatever is sent
+-- and has no defaults of its own, so it gets every option that is not `lua_only`.
 local DEFAULTS = {
-    { "DIRECTORIES", "" },
-    { "EXCLUDED_DIRECTORIES", "" },
-    { "UPDATE_PERCENTAGE", 85 },
+    { "DIRECTORIES", "", lua_only = true },
+    { "EXCLUDED_DIRECTORIES", "", lua_only = true },
+    { "UPDATE_PERCENTAGE", 85, lua_only = true },
     { "SET_COMPLETED_TO_REWATCHING_ON_FIRST_EPISODE", false },
     { "UPDATE_PROGRESS_WHEN_REWATCHING", true },
     { "SET_TO_COMPLETED_AFTER_LAST_EPISODE_CURRENT", true },
@@ -33,17 +34,8 @@ local DEFAULTS = {
     { "ADD_ENTRY_IF_MISSING", false },
     { "CACHE_REFRESH_RATE", 24 },
     { "CACHE_MODE", "NORMAL" },
-    { "SILENT_MODE", false },
-    { "SHOW_DETECTED_ANIME", false },
-}
-
--- The Python side takes whatever is sent and has no defaults of its own, so it gets everything else.
-local LUA_ONLY = {
-    DIRECTORIES = true,
-    EXCLUDED_DIRECTORIES = true,
-    UPDATE_PERCENTAGE = true,
-    SILENT_MODE = true,
-    SHOW_DETECTED_ANIME = true,
+    { "SILENT_MODE", false, lua_only = true },
+    { "SHOW_DETECTED_ANIME", false, lua_only = true },
 }
 
 local options, lines = {}, { CONF_HEADER:sub(1, -2) }
@@ -75,8 +67,9 @@ local function candidate_paths()
     }
 end
 
+local paths = candidate_paths()
+
 local function find_or_create_conf()
-    local paths = candidate_paths()
     for _, path in ipairs(paths) do
         if readable(path) then
             return path
@@ -131,7 +124,7 @@ local function parse_directories(value)
 end
 
 local conf_path = find_or_create_conf()
-if conf_path and conf_path ~= candidate_paths()[1] then
+if conf_path and conf_path ~= paths[1] then
     read_conf(conf_path)
 end
 mp_options.read_options(options, "anilistUpdater")
@@ -143,9 +136,8 @@ M.options = options
 
 M.python_options = {}
 for _, default in ipairs(DEFAULTS) do
-    local key = default[1]
-    if not LUA_ONLY[key] then
-        M.python_options[key] = options[key]
+    if not default.lua_only then
+        M.python_options[default[1]] = options[default[1]]
     end
 end
 

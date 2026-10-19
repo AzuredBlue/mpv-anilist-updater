@@ -35,14 +35,12 @@ class FileInfo:
     folder_season: bool = False
     absolute: int | None = None
     alt_title: str | None = None  # another name the file gives, to search when the title finds nothing
-    folder_title: str | None = (
-        None  # the parent folder's title when it extends the file's ("Initial D Fifth Stage")
-    )
+    # the parent folder's title when it extends the file's ("Initial D Fifth Stage")
+    folder_title: str | None = None
     marks: str = ""  # the "!" or "!!" the title ends with, to tell "K-ON!" from "K-ON!!"
     arc: str | None = None  # the arc a season folder names ("Season 02 (Part 03) - Stardust Crusaders")
-    unused_season: bool = (
-        False  # a season folder of the show was left out, as the file names more ("Show - Finale 1")
-    )
+    # a season folder of the show was left out, as the file names more ("Show - Finale 1")
+    unused_season: bool = False
     untitled: bool = False  # the filename names no title ("E12 - Welcome"); it comes from a folder
 
     @property

@@ -159,11 +159,9 @@ local function refresh()
         state.results = { { id = tonumber(anilist_id), title = "AniList ID " .. anilist_id } }
     elseif memo[text] then
         state.results = memo[text]
-    elseif #text < MIN_QUERY then
-        state.results = {}
     else
         state.results = {}
-        if not state.inflight then
+        if #text >= MIN_QUERY and not state.inflight then
             state.inflight = true
             local requested_by = state
             deps.backend.call("search", { query = text }, function(response)
