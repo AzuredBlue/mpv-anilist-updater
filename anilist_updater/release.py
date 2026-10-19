@@ -163,6 +163,10 @@ _SEASON_X_EPISODE = re.compile(r"\b(?P<season>\d{1,2})x(?P<ep>\d{2,3})(?:v(?P<ve
 _EPISODE_MARK = re.compile(
     r"(?:第\s*|#\s*)(?P<ep>\d{1,4})(?:v(?P<ver>\d+))?(?:[-~](?P<last>\d{1,4}))?(?:\s*[话話集回]|(?!\w))"
 )
+# "Ep.22", "E08" or "Ep.26.Sp.02.END" at the very end of what follows the technical words
+_LATE_EPISODE = re.compile(
+    r"(?<!\w)(?:E|EP)\.?\s?(?P<ep>\d{1,3})(?:\s+(?:END|FIN|FINAL|SP\.?\s?\d{1,2}))*\s*$", re.IGNORECASE
+)
 # " - 05", " - 05v2", " - 111c", " - 152", " - 01-02", " - 01+02", " - 01 ~ 26": a dash with spaces, so "07-Ghost"
 # and "K-On" never match
 _DASH_HEAD = r"(?:(?<=\s)|^)[-~]\s+(?P<ep>\d{1,4})[a-c]?(?:\s?v(?P<ver>\d+))?"
@@ -241,7 +245,7 @@ _PART = re.compile(r"\b(?:Part|Pt)\.?\s*(?P<n>\d{1,2}|[IVX]{1,4})\b", re.IGNOREC
 _VOLUME = re.compile(r"\b(?:Vol(?:ume)?|Dis[ck])\.?\s*\d+(?:v\d+)?\b", re.IGNORECASE)
 # "Seasons 1-4 + OVA + Junior High" lists more releases, "Norn9 - Norn + Nonetto" is one title
 _PLUS = re.compile(r"\s\+\s(?=\d|S\d|OVA|ONA|OAD|Special|Movie|Part)")
-_YEAR = re.compile(r"(?<=\s)(?P<year>(?:19[5-9]|20[0-3])\d)(?:\s*-\s*(?:19|20)\d\d)?(?![\w-])")
+_YEAR = re.compile(r"(?<=\s)(?P<year>(?:19[5-9]|20[0-3])\d)(?:\s*-\s*(?:19|20)\d\d)?(?![\w%-])")
 # "OVA 2", "OVA 11v2", "OVA 01-19"
 _FORMAT = re.compile(
     r"\b(?P<format>(?i:OVA|OAV|OAD|ONA))(?:\s?(?P<n>\d{1,2})(?:v\d+)?(?:\s?[-~]\s?(?P<last>\d{1,3}))?)?\b"
@@ -579,7 +583,8 @@ def _kept_groups(region: str, groups: list[str]) -> set[int]:
 def _analyse(text: str, groups: list[str], *, folder: bool) -> _Segment:
     """Read one alternative: where the title ends, and the markers before and after it."""
     segment = _Segment(groups=groups)
-    text = _TECH.split(text, maxsplit=1)[0]
+    head = _TECH.split(text, maxsplit=1)[0]
+    tail, text = text[len(head) :], head
     movie = _MOVIE.search(text)
     text = _MOVIE.sub(" ", text)
     segment.extra = bool(
@@ -666,6 +671,10 @@ def _analyse(text: str, groups: list[str], *, folder: bool) -> _Segment:
         if part_at is not None and part_at > title_end:
             segment.part = None
             del stops["part"]
+
+    # "Show.S01.BDRip.Group.Ep.22": the episode written after the technical words, which the search above never reads
+    if segment.episode is None and not folder and (late := _LATE_EPISODE.search(tail)):
+        segment.episode = int(late["ep"])
 
     cut = max(start, min(stops.values()))
     log.debug("    title stops: %s -> cut at %d", stops, cut)

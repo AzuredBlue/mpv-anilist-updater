@@ -1871,5 +1871,73 @@
       null,
       "SPECIAL"
     ]
+  },
+  "H66 an episode written after the technical words": {
+    "[Foobar] Sample.Show.2014.S01.RUS.JAP.BDRip.Uncensored.Version.Foobar.EP.04.avi": [
+      "Sample Show",
+      4,
+      1,
+      null,
+      2014,
+      null
+    ],
+    "[Foobar] Sample.Show.S03.BDRip.Rus.Jap.Foobar.Ep.06.avi": [
+      "Sample Show",
+      6,
+      3,
+      null,
+      null,
+      null
+    ],
+    "[Foobar] Sample.Show.2014.S01.RUS.JAP.DVDRip.720p.Foobar.Ep.26.Sp.02.END.mkv": [
+      "Sample Show",
+      26,
+      1,
+      null,
+      2014,
+      null
+    ],
+    "Sample.Show.HEVC.E08.mkv": [
+      "Sample Show",
+      8,
+      null,
+      null,
+      null,
+      null
+    ],
+    "Sample.Show.2020.1080p.BluRay.x264.DDP5.1.E-AC3-Foobar.mkv": [
+      "Sample Show",
+      1,
+      null,
+      null,
+      2020,
+      null
+    ],
+    "Sample Show S01 1080p BluRay x265 Dual Audio E-AC3 5.1.mkv": [
+      "Sample Show",
+      1,
+      1,
+      null,
+      null,
+      null
+    ]
+  },
+  "H67 a number with a percent sign is not a year": {
+    "[Foobar] Sample Show Maji Love 2000% - 10 [720p][AAC].mp4": [
+      "Sample Show Maji Love 2000%",
+      10,
+      null,
+      null,
+      null,
+      null
+    ],
+    "[Foobar] Sample Show 2000 - 10 [720p][AAC].mp4": [
+      "Sample Show",
+      10,
+      null,
+      null,
+      2000,
+      null
+    ]
   }
 }
