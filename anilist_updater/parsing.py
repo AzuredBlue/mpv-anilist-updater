@@ -54,9 +54,9 @@ def _split_path(path: str) -> list[str]:
 
 
 def _title_from_folders(parts: list[str], details: _Details) -> str:
-    """Look for the title in the parent folder, then the grandparent."""
+    """Look for the title in the parent folder, then the grandparent, then above ("Show/S04/OVA/")."""
     number = ""  # "Show/1/" is the season's number, unless it is all there is or the file says another ("86/")
-    for folder in reversed(parts[:-1][-2:]):
+    for folder in reversed(parts[:-1][-3:]):
         if re.fullmatch(r"\d|0\d", folder.strip()) and details.season in {None, int(folder)}:
             number = number or folder.strip()
             continue
@@ -96,6 +96,8 @@ def _folder_title(parent: Release | None, release: Release) -> str | None:
     """The parent folder's title when it goes on from the file's own ("Initial D Fifth Stage/Initial D - S05E07")."""
     if not (parent and parent.title and release.title):
         return None
+    if not re.search(r"[A-Za-z]", release.title) and re.search(r"[A-Za-z]", parent.title):
+        return parent.title  # "Yoru wa Neko/夜夜猫歌 - 01": the folder has the romanised name
     title = re.sub(
         r"^\d{1,2}\s+(?=[^\W\d])", "", parent.title
     )  # "09 - Initial D Fifth Stage": the index orders folders
@@ -132,6 +134,17 @@ def _season_folder(parts: list[str], parent: Release | None, release: Release) -
     if not parent.title and len(parts) > 2:
         show = parse_release(parts[-3], folder=True)
     return parent if fold_title(show.title or "") == fold_title(release.title) else None
+
+
+def _unused_season_folder(parts: list[str], parent: Release | None, release: Release) -> bool:
+    """Whether a season folder of this show was left out because the file names more than the show ("Show - Finale 1")."""
+    if parent is None or not release.title or _season_folder(parts, parent, release):
+        return False
+    show = parent
+    if not parent.title and len(parts) > 2:
+        show = parse_release(parts[-3], folder=True)
+    own, folder = fold_title(release.title), fold_title(show.title or "")
+    return (parent.season or 0) > 1 and bool(folder) and own.startswith(folder) and own != folder
 
 
 def parse_path(path: str) -> FileInfo:
@@ -184,6 +197,7 @@ def parse_path(path: str) -> FileInfo:
         folder_title=_folder_title(parent, release),
         marks=release.marks,
         arc=_arc(parts, release),
+        unused_season=_unused_season_folder(parts, parent, release),
     )
     log.info(
         "Guessed: %s - E%s %s", " ".join(filter(None, (info.query, info.media_format))), episode, info.year or ""

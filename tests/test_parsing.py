@@ -46,6 +46,23 @@ def test_titled_filename_takes_its_season_from_its_folder():
     assert not parse_path("Anime/Sample Show/[Foobar] Sample Show S3 - 05.mkv").folder_season
 
 
+def test_native_title_gets_the_latin_folder_as_its_other_name():
+    assert (
+        parse_path("Sample Show/[Foobar] 样本 - 01 (B-Global 1920x1080 HEVC AAC MKV).mkv").folder_title
+        == "Sample Show"
+    )
+    assert parse_path("[Foobar] 样本 - 01 (B-Global 1920x1080 HEVC AAC MKV).mkv").folder_title is None
+
+
+def test_season_folder_a_file_goes_beyond_is_marked_unused():
+    info = parse_path("Anime/Sample Show Season 4/[Foobar] Sample Show - Finale 1.mkv")
+    assert (info.title, info.season, info.unused_season) == ("Sample Show Finale 1", None, True)
+    assert not parse_path("Anime/Sample Show Season 4/[Foobar] Sample Show - 60.mkv").unused_season
+    assert not parse_path("Anime/Other Show S2/[Foobar] Sample Show - 05.mkv").unused_season
+    # the first season's series entry is a fair answer for a file that names more than the show
+    assert not parse_path("Anime/Sample Show Season 1/[Foobar] Sample Show - Finale 1.mkv").unused_season
+
+
 def test_windows_separators():
     assert parse_path(r"D:\Anime\86 Eighty-Six\E12 - Welcome [F1119374].mkv").title == "86 Eighty Six"
 

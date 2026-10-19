@@ -297,6 +297,22 @@
       2,
       null,
       null
+    ],
+    "01. Sample Show/Sample Show 01 - Encounter, Part 1.mkv": [
+      "Sample Show",
+      1,
+      null,
+      null,
+      null,
+      null
+    ],
+    "14. Sample Show 2nd Season/Sample Show 2nd Season 03 - Encounter, Part 2.mkv": [
+      "Sample Show",
+      3,
+      2,
+      null,
+      null,
+      null
     ]
   },
   "H14 paths": {
@@ -466,7 +482,9 @@
       null,
       null,
       "SPECIAL"
-    ]
+    ],
+    "[Foobar] Sample Show [Audio Drama 01.3][Ma10p_1080p][x265_flac].mkv": "error",
+    "SPs/[Foobar] Sample Show [Behind the Scenes][Ma10p_1080p][x265_aac].mkv": "error"
   },
   "H20 folders that name a kind of file": {
     "Anime/Sample Show/Specials/01.mkv": [
@@ -494,6 +512,22 @@
       null,
       null,
       null
+    ],
+    "Sample Show/Film/Sample Show Beginning (2025) 2160p BluRay x265-GRP.mkv": [
+      "Sample Show Beginning",
+      1,
+      null,
+      null,
+      2025,
+      "MOVIE"
+    ],
+    "[Foobar] Sample Show AV1 (S01-07 + 2 Movies + Specials + OVAs)/S04/OVA/E01 - Welcome.mkv": [
+      "Sample Show",
+      1,
+      4,
+      null,
+      null,
+      "OVA"
     ]
   },
   "H21 native and Latin words in one title": {
@@ -1291,6 +1325,14 @@
       null,
       null,
       "MOVIE"
+    ],
+    "Sample.Show.Movies.2005.1080p.CR.WEB-DL.DUAL.AAC2.0.H.264-GROUP.mkv": [
+      "Sample Show",
+      1,
+      null,
+      null,
+      2005,
+      "MOVIE"
     ]
   },
   "H44 a dashed Movie is the format": {
@@ -1396,7 +1438,16 @@
       null,
       "OVA"
     ],
-    "[Foobar] Sample Show - 02.5 (BD 1080p).mkv": "error"
+    "[Foobar] Sample Show - 02.5 (BD 1080p).mkv": "error",
+    "[Foobar] Sample Show! 018.5 - Movie [ABCD1234].mkv": [
+      "Sample Show",
+      1,
+      null,
+      null,
+      null,
+      "MOVIE"
+    ],
+    "[Foobar] Sample Show 018.5 [ABCD1234].mkv": "error"
   },
   "H52 a hyphen glued to a word does not end the title's number": {
     "[Foobar] Sample Show - 3-nen Z-gumi - 02 (1080p) [1F6790B3].mkv": [
@@ -1460,6 +1511,32 @@
       "SampleShow",
       1,
       4,
+      null,
+      null,
+      null
+    ]
+  },
+  "H56 a lone bracketed word before the episode tells two shows apart": {
+    "04. Sample Show (Kuro)/Sample Show (Kuro) 01 - Welcome, Part 1.mkv": [
+      "Sample Show Kuro",
+      1,
+      null,
+      null,
+      null,
+      null
+    ],
+    "[Foobar] Sample Show (Alt) - 05 [1080p].mkv": [
+      "Sample Show",
+      5,
+      null,
+      null,
+      null,
+      null
+    ],
+    "[Foobar] Sample Show (Alternate Title) [BD 1080p].mkv": [
+      "Sample Show",
+      1,
+      null,
       null,
       null,
       null

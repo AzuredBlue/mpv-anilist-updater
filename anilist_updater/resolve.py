@@ -19,6 +19,7 @@ Media = dict[str, Any]
 TIMES_SIGN = chr(0xD7)  # AniList writes "Durarara!!" sequels with it, which a search for "X2" doesn't find
 _TIMES = re.compile(r"\bx(?=\d\b)", re.IGNORECASE)
 _HONORIFIC = re.compile(r"\b(\w{3,}?)(san|kun|chan|sama)\b", re.IGNORECASE)
+_MOVIE_NUMBER = re.compile(r"\bMovie\s+\d+\b", re.IGNORECASE)
 
 DEFAULT_FORMATS = ["TV", "TV_SHORT", "MOVIE", "SPECIAL", "OVA", "ONA"]
 MAIN_FORMATS = {"TV", "ONA"}
@@ -334,7 +335,7 @@ def _absolute_from_base(client: AniListClient, file: FileInfo) -> AnimeInfo | No
 
     An episode that fits the first season could belong to any season, so only a remapped one is taken.
     """
-    if not file.folder_season or file.query == file.title:
+    if not file.folder_season or file.query == file.title or file.media_format:
         return None
     log.info("Episode %s doesn't fit %s, trying the title without its folder season", file.episode, file.query)
     try:
@@ -386,9 +387,13 @@ def _alternatives(file: FileInfo) -> list[str]:
         texts.append(file.alt_title)
     if file.folder_title:
         texts.append(file.folder_title)
+    # "Nekomonogatari (Shiro)": AniList may not name the bracketed word
+    if file.alt_title and title.endswith(f" {file.alt_title}"):
+        texts.append(title[: -len(file.alt_title) - 1])
     words = title.split()
     # A shortened search finds the show's first entry or one of its extras, so it is no guess for a file that says which
-    for dropped in range(1, 0 if file.media_format else min(MAX_DROPPED_WORDS, len(words) - 2) + 1):
+    named_film = file.media_format or file.unused_season or _MOVIE_NUMBER.search(title)
+    for dropped in range(1, 0 if named_film else min(MAX_DROPPED_WORDS, len(words) - 2) + 1):
         shortened = " ".join(words[:-dropped])
         if len(re.findall(r"[^\W\d_]", shortened)) >= MIN_LETTERS:
             texts.append(shortened)
@@ -572,6 +577,11 @@ def _movie_series(first: Media, file: FileInfo, graph: _Graph) -> AnimeInfo | No
     """The Nth film of a series of one-episode films numbered like episodes ("Heaven's Feel - 02" is the second)."""
     if first["format"] != "MOVIE" or first.get("episodes") != 1 or file.season or file.part:
         return None
+    # "Kizumonogatari II - Nekketsu-hen" names its film, so its default episode 1 is no count
+    if file.episode == 1 and (
+        _score(first, file.title) == EXACT or (file.alt_title and _names(first, file.alt_title))
+    ):
+        return None
     films, seen = [first], {first["id"]}
     while len(earlier := [p for p in _related(films[0], "PREQUEL", graph) if p["id"] not in seen]) == 1:
         if earlier[0]["format"] != "MOVIE":
@@ -585,12 +595,21 @@ def _movie_series(first: Media, file: FileInfo, graph: _Graph) -> AnimeInfo | No
     return _to_info(film, 1, file)
 
 
+def _parts_are_episodes(first: Media, file: FileInfo) -> bool:
+    """Whether "Side Story - Part 2" is the second episode of a short OVA or film, which AniList does not split."""
+    if not file.part or file.episode != 1 or file.season or first["format"] in SEASON_FORMATS:
+        return False
+    return file.part <= (first.get("episodes") or 0) and not _has_phrase(first, f"Part {file.part}")
+
+
 def _fit(results: list[Media], first: Media, file: FileInfo, graph: _Graph) -> AnimeInfo | None:
     """The entry for the file when its episode fits the best result, a remake of it or its part; else None."""
     if file.media_format in SINGLE_FORMATS and first.get("episodes") == 1:  # "Show - 14 (Special)" is its only one
         return _to_info(first, 1, file)
     if not file.media_format and (film := _movie_series(first, file, graph)):
         return film
+    if _parts_are_episodes(first, file):
+        return _to_info(first, file.part, file)
     if not (first.get("episodes") and file.episode > first["episodes"]):
         return _to_info(first, file.episode, file)
     if remake := _remake(results, first, file.episode):

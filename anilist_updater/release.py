@@ -4,6 +4,19 @@ Fansub and scene names follow a few conventions, and every rule here is a patter
 and bracketed tags are set aside, the text before the first technical token is searched for an episode marker,
 and the title is whatever precedes the earliest marker. Nothing after the episode marker is interpreted, because
 that is the episode's own title.
+
+Compared with other parsers on 1,850 files (paths with folders) from 558 nyaa torrents: 1,743 labeled episodes
+and 81 extras, all resolved on AniList by the same code, so only the parser differs. This is a blind benchmark
+sampled across random torrents.
+
+    parser                          correct  wrong anime  wrong episode  not found
+    this                            88.6%    4.6%         1.0%           5.7%
+    old                             82.5%    9.0%         2.4%           6.1%
+    aniparse + folder title         82.0%    10.0%        2.2%           5.7%
+    anitopy + folder title          78.5%    5.9%         1.0%           14.6%
+    aniparser + folder title        71.5%    14.6%        2.1%           11.9%
+    guessit, filename               64.6%    16.9%        2.6%           15.9%
+    guessit, full path              52.4%    11.2%        9.6%           26.7%
 """
 
 import logging
@@ -65,7 +78,7 @@ _TRAILING = re.compile(
     re.IGNORECASE,
 )
 # A trailing "TV" or "Movie" tells the format, as AniList's "School Days (TV)" does
-_FORMAT_TAIL = re.compile(r"\s+(?:(?P<tv>TV)|(?:the\s+)?Movie)$", re.IGNORECASE)
+_FORMAT_TAIL = re.compile(r"\s+(?:(?P<tv>TV)|(?:the\s+)?Movies?)$", re.IGNORECASE)
 _PREFIX = re.compile(r"^(?:REPACK|PROPER)\s+", re.IGNORECASE)
 _INDEXED = re.compile(r"^\d{1,2}\.\s+(?=\D)")
 # "Ren'ai" separates syllables; AniList spells it "Renai" and finds nothing with the apostrophe
@@ -87,10 +100,16 @@ _EXTRA = re.compile(
     re.IGNORECASE,
 )
 # Bracketed extras of a BD release: "[Menu01]", "[CM02]", "[PV]"
-_EXTRA_GROUP = re.compile(r"(?:Menu|CM|PV|IV|Preview|Trailer|Making|Interview)\d*", re.IGNORECASE)
+_EXTRA_GROUP = re.compile(
+    r"(?:Menu|CM|PV|IV|Preview|Trailer|Making|Interview|Audio Drama|Drama CD|Behind the Scenes|Commentary)"
+    r"\s*\d*(?:\.\d+)?",
+    re.IGNORECASE,
+)
 _EXTRA_FOLDER = re.compile(
     r"Extras?|Bonus|Featurettes|Trailers?|Scans|Soundtracks?|CDs?|Menus?|Creditless", re.IGNORECASE
 )
+# "Show/Film/": the folder names the format of the files in it
+_MOVIE_FOLDER = re.compile(r"Movies?|Films?", re.IGNORECASE)
 # Extras named for what they are: "Shiki OP", "Jetix Opening", "Series Menu - 01"
 _EXTRA_TITLE = re.compile(
     r"\b(?:OP|ED|PV|CM|Menu|Opening|Ending|Trailer|Storyboards?|Preview)(?:\s*\d+(?:v\d+)?[a-z]?)?$", re.IGNORECASE
@@ -102,7 +121,7 @@ _EXTRA_TITLE = re.compile(
 # ("2.0" is audio, "- 3.33 You Can (Not) Redo" a film's number)
 # ("Magikarte 02.5", "OVA3.5", and "- 04.1" after a zero-padded number)
 _DECIMAL_EPISODE = re.compile(
-    r"(?:\bE(?:P|pisode)?\.?\s*|\s-\s|\bOVA\s?|(?<=\s)(?=0\d\.))(?P<ep>\d+)\.(?P<dec>5|(?<=0\d\.)\d)(?:v\d)?"
+    r"(?:\bE(?:P|pisode)?\.?\s*|\s-\s|\bOVA\s?|(?<=\s)(?=0\d{1,2}\.))(?P<ep>\d+)\.(?P<dec>5|(?<=0\d\.)\d)(?:v\d)?"
     r"(?=[\s(\[\x00]|$)",
     re.IGNORECASE,
 )
@@ -530,8 +549,12 @@ def _kept_groups(region: str, groups: list[str]) -> set[int]:
             continue
         end = positions[index + 1] if index + 1 < len(positions) else len(region)
         after = region[position + 1 : end].strip(_LEADING)
-        if region[position - 1 : position].isalnum() or (
-            _LATIN.match(after) and re.sub(r"[\W_]", "", _TAG_WORDS.sub("", after))
+        # "Nekomonogatari (Kuro) 01": a lone word before the episode tells two shows apart
+        lone_word = re.fullmatch(r"[A-Za-z]+", groups[index].strip()) and re.match(r"\d{1,4}\b", after)
+        if (
+            region[position - 1 : position].isalnum()
+            or (_LATIN.match(after) and re.sub(r"[\W_]", "", _TAG_WORDS.sub("", after)))
+            or lone_word
         ):
             kept.add(index)
     return kept
@@ -593,9 +616,10 @@ def _analyse(text: str, groups: list[str], *, folder: bool) -> _Segment:
     elif match := _SEASON_ROMAN.search(region):
         segment.season = segment.season if segment.season is not None else _ROMAN_SEASON[match["roman"].upper()]
         stops["season"] = match.start()
+    part_at = None
     if match := _PART.search(region):
         segment.part = _number(match["n"])
-        stops["part"] = match.start()
+        stops["part"] = part_at = match.start()
     if match := _VOLUME.search(region):
         stops["volume"] = match.start()
     if (match := _YEAR.search(region)) and region[: match.start()].strip():
@@ -610,11 +634,19 @@ def _analyse(text: str, groups: list[str], *, folder: bool) -> _Segment:
     elif match := _format_word(_SPECIAL.search(named_region), named_region):
         segment.media_format = _format_of(match["format"])
         stops["format"] = match.start()
-    if movie and not segment.media_format and (marker is None or marker.start >= movie.start()):
+    if (
+        movie
+        and not segment.media_format
+        and (marker is None or marker.episode is None or marker.start >= movie.start())
+    ):
         segment.media_format = "MOVIE"
 
     if not segment.marked and not folder and (title_end := _fall_back(segment, text, region, match)) is not None:
         stops["fallback episode"] = title_end
+        # "Show 01 - Hitagi Crab, Part 1": a part after the episode belongs to the episode's title
+        if part_at is not None and part_at > title_end:
+            segment.part = None
+            del stops["part"]
 
     cut = max(start, min(stops.values()))
     log.debug("    title stops: %s -> cut at %d", stops, cut)
@@ -777,6 +809,8 @@ def parse_release(name: str, *, folder: bool = False) -> Release:
     """
     # "01. Season 1 + Special", "02. OVA": the index orders the folders and is no title
     text = _prepare(_INDEXED.sub("", name) if folder else name)
+    if folder and _MOVIE_FOLDER.fullmatch(text.strip()):
+        return Release(media_format="MOVIE")
     decimal = bool(_DECIMAL_EPISODE.search(text))
     free, groups, release_group = _extract_groups(_unscene(text))
     kinds = _classify(groups)

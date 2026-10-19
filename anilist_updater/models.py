@@ -40,6 +40,9 @@ class FileInfo:
     )
     marks: str = ""  # the "!" or "!!" the title ends with, to tell "K-ON!" from "K-ON!!"
     arc: str | None = None  # the arc a season folder names ("Season 02 (Part 03) - Stardust Crusaders")
+    unused_season: bool = (
+        False  # a season folder of the show was left out, as the file names more ("Show - Finale 1")
+    )
 
     @property
     def query(self) -> str:

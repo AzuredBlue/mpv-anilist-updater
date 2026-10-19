@@ -818,6 +818,21 @@ def test_resolve_numbered_films_ranked_last_first_pick_the_film_by_number():
     assert [resolve(FakeClient(everything=films), FileInfo("Show", n)).anime_id for n in (1, 2, 3)] == [1, 2, 3]
 
 
+def test_resolve_film_named_by_the_file_is_not_counted_from_the_first_film():
+    films = [
+        media(1, 1, fmt="MOVIE", sequel=2, title="Show I"),
+        media(2, 1, fmt="MOVIE", sequel=3, prequel=1, title="Show II"),
+        media(3, 1, fmt="MOVIE", prequel=2, title="Show III"),
+    ]
+    assert [
+        resolve(FakeClient(everything=films), FileInfo(f"Show {n}", 1)).anime_id for n in ("I", "II", "III")
+    ] == [
+        1,
+        2,
+        3,
+    ]
+
+
 def test_resolve_season_numbering_does_not_go_on_into_a_differently_named_entry():
     seasons = [media(1, 12, sequel=2, title="Owari"), media(2, 4, prequel=1, title="Tsuki")]
     with pytest.raises(SkipUpdate):
@@ -831,3 +846,50 @@ def test_resolve_bracketed_name_picks_the_entry_titled_with_it():
     black["title"]["english"] = "Nekomonogatari Black"
     info = resolve(FakeClient(everything=[series, black]), FileInfo("Nekomonogatari", 4, alt_title="Black"))
     assert info.anime_id == 2
+
+
+class SeriesOnlyClient(FakeClient):
+    def search(self, title, year, formats):
+        return ([], [media(1, 25, title="Big Show")]) if title == "Big Show" else ([], [])
+
+
+def test_resolve_numbered_film_is_not_found_by_cutting_its_title_down_to_the_series():
+    assert resolve(SeriesOnlyClient(), FileInfo("Big Show Extra Story Chronicle", 1)).anime_id == 1
+    with pytest.raises(SkipUpdate):
+        resolve(SeriesOnlyClient(), FileInfo("Big Show Movie 04 Chronicle", 1))
+
+
+class OvaOfTheTitleClient(FakeClient):
+    def search(self, title, year, formats):
+        return ([], [media(5, 1, fmt="OVA", title="Show")]) if title == "Show" else ([], [])
+
+
+def test_resolve_extra_in_a_season_folder_is_not_counted_from_the_first_season():
+    file = FileInfo("Show", 2, season=6, media_format="OVA", folder_season=True)
+    with pytest.raises(SkipUpdate):
+        resolve(OvaOfTheTitleClient(), file)
+
+
+class WithoutBracketedWordClient(FakeClient):
+    def search(self, title, year, formats):
+        return ([], [media(1, 26, title="Nekomonogatari")]) if title == "Nekomonogatari" else ([], [])
+
+
+def test_resolve_bracketed_word_the_entry_lacks_is_dropped_when_the_whole_finds_nothing():
+    file = FileInfo("Nekomonogatari Shiro", 5, alt_title="Shiro")
+    assert resolve(WithoutBracketedWordClient(), file).anime_id == 1
+
+
+def test_resolve_part_of_a_short_ova_is_its_episode():
+    ova = media(1, 2, fmt="OVA", title="Show Side Story")
+    client = FakeClient(everything=[ova])
+    assert [resolve(client, FileInfo("Show Side Story", 1, part=n)).episode for n in (1, 2)] == [1, 2]
+    named = media(2, 2, fmt="OVA", title="Show Side Story Part 2")
+    assert resolve(FakeClient(everything=[named]), FileInfo("Show Side Story", 1, part=2)).episode == 1
+
+
+def test_resolve_file_beyond_its_season_folder_is_not_cut_down_to_the_series():
+    file = FileInfo("Big Show Finale 1", 1)
+    assert resolve(SeriesOnlyClient(), file).anime_id == 1
+    with pytest.raises(SkipUpdate):
+        resolve(SeriesOnlyClient(), replace(file, unused_season=True))
