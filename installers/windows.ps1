@@ -38,6 +38,11 @@ function Update-GitClone($Target) {
 	if ($LASTEXITCODE -ne 0) {
 		throw "git pull failed. Commit or discard your changes in $Target and try again."
 	}
+	# Hide the development files; `git sparse-checkout disable` brings them back
+	git -C $Target sparse-checkout set --no-cone '/*' '!/tests/' '!/.github/' '!/installers/' '!/ruff.toml' | Out-Host
+	if ($LASTEXITCODE -ne 0) {
+		Write-Host "Warning: couldn't hide the development files (needs a recent git)."
+	}
 	$State.Result = "updated (git)"
 }
 

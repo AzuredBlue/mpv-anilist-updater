@@ -12,7 +12,7 @@ For any issues, you can either open an issue on here, or message me on discord (
 
 You will need Python 3.11 or newer and a recent mpv (developed on 0.41). The script has no other dependencies.
 
-These commands install or update the script in your mpv `scripts` folder and ask for your AniList token if there is none yet. Running one again updates it, keeping your token, cache and config. If the script was installed with `git clone`, it is updated with `git pull`.
+These commands install or update the script in your mpv `scripts` folder and ask for your AniList token if there is none yet. Running one again updates it, keeping your token, cache and config. If the script was installed with `git clone`, it is updated with `git pull` and its development files (tests, installers, CI) are hidden with a sparse checkout.
 
 ### Windows
 
@@ -45,7 +45,7 @@ On Linux, the config location is the first of these that exists (set `MPV_CONFIG
 
 ### Manual
 
-Git clone this repository into your mpv scripts folder, or download it and extract the contents there. If you use git clone, you can update by using `git pull` in the repository folder.
+Git clone this repository into your mpv scripts folder, or download it and extract the contents there. If you use git clone, you can update by using `git pull` in the repository folder. To develop, clone the repository this way rather than using the install command; if the command was run on a clone, `git sparse-checkout disable` restores every file.
 
 You **WILL** need an AniList access token for it to work (the commands above ask for it, so this is only needed for a manual install or if you skipped it):
 

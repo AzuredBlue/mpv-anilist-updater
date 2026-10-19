@@ -55,6 +55,9 @@ update_git_clone() {
 	[ "$branch" = main ] || fail "The clone is on branch '$branch'. Run 'git checkout main' in $target and try again."
 	git -C "$target" pull --ff-only ||
 		fail "git pull failed. Commit or discard your changes in $target and try again."
+	# Hide the development files; `git sparse-checkout disable` brings them back
+	git -C "$target" sparse-checkout set --no-cone '/*' '!/tests/' '!/.github/' '!/installers/' '!/ruff.toml' ||
+		echo "Warning: couldn't hide the development files (needs a recent git)."
 	result="updated (git)"
 }
 
