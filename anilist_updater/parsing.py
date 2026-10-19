@@ -159,9 +159,7 @@ def parse_path(path: str) -> FileInfo:
     if parent and not parent.title:  # "OVA/", "Specials/"
         details.media_format = details.media_format or parent.media_format
     if folder := _season_folder(parts, parent, release):
-        # A filename with a title numbers its own episodes; a season from the folder would count them twice
-        details.year = details.year or folder.year
-        details.media_format = details.media_format or folder.media_format
+        details.fill_from(folder)
     # An episode or season first ("E12 - Welcome") means the filename has no title of its own
     title = release.title or _title_from_folders(parts, details)
     if not title and release.episode_title:

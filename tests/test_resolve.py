@@ -789,3 +789,21 @@ def test_resolve_season_resolves_when_entry_title_has_roman_numeral():
     entry = media(2, 12, title="Show II")
     client = FakeClient(everything=[entry])
     assert resolve(client, FileInfo("Show", 3, season=2)).anime_id == 2
+
+
+class FolderSeasonClient(FakeClient):
+    """Show has 12 + 13 episodes; the season title finds only the second."""
+
+    def search(self, title, year, formats):
+        seasons = [media(1, 12, sequel=2, title="Show"), media(2, 13, prequel=1, title="Show 2nd Season")]
+        return ([], [seasons[1]]) if title == "Show Season 2" else ([], seasons)
+
+
+@pytest.mark.parametrize(("episode", "relative"), [(5, 5), (13, 1), (25, 13)])
+def test_resolve_folder_season_numbers_are_absolute_when_they_land_past_the_first_season(episode, relative):
+    info = resolve(FolderSeasonClient(), FileInfo("Show", episode, season=2, folder_season=True))
+    assert (info.anime_id, info.episode) == (2, relative)
+
+
+def test_resolve_episode_without_folder_season_stays_in_the_first_season():
+    assert resolve(FolderSeasonClient(), FileInfo("Show", 5)).anime_id == 1

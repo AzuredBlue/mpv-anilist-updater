@@ -509,6 +509,9 @@ def resolve(client: AniListClient, file: FileInfo) -> AnimeInfo:
         return info
     if file.arc and (info := _by_arc(client, file, formats)):
         return info
+    # "Show S2/Show - 13" counted from the first season lands in a later one; else it is the folder's own number
+    if info := _absolute_from_base(client, file):
+        return info
     return _resolve_title(client, file, formats)
 
 
