@@ -14,6 +14,10 @@ log = logging.getLogger(__name__)
 _MOVIE_SUBTITLE = re.compile(r"\bMovie\s*\d{1,2}\s*-\s*(?P<subtitle>[^\W\d_][^\[\(]+)", re.IGNORECASE)
 
 
+_PACK_WORDS = re.compile(
+    r"\b(?:complete|collection|batch|final|season|series|bd|bluray|dub|dual)\b", re.IGNORECASE
+)
+
 _ARC_FOLDER = re.compile(r"Season\s*\d{1,2}\s*(?:\(Part[^)]*\))?\s*-?\s*(?P<arc>[^\W\d_][^\[\(]*)", re.IGNORECASE)
 
 
@@ -111,7 +115,7 @@ def _named_special(release: Release, parent: Release | None) -> Release | None:
     if release.season != 0 or not release.skip or not (parent and parent.title and release.title):
         return None
     own, folder = fold_title(release.title), fold_title(parent.title)
-    if folder == own or not folder.startswith(own):
+    if folder == own or not folder.startswith(own) or _PACK_WORDS.search(parent.title):
         return None
     return replace(release, title=parent.title, season=None, media_format="SPECIAL", skip=None)
 

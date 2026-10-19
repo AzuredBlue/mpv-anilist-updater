@@ -229,3 +229,35 @@ def test_bare_episode_number_before_quoted_episode_title():
         18,
         "Marcoh's Notes",
     )
+
+
+@pytest.mark.parametrize(
+    ("name", "season", "part"),
+    [("Show Part II - 05.mkv", None, 2), ("Jojo Part IV - 05.mkv", None, 4), ("Show Pt. III - 05.mkv", None, 3)],
+)
+def test_part_roman_numeral_is_not_a_season(name, season, part):
+    release = parse_release(f"[Group] {name}")
+    assert (release.season, release.part) == (season, part)
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "Naruto Shippuden - Complete/Naruto - S00E01.mkv",
+        "Attack on Titan Final Season/Attack on Titan - S00E01.mkv",
+        "Bleach Complete [BD]/Bleach - S00E01.mkv",
+    ],
+)
+def test_special_in_pack_folder_is_not_named_by_it(path):
+    with pytest.raises(ParseError):
+        parse_path(path)
+
+
+@pytest.mark.parametrize("text", ["[Gr[oup] Show - 05.mkv", "[Group[Other] Show - 05.mkv"])
+def test_bracket_inside_group_is_kept_in_the_group(text):
+    assert parse_release(text).title == "Show"
+
+
+def test_episode_zero_is_skipped():
+    with pytest.raises(ParseError):
+        parse_path("[Group] Show - 00 [1080p].mkv")

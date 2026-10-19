@@ -216,7 +216,9 @@ _SEASON = re.compile(
 _SEASON_ORDINAL = re.compile(r"\b(?P<n>\d{1,2})(?:st|nd|rd|th)\s+Season\b", re.IGNORECASE)
 _SEASON_CJK = re.compile(r"第\s*(?P<n>[一二三四五六七八九十\d]+)\s*[季期]|(?P<k>\d+)\s*[期기]")
 _ROMAN_SEASON = {"II": 2, "III": 3, "IV": 4}
-_SEASON_ROMAN = re.compile(r"(?<!\bLupin)(?:\s+|-)(?P<roman>II|III|IV)\s*$", re.ASCII)
+_SEASON_ROMAN = re.compile(
+    r"(?<!\bLupin)(?<!\bPart)(?<!\bPt)(?<!\bPart\.)(?<!\bPt\.)(?:\s+|-)(?P<roman>II|III|IV)\s*$", re.ASCII
+)
 _PART = re.compile(r"\b(?:Part|Pt)\.?\s*(?P<n>\d{1,2}|[IVX]{1,4})\b", re.IGNORECASE)
 # A disc's number, never part of the title
 _VOLUME = re.compile(r"\b(?:Vol(?:ume)?|Dis[ck])\.?\s*\d+(?:v\d+)?\b", re.IGNORECASE)
@@ -378,7 +380,10 @@ def _extract_groups(text: str) -> tuple[str, list[str], str | None]:
     if (glued := _GLUED_PREFIX.match(text)) and _classify([glued["group"]])["titles"]:
         text = text[glued.end() :]
     if text.startswith("["):
-        if m := re.match(r"^\[(?P<group>[^\[\]]+)[\[\]]", text):
+        # "[Mites[ Title": a "[" followed by a space is a typo for "]"
+        if m := re.match(r"^\[(?P<group>[^\[\]]+)(?:\]|\[(?=\s))", text) or re.match(
+            r"^\[(?P<group>[^\]]*)\]", text
+        ):
             first = m["group"].strip()
             if not (_BRACKETED_EPISODE.fullmatch(first) or _GROUP_SEASON_EPISODE.fullmatch(first)):
                 release_group, text = first or None, text[m.end() :]
