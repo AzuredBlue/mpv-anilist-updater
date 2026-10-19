@@ -335,3 +335,9 @@ def test_episode_zero_is_skipped():
 
 def test_acute_accent_is_an_apostrophe():
     assert parse_release("[Group] Anime\u00b4s Title - 05.mkv").title == "Anime's Title"
+
+
+def test_season_zero_file_in_a_season_folder_is_skipped():
+    """The S00 number is TVDB's order of all specials; "(S01) Free! …/Free! S00E01" matched another season's special."""
+    with pytest.raises(ParseError, match="season 0"):
+        parse_path("(S01) Free! Iwatobi Swim Club/Free! S00E01-E02 FrFr! 1 Makoto's Problem!.mkv")

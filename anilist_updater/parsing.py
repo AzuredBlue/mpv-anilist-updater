@@ -125,7 +125,7 @@ def _arc(parts: list[str], release: Release) -> str | None:
 
 def _named_special(release: Release, parent: Release | None) -> Release | None:
     """The special of "Show - S00E01" inside "Show - Subtitle/": the folder names it, and AniList lists it on its own."""
-    if release.season != 0 or not release.skip or not (parent and parent.title and release.title):
+    if release.season != 0 or not release.skip or not (parent and parent.title and release.title) or parent.season:
         return None
     own, folder = fold_title(release.title), fold_title(parent.title)
     if folder == own or not folder.startswith(own) or _PACK_WORDS.search(parent.title):
