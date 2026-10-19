@@ -5,18 +5,24 @@ and bracketed tags are set aside, the text before the first technical token is s
 and the title is whatever precedes the earliest marker. Nothing after the episode marker is interpreted, because
 that is the episode's own title.
 
-Compared with other parsers on 1,850 files (paths with folders) from 558 nyaa torrents: 1,743 labeled episodes
-and 81 extras, all resolved on AniList by the same code, so only the parser differs. This is a blind benchmark
-sampled across random torrents.
+Compared with other parsers on 2,535 files (paths with folders) sampled across about 2,000 nyaa and nekobt
+torrents: 2,291 labeled episodes and 244 extras (S00 files left out). Each path was labeled blind by a model and
+the labels any parser disagreed with were checked again blind (93% held). Every parser's output was resolved
+against the same offline anime database with the same code, so only the parser differs. The offline database
+is not AniList itself, so every row might undercount.
 
     parser                          correct  wrong anime  wrong episode  not found
-    this                            88.6%    4.6%         1.0%           5.7%
-    old                             82.5%    9.0%         2.4%           6.1%
-    aniparse + folder title         82.0%    10.0%        2.2%           5.7%
-    anitopy + folder title          78.5%    5.9%         1.0%           14.6%
-    aniparser + folder title        71.5%    14.6%        2.1%           11.9%
-    guessit, filename               64.6%    16.9%        2.6%           15.9%
-    guessit, full path              52.4%    11.2%        9.6%           26.7%
+    this                            84.9%    7.8%         1.2%           6.1%
+    old                             80.5%    10.2%        1.7%           7.6%
+    aniparse + folder title         75.4%    12.6%        3.5%           8.5%
+    anitopy + folder title          78.5%    10.0%        1.7%           9.7%
+    aniparser + folder title        70.1%    16.4%        4.3%           9.3%
+    guessit, filename               72.2%    15.1%        3.0%           9.7%
+    guessit, full path              68.4%    14.9%        3.9%           12.8%
+
+By kind of entry, correct, against the next best parser: series (2,038) 85.8% against 81.9%, movies (144) 84.7%
+against 73.6%, OVAs and specials (109) 69.7% against 64.2%. Of the 244 extras (menus, creditless openings,
+trailers), this parser skips 208 and the others between 29 and 75.
 """
 
 import logging
