@@ -1,500 +1,175 @@
---[[
-Configuration options for anilistUpdater (set in anilistUpdater.conf):
+local msg = require("mp.msg")
+local config = require("lua.config")
+local backend = require("lua.backend")
+local overlay = require("lua.overlay")
 
-DIRECTORIES: Table or comma/semicolon-separated string. The directories the script will work on. Leaving it empty will make it work on every video you watch with mpv. Example: DIRECTORIES = {"D:/Torrents", "D:/Anime"}
+local silent = config.options.SILENT_MODE
 
-EXCLUDED_DIRECTORIES: Table or comma/semicolon-separated string. Useful for ignoring paths inside directories from above. Example: EXCLUDED_DIRECTORIES = {"D:/Torrents/Watched", "D:/Anime/Planned"}
-
-UPDATE_PERCENTAGE: Number (0-100). The percentage of the video you need to watch before it updates AniList automatically. Default is 85 (usually before the ED of a usual episode duration).
-
-SET_COMPLETED_TO_REWATCHING_ON_FIRST_EPISODE: Boolean. If true, when watching episode 1 of a completed anime, set it to rewatching and update progress.
-
-UPDATE_PROGRESS_WHEN_REWATCHING: Boolean. If true, allow updating progress for anime set to rewatching. This is for if you want to set anime to rewatching manually, but still update progress automatically.
-
-SET_TO_COMPLETED_AFTER_LAST_EPISODE_CURRENT: Boolean. If true, set to COMPLETED after last episode if status was CURRENT.
-
-SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING: Boolean. If true, set to COMPLETED after last episode if status was REPEATING (rewatching).
-
-ADD_ENTRY_IF_MISSING: Boolean. If true, automatically add anime to your list if it's not found during search. Default is false.
-
-CACHE_REFRESH_RATE: Number (hours). How long a normal cache entry stays valid. Default is 24.
-
-CACHE_MODE: String. Either NORMAL or SLIDING. NORMAL keeps current behavior. SLIDING refreshes cache TTL on reads for all titles.
-
-SILENT_MODE: Boolean. If true, won't show OSD messages.
-]]
-
-local utils = require 'mp.utils'
-local mpoptions = require("mp.options")
-local correction_overlay = require("correction_overlay")
-
-local conf_name = "anilistUpdater.conf"
-local script_dir = (debug.getinfo(1).source:match("@?(.*/)") or "./")
-
--- Helper function to get MPV config directory
-local function get_mpv_config_dir()
-    return os.getenv("APPDATA") and utils.join_path(os.getenv("APPDATA"), "mpv") or 
-           os.getenv("HOME") and utils.join_path(utils.join_path(os.getenv("HOME"), ".config"), "mpv") or nil
-end
-
--- Helper function to normalize path separators
-local function normalize_path(p)
-    p = p:gsub("\\", "/")
-    if p:sub(-1) == "/" then
-        p = p:sub(1, -2)
-    end
-    return p
-end
-
--- Helper function to parse directory strings (comma or semicolon separated)
-local function parse_directory_string(dir_string)
-    if type(dir_string) == "string" and dir_string ~= "" then
-        local dirs = {}
-        for dir in string.gmatch(dir_string, "([^,;]+)") do
-            local trimmed = (dir:gsub("^%s*(.-)%s*$", "%1"):gsub('[\'"]', '')) -- trim
-            table.insert(dirs, normalize_path(trimmed))
-        end
-        return dirs
-    else
-        return {}
-    end
-end
-
--- Default config
-local default_conf = [[# anilistUpdater Configuration
-# For detailed explanations of all available options, see:
-# https://github.com/AzuredBlue/mpv-anilist-updater?tab=readme-ov-file#configuration-anilistupdaterconf
-
-# Use 'yes' or 'no' for boolean options below
-# Example for multiple directories (comma or semicolon separated):
-# DIRECTORIES=D:/Torrents,D:/Anime
-# or
-# DIRECTORIES=D:/Torrents;D:/Anime
-DIRECTORIES=
-EXCLUDED_DIRECTORIES=
-UPDATE_PERCENTAGE=85
-SET_COMPLETED_TO_REWATCHING_ON_FIRST_EPISODE=no
-UPDATE_PROGRESS_WHEN_REWATCHING=yes
-SET_TO_COMPLETED_AFTER_LAST_EPISODE_CURRENT=yes
-SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING=yes
-ADD_ENTRY_IF_MISSING=no
-CACHE_REFRESH_RATE=24
-CACHE_MODE=NORMAL
-SILENT_MODE=no
-]]
-
--- Try script-opts directory (sibling to scripts)
-local script_opts_dir = script_dir:match("^(.-)[/\\]scripts[/\\]")
-
-if script_opts_dir then
-    script_opts_dir = utils.join_path(script_opts_dir, "script-opts")
-else
-    -- Fallback: try to find mpv config dir
-    local mpv_conf_dir = get_mpv_config_dir()
-    script_opts_dir = mpv_conf_dir and utils.join_path(mpv_conf_dir, "script-opts") or nil
-end
-
-local script_opts_path = script_opts_dir and utils.join_path(script_opts_dir, conf_name) or nil
-
--- Try script directory
-local script_path = utils.join_path(script_dir, conf_name)
-
--- Try mpv config directory
-local mpv_conf_dir = get_mpv_config_dir()
-local mpv_conf_path = mpv_conf_dir and utils.join_path(mpv_conf_dir, conf_name) or nil
-
-local conf_paths = {script_opts_path, script_path, mpv_conf_path}
-
--- Try to find config file
-local conf_path = nil
-for _, path in ipairs(conf_paths) do
-    if path then
-        local f = io.open(path, "r")
-        if f then
-            f:close()
-            conf_path = path
-            break
-        end
-    end
-end
-
--- If not found, try to create in order
-if not conf_path then
-    for _, path in ipairs(conf_paths) do
-        if path then
-            local f = io.open(path, "w")
-            if f then
-                f:write(default_conf)
-                f:close()
-                conf_path = path
-                break
-            end
-        end
-    end
-end
-
--- If still not found or created, warn and use defaults
-if not conf_path then
-    mp.msg.warn("Could not find or create anilistUpdater.conf in any known location! Using default options.")
-end
-
--- Initialize options with defaults
-local options = {
-    DIRECTORIES = "",
-    EXCLUDED_DIRECTORIES = "",
-    UPDATE_PERCENTAGE = 85,
-    SET_COMPLETED_TO_REWATCHING_ON_FIRST_EPISODE = false,
-    UPDATE_PROGRESS_WHEN_REWATCHING = true,
-    SET_TO_COMPLETED_AFTER_LAST_EPISODE_CURRENT = true,
-    SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING = true,
-    ADD_ENTRY_IF_MISSING = false,
-    CACHE_REFRESH_RATE = 24,
-    CACHE_MODE = "NORMAL",
-    SILENT_MODE = false
+local state = {
+    info = nil, -- detected anime for the current file
+    generation = 0, -- bumped per file, so late responses for a previous file are dropped
+    waiting = {}, -- callbacks for the detection in flight
+    fetching = false,
 }
 
--- Override defaults with values from config file
-mpoptions.read_options(options, "anilistUpdater")
+local progress_timer
 
--- Parse DIRECTORIES and EXCLUDED_DIRECTORIES using helper function
-options.DIRECTORIES = parse_directory_string(options.DIRECTORIES)
-options.EXCLUDED_DIRECTORIES = parse_directory_string(options.EXCLUDED_DIRECTORIES)
+local function osd(text, seconds)
+    if not silent then
+        mp.osd_message(text, seconds or 3)
+    end
+end
 
--- When calling Python, pass only the options relevant to it
-local python_options = {
-    SET_COMPLETED_TO_REWATCHING_ON_FIRST_EPISODE = options.SET_COMPLETED_TO_REWATCHING_ON_FIRST_EPISODE,
-    UPDATE_PROGRESS_WHEN_REWATCHING = options.UPDATE_PROGRESS_WHEN_REWATCHING,
-    SET_TO_COMPLETED_AFTER_LAST_EPISODE_CURRENT = options.SET_TO_COMPLETED_AFTER_LAST_EPISODE_CURRENT,
-    SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING = options.SET_TO_COMPLETED_AFTER_LAST_EPISODE_REWATCHING,
-    ADD_ENTRY_IF_MISSING = options.ADD_ENTRY_IF_MISSING,
-    CACHE_REFRESH_RATE = tonumber(options.CACHE_REFRESH_RATE) or 24,
-    CACHE_MODE = tostring(options.CACHE_MODE or "NORMAL")
-}
-local python_options_json = utils.format_json(python_options)
-
-DIRECTORIES = options.DIRECTORIES
-EXCLUDED_DIRECTORIES = options.EXCLUDED_DIRECTORIES
-UPDATE_PERCENTAGE = tonumber(options.UPDATE_PERCENTAGE) or 85
-
-local current_anime_info = nil
-
-local function path_starts_with_any(path, directories)
-    local norm_path = normalize_path(path)
-    for _, dir in ipairs(directories) do
-        if norm_path:sub(1, #dir) == dir then
-            return true
+-- Show a backend response. Failures to find or update something are only worth interrupting for
+-- when the user asked; real errors always are.
+local function notify(response, manual)
+    local kind = response.kind
+    if kind == "cancelled" then
+        return
+    elseif kind == "error" then
+        mp.osd_message(response.message, 5)
+    elseif kind == "skip" then
+        if manual then
+            osd(response.message, 5)
         end
-    end
-    return false
-end
-
-local function parse_osd_messages(result)
-    local messages = {}
-    if result and result.stdout then
-        for line in result.stdout:gmatch("[^\r\n]+") do
-            local msg = line:match("^OSD:%s*(.-)%s*$")
-            if msg then
-                table.insert(messages, msg)
-            else
-                print(line)
-            end
-        end
-    end
-    return messages
-end
-
-
-
-local function parse_detected_info(result)
-    if not result or not result.stdout then
-        return nil
-    end
-
-    for line in result.stdout:gmatch("[^\r\n]+") do
-        local json_part = line:match("^INFO:%s*(.+)$")
-        if json_part then
-            local info = utils.parse_json(json_part)
-            if info and type(info) == "table" then
-                return info
-            end
-        end
-    end
-
-    return nil
-end
-
-local function show_messages(success, result)
-    local is_success = success and result and result.status == 0
-
-    -- Don't show any messages only if the result is successful
-    if options.SILENT_MODE and is_success then return end
-
-    local messages = parse_osd_messages(result)
-
-    if is_success and #messages == 0 then
-        table.insert(messages, "Updated anime correctly.")
-    end
-
-    if #messages > 0 then
-        mp.osd_message(table.concat(messages, "\n"), 5)
+    elseif response.ok then
+        osd(response.message or "Updated anime correctly.", 5)
     end
 end
 
-function callback(success, result, error)
-    -- Update progress locally
-    if success and result and result.status == 0 and current_anime_info and current_anime_info.episode then
-        current_anime_info.current_progress = current_anime_info.episode
+-- Detect the anime once; everyone who asks meanwhile shares the same request.
+-- callback(info, response) gets a nil info when detection failed.
+local function ensure_info(callback)
+    if state.info then
+        return callback and callback(state.info)
     end
-
-    show_messages(success, result)
-end
-
-local function get_python_command()
-    local platform = mp.get_property("platform")
-    if platform == "windows" then
-        return "python"
-    else
-        return "python3"
-    end
-end
-
--- Helper to open a path or URL with the system's default handler
-local function open(target)
-    local platform = mp.get_property("platform")
-    local args
-    if platform == "windows" then
-        args = {"cmd", "/c", "start", "", target}
-    elseif platform == "darwin" then
-        args = {"open", target}
-    else
-        args = {"xdg-open", target}
-    end
-    mp.command_native({name = "subprocess", args = args, detach = true})
-end
-
--- Helper function to detect ani-cli compatibility
-local function is_ani_cli_compatible()
-    local directory = mp.get_property("working-directory") or ""
-    local file_path = mp.get_property("path") or ""
-    local full_path = utils.join_path(directory, file_path)
-    
-    -- Auto-detect ani-cli compatibility by checking for http:// or https:// anywhere in the path, excluding local streams (127.0.0.1)
-    return full_path:match("https?://") ~= nil and not full_path:find("127.0.0.1", 1, true)
-end
-
-local function get_path()
-    local directory = mp.get_property("working-directory")
-    -- It seems like in Linux working-directory sometimes returns it without a "/" at the end
-    directory = (directory:sub(-1) == '/' or directory:sub(-1) == '\\') and directory or directory .. '/'
-    -- For some reason, "path" sometimes returns the absolute path, sometimes it doesn't.
-    local file_path = mp.get_property("path")
-    local path = utils.join_path(directory, file_path)
-
-    -- Auto-detect ani-cli compatibility by checking for http:// or https:// anywhere in the path
-    if is_ani_cli_compatible() then
-        local media_title = mp.get_property("media-title")
-        if media_title and media_title ~= "" then
-            return media_title
-        end
-    end
-
-    if path:match("([^/\\]+)$"):lower() == "file.mp4" then
-        path = mp.get_property("media-title")
-    end
-
-    return path
-end
-
-local python_command = get_python_command()
-
-local isPaused = false
-local is_file_eligible = false
-local is_fetching = false
-
-local function fetch_anime_info(cb)
-    if is_fetching then
+    table.insert(state.waiting, callback or function() end)
+    if state.fetching then
         return
     end
-    is_fetching = true
 
-    local path = get_path()
-    mp.command_native_async({
-        name = "subprocess",
-        args = {python_command, script_dir .. "anilistUpdater.py", path, "info", python_options_json},
-        capture_stdout = true
-    }, function(success, result)
-        is_fetching = false
-        if success and result and result.status == 0 then
-            current_anime_info = parse_detected_info(result)
-            if current_anime_info then
-                print("Detected anime: " .. (current_anime_info.anime_name or "?") .. " #" .. (current_anime_info.episode or "?"))
-            end
-        else
-            parse_osd_messages(result)
+    state.fetching = true
+    local generation = state.generation
+    backend.call("info", {}, function(response)
+        if generation ~= state.generation then
+            return
         end
-        if cb then
-            cb(current_anime_info)
+        state.fetching = false
+        state.info = response.ok and response.info or nil
+        if state.info then
+            local detected = (state.info.anime_name or "?") .. " #" .. (state.info.episode or "?")
+            msg.info("Detected anime: " .. detected)
+            if config.options.SHOW_DETECTED_ANIME then
+                osd("Detected: " .. detected)
+            end
+        end
+
+        local waiting = state.waiting
+        state.waiting = {}
+        for _, waiter in ipairs(waiting) do
+            waiter(state.info, response)
         end
     end)
 end
 
--- Make sure it doesnt trigger twice in 1 video
-local triggered = false
--- Check progress every X seconds (when not paused)
-local UPDATE_INTERVAL = 1
-
--- Initialize timer once - we control it with stop/resume
-local progress_timer = mp.add_periodic_timer(UPDATE_INTERVAL, function()
-    if triggered then
-        return
-    end
-    
-    local percent_pos = mp.get_property_number("percent-pos")
-    if not percent_pos then
-        return
+local function update_anilist(manual)
+    if manual then
+        osd("Updating AniList...", 2)
     end
 
-    if percent_pos >= UPDATE_PERCENTAGE then
-        update_anilist()
-        triggered = true
-        if progress_timer then
-            progress_timer:stop()
-        end
-        return
-    end
-end)
--- Start with timer stopped - it will be started when a valid file loads
-progress_timer:stop()
-
--- Handle pause/unpause events to control the timer
-function on_pause_change(name, value)
-    isPaused = value
-    if value then
-        progress_timer:stop()
-    else
-        if is_file_eligible and not triggered then
-            progress_timer:resume()
-        end
-    end
-end
-
-local function update(info)
-    local path = get_path()
-    local info_json = utils.format_json(info)
-
-    mp.command_native_async({
-        name = "subprocess",
-        args = {python_command, script_dir .. "anilistUpdater.py", path, "update_with_info", python_options_json, info_json},
-        capture_stdout = true
-    }, callback)
-end
-
--- Function to launch the .py script to update AniList
-function update_anilist()
-    if current_anime_info then
-        update(current_anime_info)
-    else
-        fetch_anime_info(function(info)
-            if info then
-                update(info)
-            else
-                if not options.SILENT_MODE then
-                    mp.osd_message("Error: Anime info not loaded yet.", 3)
-                end
+    ensure_info(function(info, response)
+        if not info then
+            if response and response.kind ~= "cancelled" and response.message then
+                notify(response, manual)
+            elseif manual then
+                mp.osd_message("Error: Anime info not loaded yet.", 3)
             end
-        end)
-    end
-end
-
-mp.observe_property("pause", "bool", on_pause_change)
-
--- Reset triggered and start/stop timer based on file loading
-mp.register_event("file-loaded", function()
-    triggered = false
-    is_file_eligible = false
-    current_anime_info = nil
-    is_fetching = false
-    progress_timer:stop()
-
-    if not is_ani_cli_compatible() and #DIRECTORIES > 0 then
-        local path = get_path()
-
-        if not path_starts_with_any(path, DIRECTORIES) then
             return
-        else
-            -- If it starts with the directories, check if it starts with any of the excluded directories
-            if #EXCLUDED_DIRECTORIES > 0 and path_starts_with_any(path, EXCLUDED_DIRECTORIES) then
-                return
-            end
         end
+
+        local generation = state.generation
+        backend.call("update", { info = info }, function(result)
+            if result.ok and result.info and generation == state.generation then
+                state.info = result.info
+                progress_timer:kill()
+            end
+            notify(result, manual)
+        end)
+    end)
+end
+
+local function open(target, folder)
+    local platform = mp.get_property("platform")
+    local args = { "xdg-open", target }
+    if platform == "windows" then
+        -- start would read & and ^ in a folder name as cmd syntax
+        args = folder and { "explorer", target } or { "cmd", "/c", "start", "", target }
+    elseif platform == "darwin" then
+        args = { "open", target }
     end
-
-    is_file_eligible = true
-
-    -- Fetch anime info on file load
-    fetch_anime_info()
-
-    -- Start timer for this file
-    if not isPaused then
-        progress_timer:resume()
-    end
-end)
-
--- Default keybinds - can be customized in input.conf using script-binding commands
-mp.add_key_binding("ctrl+a", 'update_anilist', update_anilist)
-
-local function launch(info)
-    local url = "https://anilist.co/anime/" .. info.anime_id
-    if not options.SILENT_MODE then
-        mp.osd_message('Opening AniList for "' .. (info.anime_name or "?") .. '"', 3)
-    end
-    open(url)
+    mp.command_native({ name = "subprocess", args = args, detach = true })
 end
 
 local function launch_anilist()
-    if current_anime_info and current_anime_info.anime_id then
-        launch(current_anime_info)
-    else
-        fetch_anime_info(function(info)
-            if info and info.anime_id then
-                launch(info)
-            else
-                if not options.SILENT_MODE then
-                    mp.osd_message("Error: Anime info not loaded yet.", 3)
-                end
-            end
-        end)
-    end
+    ensure_info(function(info)
+        if info and info.anime_id then
+            osd('Opening AniList for "' .. (info.anime_name or "?") .. '"')
+            open("https://anilist.co/anime/" .. info.anime_id)
+        else
+            mp.osd_message("Error: Anime info not loaded yet.", 3)
+        end
+    end)
 end
 
-mp.add_key_binding("ctrl+b", 'launch_anilist', launch_anilist)
-
--- Open the folder that the video is
-function open_folder()
+local function open_folder()
     local path = mp.get_property("path")
-    local directory
-
     if not path then
-        mp.msg.warn("No file is currently playing.")
-        return
+        return msg.warn("No file is currently playing.")
+    elseif backend.is_stream() then
+        return mp.osd_message("Not a local file.", 2)
     end
-
-    directory = path:match("(.+)[/\\]") or mp.get_property("working-directory")
-
-    open(directory)
+    open(path:match("(.+)[/\\]") or mp.get_property("working-directory"), true)
 end
 
-mp.add_key_binding("ctrl+d", 'open_folder', open_folder)
-
--- Initialize and bind correction overlay module
-correction_overlay.init({
-    python_command = python_command,
-    python_options_json = python_options_json,
-    callback = show_messages,
-    get_current_anime_info = function() return current_anime_info end,
-    set_current_anime_info = function(info) current_anime_info = info end
-})
-
-mp.add_key_binding("c", 'correct_anime_id', function()
-    correction_overlay.correct_anime_id(get_path)
+-- Update once the video is far enough along. percent-pos doesn't move while paused.
+progress_timer = mp.add_periodic_timer(1, function()
+    local percent = mp.get_property_number("percent-pos")
+    if percent and percent >= config.options.UPDATE_PERCENTAGE then
+        progress_timer:kill()
+        update_anilist(false)
+    end
 end)
+progress_timer:kill()
+
+mp.register_event("file-loaded", function()
+    progress_timer:kill()
+    state.generation = state.generation + 1
+    state.info, state.waiting, state.fetching = nil, {}, false
+
+    if not backend.is_ani_cli() then
+        local path = backend.get_path()
+        if not path or backend.is_stream() or not config.is_eligible(path) then
+            return
+        end
+    end
+
+    -- Detect early so the update and the keybinds have the info ready
+    ensure_info()
+    progress_timer:resume()
+end)
+
+mp.register_event("end-file", function()
+    progress_timer:kill()
+end)
+
+mp.add_key_binding("ctrl+a", "update_anilist", function() update_anilist(true) end)
+mp.add_key_binding("ctrl+b", "launch_anilist", launch_anilist)
+mp.add_key_binding("ctrl+d", "open_folder", open_folder)
+
+overlay.init({
+    backend = backend,
+    notify = notify,
+    ensure_info = ensure_info,
+    generation = function() return state.generation end,
+    set_info = function(info) state.info = info end,
+})

@@ -1,4 +1,7 @@
 anilistToken.txt
+anilistUpdater.conf
 cache.json
 __pycache__
 .vscode
+.pytest_cache
+.ruff_cache
