@@ -92,6 +92,7 @@ _MEDIA_BY_ID = """
     query($id: Int) {
         Media(id: $id, type: ANIME) {
             id
+            idMal
             title { romaji english }
             episodes
             mediaListEntry { status progress }

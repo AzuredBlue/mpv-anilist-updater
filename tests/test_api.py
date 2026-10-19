@@ -92,3 +92,14 @@ def test_search_makes_a_request_only_for_a_search_not_made_yet(monkeypatch):
     client.search("Show", None, ["TV"])
     client.search("Show", None, ["MOVIE"])
     assert len(calls) == 2
+
+
+def test_media_by_id_asks_for_the_mal_id(monkeypatch):
+    queries = []
+    monkeypatch.setattr(
+        api.AniListClient, "_post", lambda _self, query, _variables: queries.append(query) or {"Media": {}}
+    )
+
+    api.AniListClient("token").media_by_id(1)
+
+    assert "idMal" in queries[0]
