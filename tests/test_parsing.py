@@ -51,23 +51,14 @@ def test_filename_without_a_title_is_untitled():
     assert not parse_path("Anime/Sample Show S2/[Foobar] Sample Show - 13 (1080p).mkv").untitled
 
 
-def test_generic_folder_is_not_the_title():
+@pytest.mark.parametrize("folder", ["Series", "TV", "Anime", "Episodes", "Video", "Videos"])
+def test_generic_folder_is_not_the_title(folder):
     """ "SNAFU S01+OVA …-EMBER/Series/S01E07-…" took "Series" as the show."""
     root = "Yahari Ore no Seishun Love Comedy wa Machigatteiru S01+OVA 1080p Dual Audio BDRip x265-EMBER"
-    assert parse_path(f"{root}/Series/S01E07-Anyway, Getting No Rest [0CB50FDA].mkv").title == (
+    assert parse_path(f"{root}/{folder}/S01E07-Anyway, Getting No Rest [0CB50FDA].mkv").title == (
         "Yahari Ore no Seishun Love Comedy wa Machigatteiru"
     )
-    assert parse_path("Series/S01E13-The Challengers [6DE3F599].mkv").title == "Series"
-    assert parse_path("Anime/Clannad/Clannad - 03.mkv").title == "Clannad"
-    assert parse_path("Anime/S01E13-The Challengers [6DE3F599].mkv").title == "Anime"
-
-
-@pytest.mark.parametrize("folder", ["TV", "Episodes", "Video", "Videos"])
-def test_generic_folders_are_skipped_for_the_show_above(folder):
-    root = "Yahari Ore no Seishun S01 1080p BDRip x265-EMBER"
-    assert parse_path(f"{root}/{folder}/S01E07-Anyway, Getting No Rest [0CB50FDA].mkv").title == (
-        "Yahari Ore no Seishun"
-    )
+    assert parse_path(f"{folder}/Clannad/Clannad - 03.mkv").title == "Clannad"
     assert parse_path(f"{folder}/S01E13-The Challengers [6DE3F599].mkv").title == folder
 
 

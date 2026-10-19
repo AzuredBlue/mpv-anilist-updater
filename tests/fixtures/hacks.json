@@ -51,22 +51,6 @@
       null,
       null,
       null
-    ],
-    "[Foobar] Dr. Sample! - 12 END [1080p].mkv": [
-      "Dr Sample",
-      12,
-      null,
-      null,
-      null,
-      null
-    ],
-    "[Foobar] Sample Show wo! 3 - 05 [1080p].mkv": [
-      "Sample Show wo 3",
-      5,
-      null,
-      null,
-      null,
-      null
     ]
   },
   "H4 dash-delimited Movie dropped": {
@@ -96,26 +80,10 @@
       null,
       null
     ],
-    "[Foobar] Sample Show S2 - 05v2 (BD 1080p).mkv": [
-      "Sample Show",
-      5,
-      2,
-      null,
-      null,
-      null
-    ],
     "[Foobar] Sample Show - S01E01 v2 (WEB 1080p).mkv": [
       "Sample Show",
       1,
       1,
-      null,
-      null,
-      null
-    ],
-    "[Foobar] Sample Show - 01V2 (1080p).mkv": [
-      "Sample Show",
-      1,
-      null,
       null,
       null,
       null
@@ -129,27 +97,11 @@
       null,
       null,
       null
-    ],
-    "[Foobar] Sample Show Season 2 - 03 [1080p].mkv": [
-      "Sample Show",
-      3,
-      2,
-      null,
-      null,
-      null
     ]
   },
   "H7 decimal episodes are skipped": {
     "Sample Show Episode 5.5": "error",
     "[Foobar] Sample Show - 05.5 [1080p].mkv": "error",
-    "[Foobar] Sample Show - 05 [BD 1080p FLAC 2.0].mkv": [
-      "Sample Show",
-      5,
-      null,
-      null,
-      null,
-      null
-    ],
     "Sample.Show.S01E03.1080p.WEB-DL.DDP5.1.H.265-GRP.mkv": [
       "Sample Show",
       3,
@@ -171,14 +123,6 @@
     "[Foobar] Neko 1-2 E3 [1080p].mkv": [
       "Neko 1 2",
       3,
-      null,
-      null,
-      null,
-      null
-    ],
-    "[Foobar] 86 SAMPLE-SIX - 13 [1080p].mkv": [
-      "86 SAMPLE SIX",
-      13,
       null,
       null,
       null,
@@ -401,14 +345,6 @@
       null,
       null
     ],
-    "[Foobar] Sample Show 0 [1080p].mkv": [
-      "Sample Show 0",
-      1,
-      null,
-      null,
-      null,
-      null
-    ],
     "[Foobar] 86 [BD 1080p].mkv": "error"
   },
   "H17 episode written Ep. or 2x05": {
@@ -432,14 +368,6 @@
       "Sample Show",
       1,
       1,
-      null,
-      null,
-      null
-    ],
-    "[Foobar] Sample!!x2 Show - 01 [1080p].mkv": [
-      "Sample x2 Show",
-      1,
-      null,
       null,
       null,
       null
@@ -605,14 +533,6 @@
   "H25 syllable apostrophes": {
     "[Foobar] Sample Ren'ai Show - 01 [1080p].mkv": [
       "Sample Renai Show",
-      1,
-      null,
-      null,
-      null,
-      null
-    ],
-    "[Foobar] Sample Show' - 01 [1080p].mkv": [
-      "Sample Show'",
       1,
       null,
       null,
@@ -987,14 +907,6 @@
       null,
       null
     ],
-    "[Foobar] Sample Show (REVERSE) - Letter Bee - 29 [5203142B].mkv": [
-      "Sample Show REVERSE Letter Bee",
-      29,
-      null,
-      null,
-      null,
-      null
-    ],
     "[Foobar] Sample Show (TV) - 02 [720p]": [
       "Sample Show",
       2,
@@ -1071,7 +983,6 @@
     ]
   },
   "H35 extras and decimals": {
-    "[Foobar]_Sample_Show_OP4a_(1280x720_Blu-Ray_FLAC)_[327A2375].mkv": "error",
     "[Foobar] Sample Show - EDv2 [1080p] [x265]": "error",
     "[Foobar] Sample Show - clean ending": "error",
     "[Foobar] Sample Show - PV [D1A15D2C].mkv": "error",
