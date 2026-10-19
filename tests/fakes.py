@@ -12,6 +12,7 @@ def media(
     duration=24,
     status="FINISHED",
     entry=None,
+    start=None,
 ):
     edges = [{"relationType": "SEQUEL", "node": {"id": sequel, "format": "TV"}}] if sequel else []
     edges += [{"relationType": "PREQUEL", "node": {"id": prequel, "format": "TV"}}] if prequel else []
@@ -22,6 +23,7 @@ def media(
         "duration": duration,
         "format": fmt,
         "status": status,
+        "startDate": {"year": start},
         "mediaListEntry": entry,
         "relations": {"edges": edges},
     }

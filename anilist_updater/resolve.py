@@ -117,7 +117,7 @@ def _choose(
     best = max(pool, key=lambda m: _score(m, title), default=None)
     if best and _score(best, title) > _score(pool[0], title):
         pool = [best, *(m for m in pool if m is not best)]
-    if marks and not _has_marks(pool[0], marks):
+    if pool and marks and not _has_marks(pool[0], marks):
         same = next((m for m in pool if _score(m, title) == _score(pool[0], title) and _has_marks(m, marks)), None)
         pool = [same, *(m for m in pool if m is not same)] if same else pool
     tv = next((m for m in pool if m["format"] in TV_FORMATS and _score(m, title)), None)
@@ -345,6 +345,16 @@ def _absolute_from_base(client: AniListClient, file: FileInfo) -> AnimeInfo | No
     return replace(info, guessed_name=file.query) if info.episode != file.episode else None
 
 
+def _without_folder_season(client: AniListClient, file: FileInfo) -> AnimeInfo | None:
+    """The whole show, for a season folder AniList has no entry for ("Rurouni Kenshin S02/" holds all 94 episodes)."""
+    if not file.folder_season:
+        return None
+    try:
+        return resolve(client, replace(file, season=None, part=None, folder_season=False))
+    except SkipUpdate:
+        return None
+
+
 def _without_year(client: AniListClient, file: FileInfo) -> AnimeInfo | None:
     """Search again without the year, which a folder gives for one cour ("Bleach (Cour 3) (2023)/Bleach - 38")."""
     if not file.year:
@@ -404,6 +414,26 @@ def _alternatives(file: FileInfo) -> list[str]:
         if len(re.findall(r"[^\W\d_]", tail)) >= MIN_TAIL_LETTERS:
             texts.append(tail)
     return [text for text in dict.fromkeys(texts) if text != file.query]
+
+
+def _respelled(client: AniListClient, file: FileInfo) -> AnimeInfo | None:
+    """Resolve again under the spelling AniList uses, for a title nothing else found."""
+    if "'" in file.title:
+        return None
+    for spelled in _spellings(file.title):
+        try:
+            return resolve(client, replace(file, title=spelled))
+        except SkipUpdate:
+            continue
+    return None
+
+
+def _spellings(title: str) -> list[str]:
+    """How AniList writes what releases leave out: the apostrophe of "JoJo's Bizarre Adventure"."""
+    # Only the name that opens the title: "The Apothecary Diaries" has no possessive in it
+    first, _, rest = title.partition(" ")
+    spelled = [f"{first[:-1]}'s {rest}"] if rest and re.fullmatch(r"[^\W\d_]{3,}s", first) else []
+    return spelled
 
 
 def _variants(client: AniListClient, file: FileInfo, formats: list[str]) -> list[Media]:
@@ -478,6 +508,25 @@ def _by_arc(client: AniListClient, file: FileInfo, formats: list[str]) -> AnimeI
 
 def _stems(media: Media) -> set[str]:
     return {fold_title(re.sub(r"\(?\b(?:19|20)\d\d\b\)?", "", name)) for name in media["title"].values() if name}
+
+
+def _start_year(media: Media) -> int | None:
+    return (media.get("startDate") or {}).get("year")
+
+
+def _pinned_by_year(season: Media, first: Media, file: FileInfo) -> bool:
+    """Whether the file's year names `season`, which began that year, and not the earlier `first` season.
+
+    Only for a file that doesn't name a season and whose episode fits the season, so a year that merely repeats
+    the show's first year, or an absolute number, finds the first season as before.
+    """
+    return bool(
+        file.year
+        and season is not first
+        and _start_year(season) == file.year
+        and (_start_year(first) or file.year) < file.year
+        and file.episode <= (season.get("episodes") or file.episode)
+    )
 
 
 def _remake(results: list[Media], first: Media, episode: int) -> Media | None:
@@ -648,7 +697,7 @@ def _resolve_title(client: AniListClient, file: FileInfo, formats: list[str]) ->
         return info
     results = results or _variants(client, file, formats)
     if not results:
-        if info := _absolute_from_base(client, file):
+        if info := _absolute_from_base(client, file) or _respelled(client, file):
             return info
         raise SkipUpdate(f"Couldn't find an anime from this title! ({file.query}). Is it in your list?")
 
@@ -664,9 +713,13 @@ def _resolve_title(client: AniListClient, file: FileInfo, formats: list[str]) ->
     if not (dated or (file.season or 0) > 1 or file.part) and first["format"] in seasons:
         # AniList may rank a later season first; the user's list can lack the ones between
         by_id = _Graph([*everything, *results], _fetcher(client))
+        started = first
         first = _first_season(
             first, by_id, file.title, seasons, lambda m: _watching(m) or _loses_marks(m, by_id, file.marks)
         )
+        # "One Punch Man (2025) - 05" is the season that began in 2025, not the first season of the show
+        if _pinned_by_year(started, first, file):
+            first = started
     if info := _fit(results, first, file, _Graph([*everything, *results], _fetcher(client))):
         log.info("Final guessed anime: %s", info.anime_name)
         return info
@@ -702,6 +755,7 @@ def _resolve_title(client: AniListClient, file: FileInfo, formats: list[str]) ->
         or _times_sign(client, file, formats)
         or _without_year(client, file)
         or _number_in_title(client, file)
+        or _without_folder_season(client, file)
     ):
         return info
     raise SkipUpdate(f"No valid seasons found for '{file.query}'.")

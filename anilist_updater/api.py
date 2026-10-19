@@ -26,6 +26,7 @@ _MEDIA_FIELDS = """
         duration
         format
         status
+        startDate { year }
         mediaListEntry { status progress }
         relations { edges { relationType node { id format } } }
     }

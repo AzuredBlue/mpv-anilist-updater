@@ -88,6 +88,12 @@ def test_resolve_nothing_found():
         resolve(FakeClient(), FileInfo("Nope", 1))
 
 
+def test_resolve_nothing_found_for_a_title_with_marks():
+    """ "Magical Taruruuto-kun Movie 3 Sukisuki Takoyaki!" found nothing and indexed the empty results."""
+    with pytest.raises(SkipUpdate, match="Couldn't find"):
+        resolve(FakeClient(), FileInfo("Sukisuki Takoyaki", 1, marks="!"))
+
+
 def test_resolve_absolute_episode_out_of_range():
     with pytest.raises(SkipUpdate, match="No valid seasons"):
         resolve(FakeClient(user=SEASONS[:2]), FileInfo("Show", 99))
@@ -655,6 +661,89 @@ class HonorificClient(FakeClient):
 
 def test_resolve_honorific_glued_to_its_name_is_searched_apart_when_the_whole_finds_nothing():
     assert resolve(HonorificClient(), FileInfo("Show Ojisan", 3)).anime_id == 7
+
+
+def test_resolve_folder_season_without_such_season_uses_the_show_as_a_whole():
+    """ "Rurouni Kenshin (1996) S02/… - 28 - S02E01": AniList has the 94 episodes in one entry."""
+    info = resolve(FakeClient(everything=[media(45, 94)]), FileInfo("Show", 28, season=2, folder_season=True))
+    assert (info.anime_id, info.episode) == (45, 28)
+
+
+def _years(*starts):
+    """Seasons of "Show" that began in the given years, newest first as AniList may rank them."""
+    seasons = [
+        media(i + 1, 12, prequel=i or None, sequel=i + 2 if i + 1 < len(starts) else None, start=year)
+        for i, year in enumerate(starts)
+    ]
+    return list(reversed(seasons))
+
+
+def test_resolve_year_that_a_later_season_began_in_names_that_season():
+    """ "One Punch Man (2025) - 05" is season 3, which began in 2025."""
+    client = FakeClient(everything=_years(2015, 2019, 2025))
+    assert resolve(client, FileInfo("Show", 5, year=2025)).anime_id == 3
+    assert resolve(client, FileInfo("Show", 5)).anime_id == 1
+
+
+def test_resolve_year_does_not_pin_what_it_cannot_tell_apart():
+    # two seasons in one year, a year that is the first season's, and an episode the season cannot hold
+    assert resolve(FakeClient(everything=_years(2025, 2025)), FileInfo("Show", 5, year=2025)).anime_id == 1
+    assert resolve(FakeClient(everything=_years(2015, 2019, 2025)), FileInfo("Show", 5, year=2015)).anime_id == 1
+    assert resolve(FakeClient(everything=_years(2015, 2019, 2025)), FileInfo("Show", 30, year=2025)).anime_id == 3
+
+
+class SpellingClient(FakeClient):
+    """AniList spells "JoJo's Bizarre Adventure", which releases write without the apostrophe."""
+
+    def search(self, title, year, formats):
+        names = {"JoJo's Bizarre Adventure": 4}
+        return ([], [media(names[title], 12, title=title)]) if title in names else ([], [])
+
+
+def test_resolve_the_spelling_anilist_uses_is_tried_when_the_title_finds_nothing():
+    assert resolve(SpellingClient(), FileInfo("JoJos Bizarre Adventure", 1)).anime_id == 4
+    with pytest.raises(SkipUpdate, match="Couldn't find"):
+        resolve(SpellingClient(), FileInfo("MS Gundam Wing", 1))
+
+
+def test_resolve_the_respelled_title_keeps_its_season():
+    class Seasons(FakeClient):
+        def search(self, title, year, formats):
+            if not title.startswith("JoJo's Bizarre Adventure"):
+                return [], []
+            first = media(1, 12, sequel=2, title="JoJo's Bizarre Adventure")
+            second = media(2, 12, prequel=1, title="JoJo's Bizarre Adventure 2nd Season")
+            return [], [second, first] if "Season 2" in title else [first, second]
+
+    info = resolve(Seasons(), FileInfo("JoJos Bizarre Adventure", 3, season=2))
+    assert (info.anime_id, info.episode) == (2, 3)
+
+
+def test_resolve_spelling_leaves_words_after_the_first_alone():
+    """ "The Apothecary Diaries" must never be searched as "The Apothecary Diarie's"."""
+    searched = []
+
+    class Recording(FakeClient):
+        def search(self, title, year, formats):
+            searched.append(title)
+            return [], []
+
+    with pytest.raises(SkipUpdate):
+        resolve(Recording(), FileInfo("The Apothecary Diaries", 1, season=2))
+    assert not any("'" in text for text in searched)
+
+
+def test_resolve_a_title_no_spelling_matches_is_still_not_found():
+    with pytest.raises(SkipUpdate, match="Couldn't find"):
+        resolve(SpellingClient(), FileInfo("Nothing Like It", 1))
+
+
+def test_resolve_spelling_is_not_tried_when_the_title_is_found():
+    class Found(SpellingClient):
+        def search(self, title, year, formats):
+            return ([], [media(9, 12, title="JoJos Bizarre Adventure")])
+
+    assert resolve(Found(), FileInfo("JoJos Bizarre Adventure", 1)).anime_id == 9
 
 
 class WordsClient(FakeClient):
