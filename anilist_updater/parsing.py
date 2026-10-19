@@ -18,6 +18,8 @@ _PACK_WORDS = re.compile(
     r"\b(?:complete|collection|batch|final|season|series|bd|bluray|dub|dual)\b", re.IGNORECASE
 )
 
+# A folder that only sorts the files ("Show/Series/" next to "Show/OVA/"), never the show's name
+_GENERIC_FOLDER = re.compile(r"Series|TV|Episodes?|Videos?", re.IGNORECASE)
 _ARC_FOLDER = re.compile(r"Season\s*\d{1,2}\s*(?:\(Part[^)]*\))?\s*-?\s*(?P<arc>[^\W\d_][^\[\(]*)", re.IGNORECASE)
 
 
@@ -56,6 +58,7 @@ def _split_path(path: str) -> list[str]:
 def _title_from_folders(parts: list[str], details: _Details) -> str:
     """Look for the title in the parent folder, then the grandparent, then above ("Show/S04/OVA/")."""
     number = ""  # "Show/1/" is the season's number, unless it is all there is or the file says another ("86/")
+    generic = None  # the title when no folder above names the show
     for folder in reversed(parts[:-1][-3:]):
         if re.fullmatch(r"\d|0\d", folder.strip()) and details.season in {None, int(folder)}:
             number = number or folder.strip()
@@ -63,20 +66,28 @@ def _title_from_folders(parts: list[str], details: _Details) -> str:
         release = parse_release(folder, folder=True)
         log.info("Folder guess: %s -> %s", folder, release)
 
+        if _GENERIC_FOLDER.fullmatch(folder.strip()):
+            generic = generic or release
+            continue
         details.fill_from(release)
         if release.title:
             if number and details.season is None:
                 details.season = int(number)
             return release.title
+    if generic:
+        details.fill_from(generic)
+        return generic.title or number
     return number
 
 
-def _skip_reason(release: Release, parent: Release | None) -> str | None:
+def _skip_reason(release: Release, parent: Release | None, grandparent: Release | None = None) -> str | None:
     """Why the file isn't an episode, from its name or from a parent folder like "Extras" or "Season 00"."""
     if release.skip or parent is None:
         return release.skip
     if parent.skip:
         return parent.skip
+    if grandparent and grandparent.skip and "extra" in grandparent.skip:  # "Extras/Eyecatches/"
+        return grandparent.skip
     if parent.season == 0 and not parent.title and not (release.media_format or parent.media_format):
         return "a season 0 special"
     return None
@@ -165,7 +176,8 @@ def parse_path(path: str) -> FileInfo:
     log.info("File name guess: %s -> %s", name, release)
     parent = parse_release(parts[-2], folder=True) if len(parts) > 1 else None
     release = _named_special(release, parent) or release
-    if skip := _skip_reason(release, parent):
+    grandparent = parse_release(parts[-3], folder=True) if len(parts) > 2 else None
+    if skip := _skip_reason(release, parent, grandparent):
         raise ParseError(f"'{name}' is {skip}. Not updating.")
 
     details = _Details(release.season, release.part, release.year, release.media_format)

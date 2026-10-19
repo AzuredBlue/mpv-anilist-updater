@@ -105,8 +105,14 @@ _EXTRA_GROUP = re.compile(
     r"\s*\d*(?:\.\d+)?",
     re.IGNORECASE,
 )
+# Words inside a bracket or parenthesis that make the file a bonus: "(BD Menu 01)", "(PV Collection)", "[ED Lyric Video]"
+_EXTRA_GROUP_WORD = re.compile(
+    r"\b(?:Menu|PV|CM|MV|Trailers?|Previews?|Announcement|Lyric Video|Animatics|Audio Guide)\b", re.IGNORECASE
+)
 _EXTRA_FOLDER = re.compile(
-    r"Extras?|Bonus|Featurettes|Trailers?|Scans|Soundtracks?|CDs?|Menus?|Creditless", re.IGNORECASE
+    r"(?:[\w.]+\s)*Extras?|Bonus|Featurettes|Trailers?|Scans|Soundtracks?|CDs?|Menus?|Creditless"
+    r"|NC|NCED|NCOP|BDMV|STREAM|BD Menus?|OP and ED|CM&PV|Promos?",
+    re.IGNORECASE,
 )
 # "Show/Film/": the folder names the format of the files in it
 _MOVIE_FOLDER = re.compile(r"Movies?|Films?", re.IGNORECASE)
@@ -377,6 +383,10 @@ def _unscene(text: str) -> str:
     return re.sub(r"\S+", lambda m: m.group().replace(".", " ") if m.group().count(".") >= 2 else m.group(), text)
 
 
+# "Movie 01 of 03", "Ep. 03 of 12": the number counts within a set, and the total is never the episode
+_OF_TOTAL = re.compile(r"\b((?:Movie|Film|Ep|Episode|Part)\.?\s*\d{1,3})\s+of\s+\d{1,3}\b", re.IGNORECASE)
+
+
 def _extract_groups(text: str) -> tuple[str, list[str], str | None]:
     """Take the release group, then swap every bracketed group for a gap and return their contents."""
     text = text.strip()
@@ -568,7 +578,10 @@ def _analyse(text: str, groups: list[str], *, folder: bool) -> _Segment:
     text = _MOVIE.sub(" ", text)
     segment.extra = bool(
         _EXTRA.search(text)
-        or any(_EXTRA.search(group) or _EXTRA_GROUP.fullmatch(group.strip()) for group in groups)
+        or any(
+            _EXTRA.search(group) or _EXTRA_GROUP.fullmatch(group.strip()) or _EXTRA_GROUP_WORD.search(group)
+            for group in groups
+        )
     )
 
     log.debug("    searched zone: %r", text)
@@ -812,7 +825,7 @@ def parse_release(name: str, *, folder: bool = False) -> Release:
     if folder and _MOVIE_FOLDER.fullmatch(text.strip()):
         return Release(media_format="MOVIE")
     decimal = bool(_DECIMAL_EPISODE.search(text))
-    free, groups, release_group = _extract_groups(_unscene(text))
+    free, groups, release_group = _extract_groups(_OF_TOTAL.sub(r"\1", _unscene(text)))
     kinds = _classify(groups)
     release_group = release_group or _scene_group(free)
     log.debug(
@@ -848,9 +861,10 @@ def parse_release(name: str, *, folder: bool = False) -> Release:
     title = title or next((segment.title for segment in used if segment.title), "")
     grouped_season = grouped_part = None
     if not title and not used[marked].marked:
-        title, grouped_season, grouped_part = _strip_season(
-            _title_from_groups([group for segment in used for group in segment.groups])
-        )
+        from_groups = _title_from_groups([group for segment in used for group in segment.groups])
+        # "01. Angel Beats! (2010) [BD][kuchikirukia]": the text after the number outranks a lone word in brackets
+        if not (" " not in from_groups and any(segment.episode_title for segment in used)):
+            title, grouped_season, grouped_part = _strip_season(from_groups)
 
     episode = (
         used[marked].episode

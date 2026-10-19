@@ -51,6 +51,52 @@ def test_filename_without_a_title_is_untitled():
     assert not parse_path("Anime/Sample Show S2/[Foobar] Sample Show - 13 (1080p).mkv").untitled
 
 
+def test_generic_folder_is_not_the_title():
+    """ "SNAFU S01+OVA …-EMBER/Series/S01E07-…" took "Series" as the show."""
+    root = "Yahari Ore no Seishun Love Comedy wa Machigatteiru S01+OVA 1080p Dual Audio BDRip x265-EMBER"
+    assert parse_path(f"{root}/Series/S01E07-Anyway, Getting No Rest [0CB50FDA].mkv").title == (
+        "Yahari Ore no Seishun Love Comedy wa Machigatteiru"
+    )
+    assert parse_path("Series/S01E13-The Challengers [6DE3F599].mkv").title == "Series"
+
+
+def test_numbered_name_is_not_titled_by_a_trailing_group():
+    """ "01. Angel Beats! (2010) [BD …][kuchikirukia].mkv" took the uploader's name for the show."""
+    info = parse_path("01. Angel Beats! (2010) [BD 1080p Hi10P AAC dual-audio ][kuchikirukia].mkv")
+    assert (info.title, info.episode, info.year) == ("Angel Beats", 1, 2010)
+    assert parse_path("[Group][Naruto][01][1080p].mkv").title == "Naruto"
+
+
+def test_n_of_m_is_the_number_without_the_total():
+    """ "Movie 01 of 03" became the title "MSG 0079 01 of" with episode 3."""
+    info = parse_path("Compilation Movies/MSG 0079 - Movie 01 of 03 - The Movie (1981 - 720p TRI Audio).mkv")
+    assert (info.title, info.episode, info.media_format) == ("MSG 0079 01", 1, "MOVIE")
+    assert parse_path("Show/Show - Ep. 03 of 12 [1080p].mkv").episode == 3
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "Show (Dual Audio)/NC/NCED/01 - Wind.mkv",
+        "Clannad Collection/CLANNAD D1/BDMV/STREAM/00000.m2ts",
+        "Show [BDRip]/BD Menu/[Beatrice-Raws] Show (BD Menu 01) [BDRip 1920x1080 HEVC TrueHD].mkv",
+        "Show/CM&PV/[Beatrice-Raws] Show (Long PV) [BDRip 1920x804 HEVC DTSHD].mkv",
+        "Show [BD]/SPs/[VCB-Studio] Show [Insert Song Lyric PV][Ma10p_1080p][x265_flac].mkv",
+        "Show (BD)/Extras/Eyecatches/Show - Eyecatches [BD-DVDRip 1440x1080 x265 FLAC].mkv",
+        "Show/1a. Show (1979-80)/OP and ED/a. Show - OP (Opening-Intro) Video.mkv",
+        "Show/1e. SEED Extras/Show Disc 1 - Episode, Chapter and Subtitle Menu (720p).mp4",
+    ],
+)
+def test_bonus_files_are_not_episodes(path):
+    with pytest.raises(ParseError, match="extra"):
+        parse_path(path)
+
+
+def test_specials_next_to_extras_are_still_episodes():
+    assert parse_path("Show [BD]/SPs/[VCB-Studio] Show [SP01][Ma10p_1080p][x265_flac].mkv").episode == 1
+    assert parse_path("Show/Specials/Gintama Harumatsuri (2010) [0912D4FC].mkv").title == "Gintama Harumatsuri"
+
+
 def test_native_title_gets_the_latin_folder_as_its_other_name():
     assert (
         parse_path("Sample Show/[Foobar] 样本 - 01 (B-Global 1920x1080 HEVC AAC MKV).mkv").folder_title
