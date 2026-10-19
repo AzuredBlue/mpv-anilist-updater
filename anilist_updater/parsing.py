@@ -198,6 +198,7 @@ def parse_path(path: str) -> FileInfo:
         marks=release.marks,
         arc=_arc(parts, release),
         unused_season=_unused_season_folder(parts, parent, release),
+        untitled=not release.title,
     )
     log.info(
         "Guessed: %s - E%s %s", " ".join(filter(None, (info.query, info.media_format))), episode, info.year or ""

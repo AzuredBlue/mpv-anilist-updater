@@ -5,6 +5,7 @@ from fakes import SEASONS, FakeClient, media
 
 from anilist_updater.errors import SkipUpdate
 from anilist_updater.models import FileInfo, Status
+from anilist_updater.parsing import parse_path
 from anilist_updater.resolve import TIMES_SIGN, locate_episode, main_series, refresh, resolve
 
 
@@ -803,6 +804,25 @@ class FolderSeasonClient(FakeClient):
 def test_resolve_folder_season_numbers_are_absolute_when_they_land_past_the_first_season(episode, relative):
     info = resolve(FolderSeasonClient(), FileInfo("Show", episode, season=2, folder_season=True))
     assert (info.anime_id, info.episode) == (2, relative)
+
+
+@pytest.mark.parametrize(("episode", "relative"), [(5, 5), (13, 13), (25, 13)])
+def test_resolve_untitled_file_in_a_season_folder_is_numbered_within_it(episode, relative):
+    file = FileInfo("Show", episode, season=2, folder_season=True, untitled=True)
+    info = resolve(FolderSeasonClient(), file)
+    assert (info.anime_id, info.episode) == (2, relative)
+
+
+def test_resolve_untitled_episode_in_a_part_folder_is_not_counted_from_the_first_part():
+    """ "86 Part 2/E12 - Welcome": 11 + 12 episodes, so E12 counted from Part 1 would be Part 2 E1."""
+
+    class PartClient(FakeClient):
+        def search(self, title, year, formats):
+            parts = [media(1, 11, sequel=2, title="86"), media(2, 12, prequel=1, title="86 Part 2")]
+            return ([], [parts[1]]) if title == "86 Part 2" else ([], parts)
+
+    info = resolve(PartClient(), parse_path("Anime/86 Part 2/E12 - Welcome [F1119374].mkv"))
+    assert (info.anime_id, info.episode) == (2, 12)
 
 
 def test_resolve_episode_without_folder_season_stays_in_the_first_season():

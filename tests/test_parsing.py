@@ -46,6 +46,11 @@ def test_titled_filename_takes_its_season_from_its_folder():
     assert not parse_path("Anime/Sample Show/[Foobar] Sample Show S3 - 05.mkv").folder_season
 
 
+def test_filename_without_a_title_is_untitled():
+    assert parse_path("Anime/Sample Show Part 2/E12 - Welcome.mkv").untitled
+    assert not parse_path("Anime/Sample Show S2/[Foobar] Sample Show - 13 (1080p).mkv").untitled
+
+
 def test_native_title_gets_the_latin_folder_as_its_other_name():
     assert (
         parse_path("Sample Show/[Foobar] 样本 - 01 (B-Global 1920x1080 HEVC AAC MKV).mkv").folder_title

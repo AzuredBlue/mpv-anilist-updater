@@ -43,6 +43,7 @@ class FileInfo:
     unused_season: bool = (
         False  # a season folder of the show was left out, as the file names more ("Show - Finale 1")
     )
+    untitled: bool = False  # the filename names no title ("E12 - Welcome"); it comes from a folder
 
     @property
     def query(self) -> str:
