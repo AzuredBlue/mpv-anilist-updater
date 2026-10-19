@@ -1541,5 +1541,335 @@
       null,
       null
     ]
+  },
+  "H57 year folder, absolute number and a language folder": {
+    "Sample Show (1979) - English subtitles/Sample Show (1979) - 0406 [Foobar][ECEE0466].avi": [
+      "Sample Show",
+      406,
+      null,
+      null,
+      1979,
+      null
+    ],
+    "Sample Show (2020) - 01 ~ 67 [1080p][Multiple Subtitle]/[Foobar] Sample Show (2020) - 12 [1080p][Multiple Subtitle][7910E1CD].mkv": [
+      "Sample Show",
+      12,
+      null,
+      null,
+      2020,
+      null
+    ],
+    "Sample Show (1989) Ep. 1-7 + Specials [1080p, HEVC, EAC3]/Sample Show - 07 [1080p, HEVC, EAC3].mkv": [
+      "Sample Show",
+      7,
+      null,
+      null,
+      1989,
+      null
+    ],
+    "Sample Show - 01 - 12 vostfr [720p]/Sample Show - 03 vostfr [720p].mp4": [
+      "Sample Show",
+      3,
+      null,
+      null,
+      null,
+      null
+    ],
+    "Sample Show Gou 1991 10bit/[Foobar] Sample Show Gou - 31 (DVD 960x720 x264 10bit AAC).mp4": [
+      "Sample Show Gou",
+      31,
+      null,
+      null,
+      1991,
+      null
+    ],
+    "Sample Show (2015) VOSTFR 1080p 10Bits BluRay x265 AAC -Foobar/Sample Show - 09 VOSTFR 1080p 10Bits BluRay x265 AAC -Foobar.mkv": [
+      "Sample Show",
+      9,
+      null,
+      null,
+      2015,
+      null
+    ]
+  },
+  "H58 a pack folder above the files": {
+    "Sample Show Complete BDrip 1080p FLAC x265-Foobar/Partie 01/Sample Show (2022) - 12 MULTi BDrip 1080p FLAC x265 v2-Foobar.mkv": [
+      "Sample Show",
+      12,
+      null,
+      null,
+      2022,
+      null
+    ],
+    "[Foobar] Sample Show Complete Series BD 1080p/[Foobar] Sample Show Season 1 DTS-HD Master Dual Audio/Sample Show 05.mkv": [
+      "Sample Show",
+      5,
+      1,
+      null,
+      null,
+      null
+    ],
+    "Sample Show/Sample Show/Sample Show - 04 - Kidnap.mkv": [
+      "Sample Show",
+      4,
+      null,
+      null,
+      null,
+      null
+    ],
+    "Sample Show Season Collection/Sample Show Gou 1991 10bit/[Foobar] Sample Show Gou - 31 (DVD 960x720 x264 10bit AAC).mp4": [
+      "Sample Show Gou",
+      31,
+      null,
+      null,
+      1991,
+      null
+    ]
+  },
+  "H59 year and quality in brackets around the episode": {
+    "[Foobar] Sample Show (1998) - 23 - Episode Title! [480p v2] [D73803EA].mkv": [
+      "Sample Show",
+      23,
+      null,
+      null,
+      1998,
+      null
+    ],
+    "[1998] [Season 1] Sample Show/Sample Show [1998] - S01E19 - Episode Title!.mkv": [
+      "Sample Show",
+      19,
+      1,
+      null,
+      1998,
+      null
+    ],
+    "Sample Show (1998) [480i] [Dual Audio] [5.1 AC-3]/24. Episode Title.mkv": [
+      "Sample Show",
+      24,
+      null,
+      null,
+      1998,
+      null
+    ],
+    "Sample Show (1998) (Dual Audio) DVD Remux [Foobar]/Sample Show E20 [Foobar].mkv": [
+      "Sample Show",
+      20,
+      null,
+      null,
+      1998,
+      null
+    ],
+    "Sample Show 98 (1998) (Dual Audio) DVD Remux (Foobar)/Sample Show 98 E08 (Foobar).mkv": [
+      "Sample Show 98",
+      8,
+      null,
+      null,
+      1998,
+      null
+    ],
+    "Sample Show_1998_480p.mkv": [
+      "Sample Show",
+      1,
+      null,
+      null,
+      1998,
+      null
+    ]
+  },
+  "H60 the show name between brackets": {
+    "[Foobar][Sample Show][06][1080P][BDRip][HEVC-10bit][FLAC].mkv": [
+      "Sample Show",
+      6,
+      null,
+      null,
+      null,
+      null
+    ],
+    "[Foobar][Sample Show]/Season 1/[Foobar] Sample Show #23 (BD HEVC 1920x1080 FLAC)[4743E2CE].mkv": [
+      "Sample Show",
+      23,
+      1,
+      null,
+      null,
+      null
+    ],
+    "(Foobar) Sample Show 117 [19989ABC].mkv": [
+      "Sample Show",
+      117,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "H61 underscores and glued episode markers": {
+    "Sample_Show_Ep08[x264.AAC][Foobar][BD4039EE].mkv": [
+      "Sample Show",
+      8,
+      null,
+      null,
+      null,
+      null
+    ],
+    "Sample Show.1999.EP05.x264.AC3-Foobar.mkv": [
+      "Sample Show",
+      5,
+      null,
+      null,
+      1999,
+      null
+    ],
+    "[PM]Sample_Show_OVA_2_-_Episode_Title_2000[H264_DVDSUB][B0059DAE].mkv": [
+      "Sample Show",
+      2,
+      null,
+      null,
+      2000,
+      "OVA"
+    ]
+  },
+  "H62 season written as a roman numeral or an ordinal": {
+    "Sample Show/Sample Show III/[DB]Sample Show III_-_06_(Dual Audio_10bit_BD1080p_x265).mkv": [
+      "Sample Show",
+      6,
+      3,
+      null,
+      null,
+      null
+    ],
+    "Sample Show/Sample Show 2nd Season/[DB]Sample Show 2nd Season_-_12_(Dual Audio_10bit_BD1080p_x265).mkv": [
+      "Sample Show",
+      12,
+      2,
+      null,
+      null,
+      null
+    ],
+    "[Foobar] Sample Show 2nd Season - 01 [480p CR WEB-DL AVC AAC][MultiSub][38A2020E].mkv": [
+      "Sample Show",
+      1,
+      2,
+      null,
+      null,
+      null
+    ],
+    "The.Sample.Show.II.S05E03.Episode.Title.1080p.CR.WEB-DL.JPN.AAC2.0.H.264.MSubs-Foobar.mkv": [
+      "The Sample Show",
+      3,
+      5,
+      null,
+      null,
+      null
+    ],
+    "Sample Show S02 1080p Dual Audio BDRip 10 bits DD+ x265-Foobar/S02E15-Episode Title, Part 2 [66485653].mkv": [
+      "Sample Show",
+      15,
+      2,
+      null,
+      null,
+      null
+    ],
+    "Sample Show S01 1080p Dual Audio WEBRip AAC x265-Foobar/[Foobar] Sample Show - 04 V2.mkv": [
+      "Sample Show",
+      4,
+      1,
+      null,
+      null,
+      null
+    ]
+  },
+  "H63 season and episode with an absolute number beside them": {
+    "Sample Show - AV1/Season 3/[Foobar] Sample Show S03E19 (56) (BD 1080p AV1) [B7739888].mkv": [
+      "Sample Show",
+      19,
+      3,
+      null,
+      null,
+      null
+    ],
+    "Sample Show (BD)/Season 17 - Title Episodes/[Foobar] Sample Show - 814 - Episode Title.mkv": [
+      "Sample Show",
+      814,
+      17,
+      null,
+      null,
+      null
+    ],
+    "Sample Show S1E05 Episode Title!! Subtitle.mkv": [
+      "Sample Show",
+      5,
+      1,
+      null,
+      null,
+      null
+    ],
+    "[Foobar] Sample Show S2 33 (1080p AV1 MULTI Audio)[1148511F].mkv": [
+      "Sample Show",
+      33,
+      2,
+      null,
+      null,
+      null
+    ]
+  },
+  "H64 a part number after the episode is the episode's own title": {
+    "[Foobar] Sample Show - 26 The Real Folk Blues Part 2.mkv": [
+      "Sample Show",
+      26,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "H65 films, OVAs and specials in their own folders": {
+    "Sample Show - The Movie (2000) [HEVC][10bit][Multi-Audio][1080p]/[Foobar] Sample Show - The Movie (2000) [HEVC][10bit][Multi-Audio][1080p].mkv": [
+      "Sample Show",
+      1,
+      null,
+      null,
+      2000,
+      "MOVIE"
+    ],
+    "[Foobar] Sample Show (1998)/[Foobar] Sample Show (1998) - Movie [480p HS] [4BCD4D03].mp4": [
+      "Sample Show",
+      1,
+      null,
+      null,
+      1998,
+      "MOVIE"
+    ],
+    "Sample Show.Chronicle.Movie.2020.MULTI.1080p.BDRip.CUSTOM.x264.PCM.AC3-Foobar.mkv": [
+      "Sample Show Chronicle",
+      1,
+      null,
+      null,
+      2020,
+      "MOVIE"
+    ],
+    "[2008] [OVA] Sample Show Extra Stage 2/[2008] [OVA] Sample Show Extra Stage 2 Episode Title.mkv": [
+      "Sample Show Extra Stage 2 Episode Title",
+      1,
+      null,
+      null,
+      2008,
+      "OVA"
+    ],
+    "Sample Show Complete Series + OVA [BD 1080p + DVD 480p]/Specials/[Foobar] Sample Show - OVA 03 [DVD 480p x264 AC3].mkv": [
+      "Sample Show",
+      3,
+      null,
+      null,
+      null,
+      "OVA"
+    ],
+    "Sample Show Specials/Sample Show - Special 05 VOSTFR 1080p 10Bits BluRay x265 AAC -Foobar.mkv": [
+      "Sample Show",
+      5,
+      null,
+      null,
+      null,
+      "SPECIAL"
+    ]
   }
 }

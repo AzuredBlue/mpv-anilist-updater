@@ -62,6 +62,15 @@ def test_generic_folder_is_not_the_title():
     assert parse_path("Anime/S01E13-The Challengers [6DE3F599].mkv").title == "Anime"
 
 
+@pytest.mark.parametrize("folder", ["TV", "Episodes", "Video", "Videos"])
+def test_generic_folders_are_skipped_for_the_show_above(folder):
+    root = "Yahari Ore no Seishun S01 1080p BDRip x265-EMBER"
+    assert parse_path(f"{root}/{folder}/S01E07-Anyway, Getting No Rest [0CB50FDA].mkv").title == (
+        "Yahari Ore no Seishun"
+    )
+    assert parse_path(f"{folder}/S01E13-The Challengers [6DE3F599].mkv").title == folder
+
+
 def test_numbered_name_is_not_titled_by_a_trailing_group():
     """ "01. Angel Beats! (2010) [BD …][kuchikirukia].mkv" took the uploader's name for the show."""
     info = parse_path("01. Angel Beats! (2010) [BD 1080p Hi10P AAC dual-audio ][kuchikirukia].mkv")
@@ -73,7 +82,11 @@ def test_n_of_m_is_the_number_without_the_total():
     """ "Movie 01 of 03" became the title "MSG 0079 01 of" with episode 3."""
     info = parse_path("Compilation Movies/MSG 0079 - Movie 01 of 03 - The Movie (1981 - 720p TRI Audio).mkv")
     assert (info.title, info.episode, info.media_format) == ("MSG 0079 01", 1, "MOVIE")
-    assert parse_path("Show/Show - Ep. 03 of 12 [1080p].mkv").episode == 3
+    info = parse_path("Show/Show - Ep. 03 of 12 [1080p].mkv")
+    assert (info.title, info.episode) == ("Show", 3)
+    assert parse_path("Show/Show - Part 2 of 3 [1080p].mkv").title == "Show"
+    info = parse_path("[Group] Fist of the North Star - 05 (BD 1080p).mkv")
+    assert (info.title, info.episode) == ("Fist of the North Star", 5)
 
 
 @pytest.mark.parametrize(
@@ -94,9 +107,57 @@ def test_bonus_files_are_not_episodes(path):
         parse_path(path)
 
 
+@pytest.mark.parametrize(
+    "folder",
+    ["Bonus", "Featurettes", "Trailers", "Scans", "Soundtracks", "CDs", "Menus", "Creditless", "NCOP", "Promos"],
+)
+def test_bonus_folders_are_not_episodes(folder):
+    with pytest.raises(ParseError, match="extra"):
+        parse_path(f"Show [BD 1080p]/{folder}/Show - 01 [Ma10p_1080p].mkv")
+
+
+@pytest.mark.parametrize(
+    "word",
+    [
+        "MV",
+        "Trailer",
+        "Trailers",
+        "Preview",
+        "Previews",
+        "Announcement",
+        "Lyric Video",
+        "Animatics",
+        "Audio Guide",
+    ],
+)
+def test_bonus_words_in_brackets_are_not_episodes(word):
+    for name in (f"[Group] Show [{word}][1080p].mkv", f"[Group] Show ({word}) [1080p].mkv"):
+        with pytest.raises(ParseError, match="extra"):
+            parse_path(name)
+
+
 def test_specials_next_to_extras_are_still_episodes():
     assert parse_path("Show [BD]/SPs/[VCB-Studio] Show [SP01][Ma10p_1080p][x265_flac].mkv").episode == 1
     assert parse_path("Show/Specials/Gintama Harumatsuri (2010) [0912D4FC].mkv").title == "Gintama Harumatsuri"
+
+
+@pytest.mark.parametrize("folder", ["SP", "SPs"])
+def test_sp_folders_hold_real_specials(folder):
+    info = parse_path(f"Show [BD]/{folder}/[VCB-Studio] Show [SP01][Ma10p_1080p][x265_flac].mkv")
+    assert (info.title, info.episode, info.media_format) == ("Show", 1, "SPECIAL")
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "Clannad S00E02 - Mei Sunohara Another Story (OVA).mkv",
+        "Clannad/Clannad S00E02 OVA.mkv",
+        "[Group] Clannad - S00E02 (OVA) [BD 1080p].mkv",
+    ],
+)
+def test_season_zero_naming_a_format_is_not_skipped(path):
+    info = parse_path(path)
+    assert (info.title, info.episode, info.season, info.media_format) == ("Clannad", 2, 0, "OVA")
 
 
 def test_native_title_gets_the_latin_folder_as_its_other_name():

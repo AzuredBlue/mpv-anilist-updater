@@ -740,6 +740,19 @@ def test_resolve_spelling_leaves_words_after_the_first_alone():
     assert not any("'" in text for text in searched)
 
 
+def test_resolve_spelling_leaves_a_title_with_an_apostrophe_alone():
+    searched = []
+
+    class Recording(FakeClient):
+        def search(self, title, year, formats):
+            searched.append(title)
+            return [], []
+
+    with pytest.raises(SkipUpdate):
+        resolve(Recording(), FileInfo("Dogs of Cat's Eye", 1))
+    assert "Dog's of Cat's Eye" not in searched
+
+
 def test_resolve_a_title_no_spelling_matches_is_still_not_found():
     with pytest.raises(SkipUpdate, match="Couldn't find"):
         resolve(SpellingClient(), FileInfo("Nothing Like It", 1))
