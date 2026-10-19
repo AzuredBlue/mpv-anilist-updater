@@ -1850,5 +1850,105 @@
       2000,
       null
     ]
+  },
+  "H68 behaviours the mutation run found unpinned": {
+    "[Foobar] Sample.Show.2018-2020.S05.Rus.Dub.WEB-DL.1080p.Foobar.Ep.17.mkv": [
+      "Sample Show",
+      17,
+      5,
+      null,
+      2018,
+      null
+    ],
+    "Sample Show (1997-1998) OVA BDRemux (Dual Audio, Special Features)/[Foobar] Sample Show S1E1 Chronicle Beginning.mkv": [
+      "Sample Show",
+      1,
+      1,
+      null,
+      1997,
+      "OVA"
+    ],
+    "[Foobar] Sample Doan's Island (BDRip 1080p HEVC QAAC) [125B97CA].mkv": [
+      "Sample Doan's Island",
+      1,
+      null,
+      null,
+      null,
+      null
+    ],
+    "[Foobar] Sample Show - TV + Extras [US BD-Remux]/[Foobar] Sample Show - 01 [US BD-Remux] [3A816038].mkv": [
+      "Sample Show",
+      1,
+      null,
+      null,
+      null,
+      null
+    ],
+    "[mango.sub] 示例作品 第1话(640×480 ×264 AAC).mkv": [
+      "示例作品",
+      1,
+      null,
+      null,
+      null,
+      null
+    ],
+    "[2000] Sample Show_示例_OVA/DVDRip.MP4.720x480.RAW.U2/[DVDRIP][示例作品][720x480_X264_AAC][01][2D8A6DC1].mp4": [
+      "Sample Show",
+      1,
+      null,
+      null,
+      2000,
+      "OVA"
+    ],
+    "Sample Show Disc/BDMV/BACKUP/MovieObject.bdmv": "error",
+    "Sample Show/Movies/[Foobar] Sample Show - The Rising (BD HEVC 1920x1080 FLAC)[CD3AC1C9].mkv": [
+      "Sample Show The Rising",
+      1,
+      null,
+      null,
+      null,
+      "MOVIE"
+    ],
+    "[Foobar] Sample Show - Clean ED [480p HS] [03428DB7].mp4": "error",
+    "Sample Show - Edited (2000).mkv": [
+      "Sample Show Edited",
+      1,
+      null,
+      null,
+      2000,
+      null
+    ],
+    "[Foobar]Sample_Show_1-3[divx5.03].ogm": [
+      "Sample Show",
+      3,
+      null,
+      null,
+      null,
+      null
+    ],
+    "Sample Show Movie OVA Special Collection/Sample Show Special 2013 Episode of Foo 720p BluRay x264 AAC-Foobar.mp4": [
+      "Sample Show",
+      1,
+      null,
+      null,
+      2013,
+      "SPECIAL"
+    ],
+    "Sample.Show.Special2.Song.of.Foo.1080p.HEVC.E01.mkv": [
+      "Sample Show",
+      2,
+      null,
+      null,
+      null,
+      "SPECIAL"
+    ],
+    "[Erai-raws] Sample Show Part 2 - 07 [1080p CR WEB-DL AVC AAC][MultiSub][01CFE7EB].mkv": [
+      "Sample Show",
+      7,
+      null,
+      2,
+      null,
+      null
+    ]
   }
 }
