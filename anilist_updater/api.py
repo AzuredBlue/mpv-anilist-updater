@@ -20,6 +20,7 @@ TIMEOUT = 10
 _MEDIA_FIELDS = """
     fragment MediaFields on Media {
         id
+        idMal
         title { romaji english }
         synonyms
         episodes

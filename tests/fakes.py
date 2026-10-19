@@ -13,11 +13,13 @@ def media(
     status="FINISHED",
     entry=None,
     start=None,
+    mal=None,
 ):
     edges = [{"relationType": "SEQUEL", "node": {"id": sequel, "format": "TV"}}] if sequel else []
     edges += [{"relationType": "PREQUEL", "node": {"id": prequel, "format": "TV"}}] if prequel else []
     return {
         "id": anime_id,
+        "idMal": mal,
         "title": {"romaji": title or f"Show {anime_id}", "english": None},
         "episodes": episodes,
         "duration": duration,

@@ -1,6 +1,8 @@
 import pytest
 from fakes import FakeClient, media
 
+from anilist_updater import cli
+from anilist_updater.api import AniListClient
 from anilist_updater.cache import Cache
 from anilist_updater.errors import SkipUpdate
 from anilist_updater.models import AnimeInfo, Correction, Options, Status
@@ -46,6 +48,27 @@ def test_info_then_cache_hit_skips_the_search(tmp_path):
     second = make(tmp_path, client).info(PATH).info
     assert client.searches == 1
     assert second == first
+
+
+def test_info_response_carries_the_mal_id(monkeypatch, tmp_path):
+    """Other programs read `info.mal_id` from the response, fresh and from the cache."""
+    client = RecordingClient(user=[media(1, 12, mal=4242, entry=ENTRY)])
+    monkeypatch.setattr(AniListClient, "from_token_file", lambda: client)
+    monkeypatch.setattr(cli, "Cache", lambda options: Cache(options, tmp_path / "cache.json"))
+    request = {"action": "info", "path": PATH, "options": {}}
+
+    assert cli.handle(request)["info"]["mal_id"] == 4242
+    assert cli.handle(request)["info"]["mal_id"] == 4242
+    assert client.searches == 1
+
+
+def test_info_response_has_a_null_mal_id_when_anilist_has_none(monkeypatch, tmp_path):
+    client = RecordingClient(user=[media(1, 12, entry=ENTRY)])
+    monkeypatch.setattr(AniListClient, "from_token_file", lambda: client)
+    monkeypatch.setattr(cli, "Cache", lambda options: Cache(options, tmp_path / "cache.json"))
+
+    response = cli.handle({"action": "info", "path": PATH, "options": {}})
+    assert (response["ok"], response["info"]["mal_id"]) == (True, None)
 
 
 def test_resolved_info_is_not_refreshed_again(tmp_path):

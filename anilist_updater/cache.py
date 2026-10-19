@@ -47,6 +47,7 @@ class Entry:
     offset: int
     corrected: bool
     ttl: float
+    mal_id: int | None = None
 
     @classmethod
     def from_json(cls, raw: dict[str, Any]) -> Self:
@@ -65,6 +66,7 @@ class Entry:
             offset=offset,
             corrected=bool(raw.get("corrected")),
             ttl=raw["ttl"],
+            mal_id=raw.get("mal_id"),
         )
 
     def to_json(self) -> dict[str, Any]:
@@ -85,6 +87,7 @@ class Entry:
             current_status=self.current_status,
             guessed_name=self.guessed_name,
             absolute_episode=absolute,
+            mal_id=self.mal_id,
         )
 
 
@@ -171,6 +174,7 @@ class Cache:
             offset=info.absolute_episode - info.episode,
             corrected=corrected,
             ttl=self._clock() + (CORRECTED_TTL if corrected else self._ttl),
+            mal_id=info.mal_id,
         )
         self._changed.add(key)
 

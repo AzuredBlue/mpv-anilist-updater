@@ -108,6 +108,13 @@ def test_refresh_fills_episode_count_and_drops_progress_without_entry():
     assert (refreshed.total_episodes, refreshed.current_progress, refreshed.current_status) == (12, None, None)
 
 
+def test_mal_id_follows_the_resolved_and_refreshed_anime():
+    info = resolve(FakeClient(user=[media(1, 12, mal=100)]), FileInfo("Show", 3))
+    assert info.mal_id == 100
+    assert refresh(FakeClient(by_id={2: media(2, 24, mal=200)}), info, 2).mal_id == 200
+    assert refresh(FakeClient(by_id={2: media(2, 24)}), info, 2).mal_id is None
+
+
 def test_refresh_to_another_anime_drops_old_progress():
     client = FakeClient(by_id={2: media(2, 24)})
     base = resolve(

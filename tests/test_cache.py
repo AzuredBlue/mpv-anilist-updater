@@ -41,6 +41,13 @@ def test_round_trip_and_episode_mapping(tmp_path):
     assert entry.info_for(26) is None
 
 
+def test_mal_id_survives_the_cache(tmp_path):
+    cache = make(tmp_path)
+    cache.put(PATH, replace(INFO, mal_id=4242))
+    cache.save()
+    assert make(tmp_path).get(PATH, "Show").info_for(14).mal_id == 4242
+
+
 def test_other_title_or_directory_misses(tmp_path):
     cache = make(tmp_path)
     cache.put(PATH, INFO)
@@ -143,7 +150,7 @@ def test_legacy_entry_is_migrated(tmp_path):
             "guessed_name": "Show",
             "anime_name": "Show 2",
             "anime_id": 7,
-            "mal_id": None,
+            "mal_id": 4242,
             "current_progress": 3,
             "relative_progress": "19->7",
             "total_episodes": 12,
@@ -157,6 +164,7 @@ def test_legacy_entry_is_migrated(tmp_path):
 
     cache = make(tmp_path)
     assert cache.get(PATH, "Show").info_for(20).episode == 8
+    assert cache.get(PATH, "Show").info_for(20).mal_id == 4242
     cache.save()
 
     saved = json.loads((tmp_path / "cache.json").read_text(encoding="utf-8"))

@@ -278,6 +278,7 @@ def _to_info(media: Media, episode: int, file: FileInfo) -> AnimeInfo:
         current_status=Status(entry["status"]) if entry else None,
         guessed_name=file.query,
         absolute_episode=file.episode,
+        mal_id=media.get("idMal"),
     )
 
 
@@ -785,6 +786,7 @@ def refresh(client: AniListClient, info: AnimeInfo, anime_id: int | None = None)
     return replace(
         info,
         anime_id=media["id"],
+        mal_id=media.get("idMal"),
         anime_name=media_title(media) or (info.anime_name if same else None),
         current_progress=progress,
         current_status=status,

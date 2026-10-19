@@ -73,6 +73,7 @@ class AnimeInfo:
     current_status: Status | None = None
     guessed_name: str = ""
     absolute_episode: int = 1
+    mal_id: int | None = None
 
     @classmethod
     def from_dict(cls, data: Mapping[str, Any] | None) -> Self | None:
