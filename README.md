@@ -155,9 +155,31 @@ The title can be in the file name or in a folder name:
 
 To see which anime got detected, you can use `c`, `Ctrl+B` to launch the AniList page, or check mpv's console.
 
+## Using the parser from other programs
+
+The parser and the AniList lookup work without mpv, for example to get the AniList and MyAnimeList IDs of a file. No token is needed for this, but without one `current_progress` and `current_status` are `null`.
+
+Run `anilistUpdater.py` with one JSON request on stdin. It prints one JSON response on stdout, and the log goes to stderr:
+
+```bash
+echo '{"action": "info", "path": "/anime/Frieren S2/[EMBER] Sousou no Frieren S2 - 09.mkv"}' | python3 anilistUpdater.py
+```
+
+```json
+{"ok": true, "kind": "success", "message": null, "info": {"anime_id": 182255, "anime_name": "Sousou no Frieren 2nd Season", "episode": 9, "current_progress": null, "total_episodes": 10, "current_status": null, "guessed_name": "Sousou no Frieren Season 2", "absolute_episode": 9, "mal_id": 59978}}
+```
+
+- `kind` is `success`, `skip` (extras, no title, nothing found on AniList) or `error`. On `skip` and `error`, `info` is `null` and `message` says why.
+- **`mal_id`** is the MyAnimeList ID AniList lists for the entry, or `null` if it has none.
+- **`episode`** is relative to the AniList entry. **`absolute_episode`** is the number in the file name.
+- `options` is optional. It takes the update options of [the configuration](#configuration-anilistupdaterconf), such as `CACHE_MODE`.
+- A file with a list entry is remembered in `cache.json` next to the script.
+
 ## MAL
 
 For a MyAnimeList version, check out the fork [mpv-mal-updater](https://github.com/locomotiv1/mpv-mal-updater). Take into account this is a fork not maintained by me so I can't guarantee its safety. It may also be outdated or work differently.
+
+This script only updates AniList. The MyAnimeList ID of each file is available as `mal_id`, see [Using the parser from other programs](#using-the-parser-from-other-programs).
 
 ## Credits
 
