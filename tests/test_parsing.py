@@ -58,6 +58,8 @@ def test_generic_folder_is_not_the_title():
         "Yahari Ore no Seishun Love Comedy wa Machigatteiru"
     )
     assert parse_path("Series/S01E13-The Challengers [6DE3F599].mkv").title == "Series"
+    assert parse_path("Anime/Clannad/Clannad - 03.mkv").title == "Clannad"
+    assert parse_path("Anime/S01E13-The Challengers [6DE3F599].mkv").title == "Anime"
 
 
 def test_numbered_name_is_not_titled_by_a_trailing_group():

@@ -19,7 +19,7 @@ _PACK_WORDS = re.compile(
 )
 
 # A folder that only sorts the files ("Show/Series/" next to "Show/OVA/"), never the show's name
-_GENERIC_FOLDER = re.compile(r"Series|TV|Episodes?|Videos?", re.IGNORECASE)
+_GENERIC_FOLDER = re.compile(r"Series|TV|Anime|Episodes?|Videos?", re.IGNORECASE)
 _ARC_FOLDER = re.compile(r"Season\s*\d{1,2}\s*(?:\(Part[^)]*\))?\s*-?\s*(?P<arc>[^\W\d_][^\[\(]*)", re.IGNORECASE)
 
 
