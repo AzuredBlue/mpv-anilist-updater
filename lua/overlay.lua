@@ -6,8 +6,8 @@ local STATUSES = { "CURRENT", "PAUSED", "DROPPED", "COMPLETED", "REPEATING", "PL
 local FIELDS = { "anime", "episode", "status", "score" }
 -- Everyone picks their own score system on AniList. The backend reports it, and scores are sent in it.
 local SCORE_FORMATS = {
-    POINT_100 = { max = 100, step = 5 },
-    POINT_10_DECIMAL = { max = 10, step = 0.5, decimal = true },
+    POINT_100 = { max = 100, step = 1 },
+    POINT_10_DECIMAL = { max = 10, step = 0.1, decimal = true },
     POINT_10 = { max = 10, step = 1 },
     POINT_5 = { max = 5, step = 1 },
     POINT_3 = { max = 3, step = 1, labels = { ":(", ":|", ":)" } },
@@ -454,8 +454,8 @@ local function open()
     bind("Shift+TAB", function() move_focus(-1) end)
     bind("DOWN", function() move_selection(1) end)
     bind("UP", function() move_selection(-1) end)
-    bind("LEFT", function() adjust(-1) end)
-    bind("RIGHT", function() adjust(1) end)
+    bind("LEFT", function() adjust(-1) end, { repeatable = true })
+    bind("RIGHT", function() adjust(1) end, { repeatable = true })
     bind("BS", backspace, { repeatable = true })
     bind("DEL", clear_field)
     bind("Ctrl+v", paste)
