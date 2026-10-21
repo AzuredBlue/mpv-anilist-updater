@@ -308,13 +308,44 @@ def test_a_successful_update_sends_the_queue_of_other_anime(offline):
     assert not queue.exists()
 
 
-def test_queued_episodes_older_than_the_one_just_saved_are_dropped_without_a_request(offline):
+def test_queued_episodes_of_the_same_anime_are_sent_before_the_current_one(offline):
     client, service, queue = offline
     service.update(PATH, episode(5))
     client.down = False
     outcome = service.update(PATH, episode(7))
-    assert client.saves == [(1, Status.CURRENT, 7)]
-    assert "queued sent" not in outcome.message
+    assert client.saves == [(1, Status.CURRENT, 5), (1, Status.CURRENT, 7)]
+    assert outcome.message.endswith("(+1 queued sent)")
+    assert not queue.exists()
+
+
+def test_a_queued_first_episode_of_a_rewatch_is_sent_before_the_second(tmp_path):
+    client = Flaky(by_id={1: media(1, 12, entry={"status": "COMPLETED", "progress": 12})})
+    service = queue_make(tmp_path, client, set_completed_to_rewatching_on_first_episode=True)
+    client.down = True
+    service.update(PATH, episode(1))
+    client.down = False
+    service.update(PATH, episode(2))
+    assert client.saves == [(1, Status.REPEATING, 0), (1, None, 1), (1, Status.CURRENT, 2)]
+    assert not (tmp_path / "queue.json").exists()
+
+
+def test_a_skipped_update_still_sends_the_queue_since_anilist_answered(offline):
+    client, service, queue = offline
+    service.update("/other/Show 2 - 02.mkv", episode(2, anime_id=2, name="Other"))
+    client.down = False
+    with pytest.raises(SkipUpdate, match="not new"):
+        service.update(PATH, episode(3))
+    assert client.saves == [(2, Status.CURRENT, 2)]
+    assert not queue.exists()
+
+
+def test_the_message_counts_the_queued_updates_that_were_given_up_on(offline):
+    client, service, queue = offline
+    service.update(PATH, episode(5))
+    client.down = False
+    client.by_id[1] = media(1, 12, entry={"status": "CURRENT", "progress": 8})
+    outcome = service.update("/other/Show 2 - 02.mkv", episode(2, anime_id=2, name="Other"))
+    assert outcome.message.endswith("(+1 dropped)")
     assert not queue.exists()
 
 
@@ -324,7 +355,7 @@ def test_queued_episodes_of_one_anime_read_the_entry_once(offline):
     service.update(PATH, episode(6))
     client.down = False
     before = client.requests
-    assert service.drain() == 2
+    assert service.drain().sent == 2
     assert client.requests == before + 1
 
 
@@ -333,7 +364,7 @@ def test_queued_episode_already_watched_elsewhere_is_dropped(offline):
     service.update(PATH, episode(5))
     client.down = False
     client.by_id[1] = media(1, 12, entry={"status": "CURRENT", "progress": 8})
-    assert service.drain() == 0
+    assert service.drain().sent == 0
     assert client.saves == []
     assert not queue.exists()
 
@@ -351,7 +382,7 @@ def test_failing_in_the_middle_keeps_the_rest(offline):
         return save(anime_id, *args, **kwargs)
 
     client.save_entry = die_on_second
-    assert service.drain() == 1
+    assert service.drain().sent == 1
     left = json.loads(queue.read_text())
     assert [(i["info"]["anime_id"], i["info"]["episode"]) for i in left] == [(2, 2)]
 
@@ -372,7 +403,7 @@ def test_killed_after_the_save_before_the_removal_sends_nothing_twice(offline):
 
     client.by_id[1] = media(1, 12, entry={"status": "CURRENT", "progress": 5})
     fresh = queue_make(tmp_path := queue.parent, client)
-    assert fresh.drain() == 0
+    assert fresh.drain().sent == 0
     assert client.saves == [(1, Status.CURRENT, 5)]
     assert not (tmp_path / "queue.json").exists()
 
@@ -385,7 +416,7 @@ def test_an_unexpected_failure_keeps_the_item_and_does_not_block_the_rest(offlin
     media_by_id = client.media_by_id
     client.media_by_id = lambda i: (_ for _ in ()).throw(KeyError("odd")) if i == 1 else media_by_id(i)
 
-    assert service.drain() == 1
+    assert service.drain().sent == 1
     assert [i["info"]["anime_id"] for i in json.loads(queue.read_text())] == [1]
     assert service.update(PATH, episode(5, anime_id=2, name="Other")) is not None
 
@@ -395,7 +426,7 @@ def test_a_missing_token_keeps_the_queue(offline):
     service.update(PATH, episode(5))
     client.down = False
     client.save_entry = lambda *_a, **_k: (_ for _ in ()).throw(AniListError("No AniList token found.", 401))
-    assert service.drain() == 0
+    assert service.drain().sent == 0
     assert queue.exists()
 
 
@@ -423,9 +454,9 @@ def test_a_broken_queue_file_does_not_break_the_action(offline):
     client, service, queue = offline
     client.down = False
     queue.write_text("{not json", encoding="utf-8")
-    assert service.drain() == 0
+    assert service.drain().sent == 0
     queue.write_text(json.dumps([{"path": 3}, {"path": PATH, "info": [1]}, "x"]), encoding="utf-8")
-    assert service.drain() == 0
+    assert service.drain().sent == 0
 
 
 def test_update_on_the_outage_403_is_queued(tmp_path):

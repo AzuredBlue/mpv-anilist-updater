@@ -1,7 +1,7 @@
 """The three actions mpv can ask for: detect the anime, record an episode, correct a detection."""
 
 import logging
-from dataclasses import replace
+from dataclasses import dataclass, replace
 
 from .api import AniListClient
 from .cache import Cache, Pending
@@ -15,6 +15,24 @@ log = logging.getLogger(__name__)
 
 # A missing or expired token is the user's to fix; the queue waits for it.
 AUTH_ERRORS = {401}
+
+
+@dataclass(frozen=True, slots=True)
+class Drained:
+    """What a drain did: updates sent, updates given up on, and whether AniList asked it to wait."""
+
+    sent: int = 0
+    dropped: int = 0
+    waiting: bool = False
+
+    def __add__(self, other: "Drained") -> "Drained":
+        """Both drains' counts; it is waiting if the later one is."""
+        return Drained(self.sent + other.sent, self.dropped + other.dropped, other.waiting)
+
+    def suffix(self) -> str:
+        """The note for an action's message, empty when nothing happened."""
+        parts = [f"{self.sent} queued sent"] * bool(self.sent) + [f"{self.dropped} dropped"] * bool(self.dropped)
+        return f" (+{', '.join(parts)})" if parts else ""
 
 
 def _update_message(before: AnimeInfo, after: AnimeInfo, saves: list[Save]) -> str:
@@ -88,7 +106,7 @@ class Service:
         log.info('Sent queued update: "%s" to %s', info.anime_name, updated.current_progress)
         return "sent"
 
-    def drain(self, seen: dict[int, AnimeInfo] | None = None) -> int:
+    def drain(self, seen: dict[int, AnimeInfo] | None = None, anime_id: int | None = None) -> Drained:
         """Send the queued updates, oldest first. Only called once a request has just worked.
 
         Each one leaves the queue only after it is saved, so a run killed in between sends it again; the
@@ -97,20 +115,27 @@ class Service:
 
         Args:
             seen (dict[int, AnimeInfo] | None): Entries already read this run, to not read them again.
+            anime_id (int | None): Send only the updates of this anime.
 
         Returns:
-            int: How many updates were sent.
+            Drained: How many updates were sent and dropped, and whether AniList made it stop.
         """
-        sent, seen = 0, {} if seen is None else seen
+        sent = dropped = 0
+        seen = {} if seen is None else seen
+        waiting = False
         for path, queued in self.pending.items():
+            if anime_id is not None and queued.anime_id != anime_id:
+                continue
             result = self._send(path, queued, seen)
             sent += result == "sent"
+            dropped += result == "dropped"
             if result == "waiting":
+                waiting = True
                 break
             if result != "failed":
                 self.pending.remove(path, queued)
         self.cache.save()
-        return sent
+        return Drained(sent, dropped, waiting)
 
     def _queue(self, path: str, info: AnimeInfo, reason: object) -> Outcome:
         self.pending.add(path, info)
@@ -156,23 +181,32 @@ class Service:
     def update(self, path: str, info: AnimeInfo) -> Outcome:
         """Record the info's episode on AniList according to the user's options.
 
-        If AniList can't be reached the update is queued instead. Once it has worked, the queued ones are sent.
+        If AniList can't be reached the update is queued instead. Queued episodes of the same anime go first,
+        so they don't land behind this one; the other queued ones are sent once it has worked, or been skipped
+        after AniList answered.
 
         Raises:
             AniListError: If AniList refuses the update, for a reason waiting won't fix.
+            SkipUpdate: If the episode shouldn't be recorded.
         """
-        seen = {}
+        seen, first = {}, Drained()
         try:
+            if info.anime_id is not None:
+                first = self.drain(seen, info.anime_id)
+            if first.waiting:
+                return self._queue(path, info, "AniList is still unreachable")
             before, saves, updated = self._apply(path, info, seen)
         except AniListError as e:
             if not e.retryable:
                 raise
             return self._queue(path, info, e)
+        except SkipUpdate:
+            self.drain(seen)
+            raise
         finally:
             self.cache.save()
-        sent = self.drain(seen)
-        message = _update_message(before, updated, saves)
-        return Outcome(updated, f"{message} (+{sent} queued sent)" if sent else message)
+        drained = first + self.drain(seen)
+        return Outcome(updated, _update_message(before, updated, saves) + drained.suffix())
 
     def correct(self, path: str, info: AnimeInfo | None, correction: Correction) -> Outcome:
         """Apply the user's fixes to a detection: the AniList entry, the episode mapping and the status.
