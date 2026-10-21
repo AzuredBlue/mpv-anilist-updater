@@ -6,7 +6,8 @@ import logging
 import os
 import tempfile
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from functools import cached_property
 from pathlib import Path
@@ -20,6 +21,8 @@ log = logging.getLogger(__name__)
 CACHE_PATH = Path(__file__).resolve().parent.parent / "cache.json"
 QUEUE_PATH = Path(__file__).resolve().parent.parent / "queue.json"
 CORRECTED_TTL = 28 * 24 * 60 * 60
+LOCK_WAIT = 2
+LOCK_STALE = 120
 
 
 def _write_json(path: Path, payload: object) -> None:
@@ -221,6 +224,36 @@ class Pending:
             return []
         return [item for item in raw if isinstance(item, dict) and isinstance(item.get("path"), str)]
 
+    @contextmanager
+    def _locked(self) -> Iterator[None]:
+        """Hold `queue.lock` while a change is read and written, so two runs can't overwrite each other.
+
+        The lock is a file created exclusively, which every OS does atomically. One left behind by a killed run
+        is taken over after `LOCK_STALE` seconds; if it can't be had in `LOCK_WAIT` the change goes ahead
+        anyway, as losing the update is worse than the small chance of a clash.
+        """
+        lock = self._path.with_suffix(".lock")
+        deadline, held = time.monotonic() + LOCK_WAIT, False
+        while not held and time.monotonic() < deadline:
+            try:
+                os.close(os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY))
+                held = True
+            except FileExistsError:
+                try:
+                    if time.time() - lock.stat().st_mtime > LOCK_STALE:
+                        lock.unlink(missing_ok=True)
+                        continue
+                except OSError:
+                    pass
+                time.sleep(0.05)
+            except OSError:
+                break
+        try:
+            yield
+        finally:
+            if held:
+                lock.unlink(missing_ok=True)
+
     def _write(self, items: list[dict[str, Any]]) -> None:
         if items:
             _write_json(self._path, items)
@@ -245,19 +278,21 @@ class Pending:
 
     def add(self, path: str, info: AnimeInfo) -> None:
         """Queue an update; the same one twice is kept once. A failed write raises, as the update would be lost."""
-        items = self._read()
         item = json.loads(json.dumps(self._item(path, info)))
-        if item not in items:
-            self._write([*items, item])
+        with self._locked():
+            items = self._read()
+            if item not in items:
+                self._write([*items, item])
 
     def remove(self, path: str, info: AnimeInfo) -> None:
         """Forget a queued update once it is done; a failed write only means it is tried again."""
-        items = self._read()
         item = json.loads(json.dumps(self._item(path, info)))
-        if item not in items:
-            return
-        items.remove(item)
-        try:
-            self._write(items)
-        except OSError as e:
-            log.warning("Failed saving the queue: %s", e)
+        with self._locked():
+            items = self._read()
+            if item not in items:
+                return
+            items.remove(item)
+            try:
+                self._write(items)
+            except OSError as e:
+                log.warning("Failed saving the queue: %s", e)

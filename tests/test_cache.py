@@ -2,7 +2,8 @@ import json
 import os
 from dataclasses import replace
 
-from anilist_updater.cache import CORRECTED_TTL, Cache, _key, _legacy_key
+from anilist_updater import cache as cache_module
+from anilist_updater.cache import CORRECTED_TTL, LOCK_STALE, Cache, Pending, _key, _legacy_key
 from anilist_updater.models import AnimeInfo, Options, Status
 
 PATH = "/anime/Show/Show - 13.mkv"
@@ -208,3 +209,30 @@ def test_streams_without_a_directory_get_one_entry_per_title(tmp_path):
     entry = make(tmp_path).get("A Episode 6", "A")
     assert entry is not None
     assert entry.corrected
+
+
+def test_queue_change_waits_for_a_held_lock_then_goes_ahead(tmp_path, monkeypatch):
+    monkeypatch.setattr(cache_module, "LOCK_WAIT", 0.1)
+    lock = tmp_path / "queue.lock"
+    lock.touch()
+    Pending(tmp_path / "queue.json").add(PATH, replace(INFO, anime_id=3))
+    assert json.loads((tmp_path / "queue.json").read_text(encoding="utf-8"))[0]["info"]["anime_id"] == 3
+    assert lock.exists()  # not ours to remove
+
+
+def test_queue_change_takes_over_a_lock_left_by_a_killed_run(tmp_path):
+    lock = tmp_path / "queue.lock"
+    lock.touch()
+    old = lock.stat().st_mtime - LOCK_STALE - 1
+    os.utime(lock, (old, old))
+    Pending(tmp_path / "queue.json").add(PATH, replace(INFO, anime_id=3))
+    assert (tmp_path / "queue.json").exists()
+    assert not lock.exists()
+
+
+def test_queue_change_releases_its_lock(tmp_path):
+    queue = Pending(tmp_path / "queue.json")
+    queue.add(PATH, replace(INFO, anime_id=3))
+    queue.remove(PATH, replace(INFO, anime_id=3))
+    assert not (tmp_path / "queue.lock").exists()
+    assert not (tmp_path / "queue.json").exists()
