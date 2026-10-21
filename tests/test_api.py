@@ -103,3 +103,38 @@ def test_media_by_id_asks_for_the_mal_id(monkeypatch):
     api.AniListClient("token").media_by_id(1)
 
     assert "idMal" in queries[0]
+
+
+@pytest.mark.parametrize(
+    ("code", "retryable"),
+    [(403, True), (429, True), (500, True), (503, True), (400, False), (401, False), (404, False)],
+)
+def test_http_errors_are_retryable_when_waiting_may_fix_them(monkeypatch, code, retryable):
+    error = api.urllib.error.HTTPError("url", code, "reason", {}, io.BytesIO(b"{}"))
+    with pytest.raises(AniListError) as caught:
+        post(monkeypatch, error)
+    assert (caught.value.status, caught.value.retryable) == (code, retryable)
+
+
+@pytest.mark.parametrize("error", [OSError("no route"), http.client.IncompleteRead(b"")])
+def test_connection_failures_are_retryable(monkeypatch, error):
+    with pytest.raises(AniListError) as caught:
+        post(monkeypatch, error)
+    assert caught.value.retryable
+
+
+def test_maintenance_page_is_retryable_but_a_graphql_error_is_not(monkeypatch):
+    with pytest.raises(AniListError) as page:
+        post(monkeypatch, b"<html>Down for maintenance</html>")
+    assert page.value.retryable
+    with pytest.raises(AniListError) as graphql:
+        post(monkeypatch, b'{"errors": [{"message": "Invalid"}]}')
+    assert not graphql.value.retryable
+
+
+def test_the_outage_403_keeps_anilists_message(monkeypatch):
+    body = b'{"errors": [{"message": "The AniList API has been temporarily disabled.", "status": 403}]}'
+    error = api.urllib.error.HTTPError("url", 403, "Forbidden", {}, io.BytesIO(body))
+    with pytest.raises(AniListError, match="temporarily disabled") as caught:
+        post(monkeypatch, error)
+    assert caught.value.retryable

@@ -181,6 +181,7 @@ echo '{"action": "info", "path": "/anime/Frieren S2/[EMBER] Sousou no Frieren S2
 - **`episode`** is relative to the AniList entry. **`absolute_episode`** is the number in the file name.
 - `options` is optional. It takes the update options of [the configuration](#configuration-anilistupdaterconf), such as `CACHE_MODE`.
 - A file with a list entry is remembered in `cache.json` next to the script.
+- If AniList can't be reached when an episode should be recorded (maintenance, rate limit, no connection), the update is kept in `queue.json` and sent after the next update or fresh detection that AniList answers.
 
 ## Credits
 

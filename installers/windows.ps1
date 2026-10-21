@@ -1,7 +1,7 @@
 # Installs mpv-anilist-updater into mpv's scripts folder. Run it again to update.
 $ZipURL = if ($env:ANILIST_UPDATER_ZIP) { $env:ANILIST_UPDATER_ZIP } else { "https://github.com/AzuredBlue/mpv-anilist-updater/archive/refs/heads/main.zip" }
 $TokenURL = "https://anilist.co/api/v2/oauth/authorize?client_id=20740&response_type=token"
-$UserFiles = "anilistToken.txt", "cache.json", "anilistUpdater.conf"
+$UserFiles = "anilistToken.txt", "cache.json", "queue.json", "anilistUpdater.conf"
 
 # Messages use Write-Host so they never end up in a function's return value.
 function Get-ConfigDir {

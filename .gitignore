@@ -1,6 +1,7 @@
 anilistToken.txt
 anilistUpdater.conf
 cache.json
+queue.json
 __pycache__
 .vscode
 .pytest_cache

@@ -6,7 +6,7 @@ import sys
 from typing import Any
 
 from .api import AniListClient
-from .cache import Cache
+from .cache import Cache, Pending
 from .errors import SkipUpdate
 from .models import AnimeInfo, Correction, Options, Outcome
 from .service import Service
@@ -23,7 +23,7 @@ def _run(request: dict[str, Any]) -> Outcome:
         return Outcome(score={"format": score_format, "value": value})
 
     options = Options.from_dict(request.get("options"))
-    service = Service(options, client, Cache(options))
+    service = Service(options, client, Cache(options), Pending())
     path = request["path"]
     info = AnimeInfo.from_dict(request.get("info"))
 

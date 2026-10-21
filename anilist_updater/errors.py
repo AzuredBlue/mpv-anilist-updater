@@ -16,7 +16,8 @@ class ParseError(SkipUpdate):
 class AniListError(UpdaterError):
     """The AniList API (or the network to it) failed."""
 
-    def __init__(self, message: str, status: int | None = None) -> None:
-        """Store the HTTP status alongside the message."""
+    def __init__(self, message: str, status: int | None = None, *, retryable: bool = False) -> None:
+        """Store the HTTP status alongside the message; `retryable` says a later attempt may well work."""
         super().__init__(message)
         self.status = status
+        self.retryable = retryable

@@ -152,11 +152,11 @@ class AniListClient:
             with urllib.request.urlopen(request, timeout=TIMEOUT) as response:  # ruff: ignore[suspicious-url-open-usage]
                 payload = json.load(response)
         except urllib.error.HTTPError as e:
-            raise AniListError(_error_message(e), e.code) from e
+            raise AniListError(_error_message(e), e.code, retryable=e.code in {403, 429} or e.code >= 500) from e
         except (OSError, http.client.HTTPException) as e:
-            raise AniListError(f"Couldn't reach AniList: {e}") from e
+            raise AniListError(f"Couldn't reach AniList: {e}", retryable=True) from e
         except ValueError as e:
-            raise AniListError("AniList sent an unreadable response.") from e
+            raise AniListError("AniList sent an unreadable response.", retryable=True) from e
 
         if errors := payload.get("errors"):
             raise AniListError(errors[0].get("message", "Unknown error"))
@@ -273,7 +273,7 @@ class AniListClient:
             AniListError: If there is no token, or the request fails.
         """
         if not self._token:
-            raise AniListError("No AniList token found. Put it in anilistToken.txt.")
+            raise AniListError("No AniList token found. Put it in anilistToken.txt.", 401)
         variables = {"mediaId": anime_id, "status": status, "progress": progress, "score": score}
         variables = {k: v for k, v in variables.items() if v is not None}
         return self._post(_SAVE_ENTRY, variables)["SaveMediaListEntry"]

@@ -18,7 +18,15 @@ from .release import fold_title
 log = logging.getLogger(__name__)
 
 CACHE_PATH = Path(__file__).resolve().parent.parent / "cache.json"
+QUEUE_PATH = Path(__file__).resolve().parent.parent / "queue.json"
 CORRECTED_TTL = 28 * 24 * 60 * 60
+
+
+def _write_json(path: Path, payload: object) -> None:
+    """Replace `path` with `payload` in one step, so an interrupted run can't leave half a file."""
+    with tempfile.NamedTemporaryFile("w", dir=path.parent, suffix=".tmp", delete=False, encoding="utf-8") as tmp:
+        json.dump(payload, tmp, ensure_ascii=False, indent=2)
+    Path(tmp.name).replace(path)
 
 
 def _key(filepath: str, title: str) -> str:
@@ -185,13 +193,71 @@ class Cache:
         payload = {key: value for key, value in self._read().items() if key not in self._dropped}
         payload.update({key: self._entries[key].to_json() for key in self._changed})
         try:
-            with tempfile.NamedTemporaryFile(
-                "w", dir=self._path.parent, suffix=".tmp", delete=False, encoding="utf-8"
-            ) as tmp:
-                json.dump(payload, tmp, ensure_ascii=False, indent=2)
-            Path(tmp.name).replace(self._path)
+            _write_json(self._path, payload)
         except OSError as e:
             log.warning("Failed saving cache: %s", e)
         else:
             self._changed.clear()
             self._dropped.clear()
+
+
+class Pending:
+    """Updates that couldn't reach AniList, kept in `queue.json` until a later run can send them.
+
+    The file exists only while something is pending. Every change re-reads it and is written atomically, so a
+    run that is killed leaves the queue as it was before or after that change, never half of it.
+    """
+
+    def __init__(self, path: Path = QUEUE_PATH) -> None:
+        """Create a queue over `path`."""
+        self._path = path
+
+    def _read(self) -> list[dict[str, Any]]:
+        try:
+            raw = json.loads(self._path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return []
+        if not isinstance(raw, list):
+            return []
+        return [item for item in raw if isinstance(item, dict) and isinstance(item.get("path"), str)]
+
+    def _write(self, items: list[dict[str, Any]]) -> None:
+        if items:
+            _write_json(self._path, items)
+        else:
+            self._path.unlink(missing_ok=True)
+
+    @staticmethod
+    def _item(path: str, info: AnimeInfo) -> dict[str, Any]:
+        return {"path": path, "info": info.to_dict()}
+
+    def items(self) -> list[tuple[str, AnimeInfo]]:
+        """The queued updates, oldest first; entries that can't be read are left out."""
+        items = []
+        for raw in self._read():
+            try:
+                info = AnimeInfo.from_dict(raw.get("info"))
+            except (ValueError, TypeError, AttributeError):
+                continue
+            if info and info.anime_id is not None:
+                items.append((raw["path"], info))
+        return items
+
+    def add(self, path: str, info: AnimeInfo) -> None:
+        """Queue an update; the same one twice is kept once. A failed write raises, as the update would be lost."""
+        items = self._read()
+        item = json.loads(json.dumps(self._item(path, info)))
+        if item not in items:
+            self._write([*items, item])
+
+    def remove(self, path: str, info: AnimeInfo) -> None:
+        """Forget a queued update once it is done; a failed write only means it is tried again."""
+        items = self._read()
+        item = json.loads(json.dumps(self._item(path, info)))
+        if item not in items:
+            return
+        items.remove(item)
+        try:
+            self._write(items)
+        except OSError as e:
+            log.warning("Failed saving the queue: %s", e)
