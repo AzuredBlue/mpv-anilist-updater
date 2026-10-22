@@ -1,4 +1,4 @@
-"""Process entry point: one JSON request on stdin, one JSON response on stdout, logs on stderr."""
+"""Process entry point: one JSON request (first argument, else stdin), one JSON response on stdout, logs on stderr."""
 
 import json
 import logging
@@ -72,12 +72,12 @@ def handle(request: dict[str, Any]) -> dict[str, Any]:
 
 
 def main() -> None:
-    """Read the request from stdin and write the response to stdout, both as UTF-8."""
+    """Read the request from the first argument, else stdin, and write the response to stdout as UTF-8."""
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")  # type: ignore
     logging.basicConfig(stream=sys.stderr, level=logging.INFO, format="%(message)s")
 
     try:
-        request = json.loads(sys.stdin.buffer.read())
+        request = json.loads(sys.argv[1] if len(sys.argv) > 1 else sys.stdin.buffer.read())
     except ValueError:
         response = _failure("error", "Invalid request.")
     else:

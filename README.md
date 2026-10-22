@@ -166,7 +166,7 @@ To see which anime got detected, you can use `c`, `Ctrl+B` to launch the AniList
 
 The parser and the AniList lookup work without mpv, for example to get the AniList and MyAnimeList IDs of a file. No token is needed for this, but without one `current_progress` and `current_status` are `null`.
 
-Run `anilistUpdater.py` with one JSON request on stdin. It prints one JSON response on stdout, and the log goes to stderr:
+Run `anilistUpdater.py` with one JSON request on stdin (or as the first argument). It prints one JSON response on stdout, and the log goes to stderr:
 
 ```bash
 echo '{"action": "info", "path": "/anime/Frieren S2/[EMBER] Sousou no Frieren S2 - 09.mkv"}' | python3 anilistUpdater.py

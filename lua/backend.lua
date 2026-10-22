@@ -81,7 +81,8 @@ function M.call(action, fields, callback)
         request[key] = value
     end
 
-    local stdin_data = utils.format_json(request)
+    -- An argument, not stdin_data: mpv on Windows connects the child's stdin to NUL.
+    local payload = utils.format_json(request)
 
     local function run()
         local args = {}
@@ -89,11 +90,11 @@ function M.call(action, fields, callback)
             args[#args + 1] = part
         end
         args[#args + 1] = entry_point
+        args[#args + 1] = payload
 
         mp.command_native_async({
             name = "subprocess",
             args = args,
-            stdin_data = stdin_data,
             capture_stdout = true,
             capture_stderr = true,
             -- Detection is moot once the file changes, but a write must finish.

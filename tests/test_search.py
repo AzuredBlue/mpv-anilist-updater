@@ -60,6 +60,7 @@ def test_search_action_returns_results_without_touching_the_cache(monkeypatch):
 
 def test_invalid_request_is_an_error(monkeypatch):
     stdout = io.BytesIO()
+    monkeypatch.setattr(cli.sys, "argv", ["anilistUpdater.py"])
     monkeypatch.setattr(cli.sys, "stdin", type("In", (), {"buffer": io.BytesIO(b"{nope")})())
     monkeypatch.setattr(cli.sys, "stdout", type("Out", (), {"buffer": stdout})())
     cli.main()
@@ -69,3 +70,13 @@ def test_invalid_request_is_an_error(monkeypatch):
         "message": "Invalid request.",
         "info": None,
     }
+
+
+def test_request_is_read_from_the_first_argument(monkeypatch):
+    stdout = io.BytesIO()
+    monkeypatch.setattr(cli.sys, "argv", ["anilistUpdater.py", '{"action": "bogus", "path": "x"}'])
+    monkeypatch.setattr(cli.sys, "stdin", type("In", (), {"buffer": io.BytesIO(b"")})())
+    monkeypatch.setattr(cli.sys, "stdout", type("Out", (), {"buffer": stdout})())
+    monkeypatch.setattr(AniListClient, "from_token_file", lambda: AniListClient(None))
+    cli.main()
+    assert json.loads(stdout.getvalue())["message"] == "Unknown action: bogus"
