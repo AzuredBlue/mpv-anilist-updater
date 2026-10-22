@@ -6,7 +6,7 @@ import logging
 import os
 import tempfile
 import time
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Generator
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from functools import cached_property
@@ -225,7 +225,7 @@ class Pending:
         return [item for item in raw if isinstance(item, dict) and isinstance(item.get("path"), str)]
 
     @contextmanager
-    def _locked(self) -> Iterator[None]:
+    def _locked(self) -> Generator[None, None, None]:
         """Hold `queue.lock` while a change is read and written, so two runs can't overwrite each other.
 
         The lock is a file created exclusively, which every OS does atomically. One left behind by a killed run
