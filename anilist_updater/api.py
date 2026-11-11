@@ -1,15 +1,15 @@
 """Minimal AniList GraphQL client on the standard library."""
 
-import http.client
 import json
 import logging
-import urllib.error
-import urllib.request
 from pathlib import Path
-from typing import Any, Self
+from typing import TYPE_CHECKING, Any, Self
 
 from .errors import AniListError, SkipUpdate
 from .models import Status
+
+if TYPE_CHECKING:
+    import urllib.error
 
 log = logging.getLogger(__name__)
 
@@ -106,7 +106,7 @@ def media_title(media: dict[str, Any]) -> str | None:
     return media["title"].get("romaji") or media["title"].get("english")
 
 
-def _error_message(error: urllib.error.HTTPError) -> str:
+def _error_message(error: "urllib.error.HTTPError") -> str:
     try:
         message = json.load(error)["errors"][0]["message"]
     except (ValueError, KeyError, IndexError, TypeError):
@@ -137,6 +137,11 @@ class AniListClient:
         return cls(lines[0].strip() if lines else None)
 
     def _post(self, query: str, variables: dict[str, Any]) -> dict[str, Any]:
+        # Imported here: a cache hit never gets this far, and they are a quarter of the start-up time.
+        import http.client  # ruff: ignore[import-outside-top-level]
+        import urllib.error  # ruff: ignore[import-outside-top-level]
+        import urllib.request  # ruff: ignore[import-outside-top-level]
+
         # AniList rejects the default Python-urllib agent with a 403.
         headers = {
             "Content-Type": "application/json",

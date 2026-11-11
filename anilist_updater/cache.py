@@ -1,10 +1,8 @@
 """Per-directory cache of detected anime, so most files load without searching AniList."""
 
-import hashlib
 import json
 import logging
 import os
-import tempfile
 import time
 from collections.abc import Callable, Generator
 from contextlib import contextmanager
@@ -27,6 +25,8 @@ LOCK_STALE = 120
 
 def _write_json(path: Path, payload: object) -> None:
     """Replace `path` with `payload` in one step, so an interrupted run can't leave half a file."""
+    import tempfile  # ruff: ignore[import-outside-top-level]
+
     with tempfile.NamedTemporaryFile("w", dir=path.parent, suffix=".tmp", delete=False, encoding="utf-8") as tmp:
         json.dump(payload, tmp, ensure_ascii=False, indent=2)
     Path(tmp.name).replace(path)
@@ -39,6 +39,8 @@ def _key(filepath: str, title: str) -> str:
 
 
 def _legacy_key(filepath: str) -> str:
+    import hashlib  # ruff: ignore[import-outside-top-level]
+
     return hashlib.sha256(os.path.dirname(filepath).encode()).hexdigest()
 
 
