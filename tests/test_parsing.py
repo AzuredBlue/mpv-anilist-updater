@@ -51,6 +51,11 @@ def test_filename_without_a_title_is_untitled():
     assert not parse_path("Anime/Sample Show S2/[Foobar] Sample Show - 13 (1080p).mkv").untitled
 
 
+def test_filename_without_an_episode_is_unnumbered():
+    assert parse_path("[Foobar] Sample Show the Movie [BD 1080p].mkv").unnumbered
+    assert not parse_path("[Foobar] Sample Show - 01 [BD 1080p].mkv").unnumbered
+
+
 @pytest.mark.parametrize("folder", ["Series", "TV", "Anime", "Episodes", "Video", "Videos"])
 def test_generic_folder_is_not_the_title(folder):
     """ "SNAFU S01+OVA …-EMBER/Series/S01E07-…" took "Series" as the show."""
@@ -256,6 +261,17 @@ def test_absolute_number_beside_the_episode(path, absolute):
             "Kiki's Service",
         ),
         ("Sample Show - Movie 1-The Legend of Raoh (2006) BD 1080p.mkv", None, "The Legend of Raoh"),
+        (
+            "[Foobar]Sample Show Movie - 01 - Tabidachi no Yoake_-_(BD1080p_x265).mkv",
+            "Sample Show",
+            "Tabidachi no Yoake",
+        ),
+        ("[Foobar] Sample Show OVA - Brother, Sister, Lover.mkv", "Sample Show", "Brother Sister Lover"),
+        (
+            "[Foobar] Sample Show (The Other Name) - OVA (WEB 1080p) [B489060A].mkv",
+            "Sample Show",
+            "The Other Name",
+        ),
         ("[Foobar] Sample Show - 03 [1080p].mkv", "Sample Show", None),
     ],
 )

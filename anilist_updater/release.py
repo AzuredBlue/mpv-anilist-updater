@@ -102,7 +102,7 @@ _TECH = re.compile(
 )
 _EXTRA = re.compile(
     r"\b(?:NC(?:OP|ED)\d*[a-z]?|(?:OP|ED)\d+(?:v\d+)?[a-z]?|(?:OP|ED)v\d+|Creditless|Play All"
-    r"|Clean\s+(?:Opening|Ending)|(?:Opening|Ending)\s+Clean)\b",
+    r"|Clean\s+(?:Opening|Ending)|(?:Opening|Ending)\s+Clean|Making\s+of|Extra\s+\d{1,2})\b",
     re.IGNORECASE,
 )
 # Bracketed extras of a BD release: "[Menu01]", "[CM02]", "[PV]"
@@ -117,7 +117,7 @@ _EXTRA_GROUP_WORD = re.compile(
 )
 _EXTRA_FOLDER = re.compile(
     r"(?:[\w.]+\s)*Extras?|Bonus|Featurettes|Trailers?|Scans|Soundtracks?|CDs?|Menus?|Creditless"
-    r"|NC|NCED|NCOP|BDMV|STREAM|BD Menus?|OP and ED|CM&PV|Promos?",
+    r"|NC|NCED|NCOP|BDMV|STREAM|BD Menus?|OP and ED|CM&PV|Promos?|映像特典|特典映像|特典",
     re.IGNORECASE,
 )
 # "Show/Film/": the folder names the format of the files in it
@@ -151,9 +151,10 @@ _SEASON_NUMBER = re.compile(
     r"\b(?:Season\s*|S)(?P<season>\d{1,2})(?:\s+|\s*-\s*)(?P<ep>\d{1,4})(?:\s?v(?P<ver>\d+))?(?!\w)", re.IGNORECASE
 )
 # "E05", "EP05v2", "Episode 5"
-# Also "Episode 121-125", "Ep. 1-5" and "Episodio 009"
+# Also "Episode 121-125", "Ep. 1-5", "Episodio 009" and "Episode - 07"
 _EPISODE_WORD = re.compile(
-    r"\b(?:E|EP|Episode|Episodio|Episódio|Épisode|Folge)\.?\s*(?P<ep>\d{1,4})(?:v(?P<ver>\d+))?"
+    r"\b(?:(?:E|EP)\.?\s*|(?:Episode|Episodio|Episódio|Épisode|Folge|Cap[ií]tulo)\.?\s*(?:-\s+)?)(?P<ep>\d{1,4})"
+    r"(?:v(?P<ver>\d+))?"
     r"(?:[-~](?:E(?:P|pisode)?\.?\s*)?(?P<last>\d{1,4}))?(?!\w)",
     re.IGNORECASE,
 )
@@ -195,7 +196,7 @@ _MARKERS = {
 # and "[02(14)]", the season's own number with the absolute one in parentheses
 _BRACKETED_EPISODE = re.compile(
     r"(?:E(?:p|pisode)?\.?\s*)?(?P<ep>\d{1,4})(?:v\d+)?(?:\s*[-~]\s*(?P<last>\d{1,4}))?(?:\s+of\s+\d+)?"
-    r"(?:\s*\(?(?:END|FINAL)\)?)?(?:\((?P<absolute>\d{1,4})\))?",
+    r"(?:\s*\(?(?:END|FINAL)\)?)?(?:\((?:(?P<absolute>\d{1,4})|(?P<kind>OVA|OAD|SP))\))?",
     re.IGNORECASE,
 )
 # "(S4-24)": a season's own number next to the absolute one
@@ -249,9 +250,9 @@ _YEAR = re.compile(r"(?<=\s)(?P<year>(?:19[5-9]|20[0-3])\d)(?:\s*-\s*(?:19|20)\d
 _FORMAT = re.compile(
     r"\b(?P<format>(?i:OVA|OAV|OAD|ONA))(?:\s?(?P<n>\d{1,2})(?:v\d+)?(?:\s?[-~]\s?(?P<last>\d{1,3}))?)?\b"
 )
-# "- Special 3", "SP05", and "Title Special 1" when a number follows
+# "- Special 3", "SP05", and "Title Special 1" or "Title SP4" when a number follows
 _SPECIAL = re.compile(
-    rf"(?:(?:^|-|{_GAP})\s*|(?<=\s)(?=Specials?\s?\d))(?P<format>Specials?(?!\s+[A-Za-z])|(?i:SPE?)|EX)"
+    rf"(?:(?:^|-|{_GAP})\s*|(?<=\s)(?=Specials?\s?\d|Special\s+-\s|SP\d{{1,3}}(?!\d)))(?P<format>Specials?(?!\s+[A-Za-z])|(?i:SPE?)|EX)"
     r"(?:\s?(?P<n>\d{1,3})(?:v\d+)?(?:\s?[-~]\s?(?P<last>\d{1,3}))?)?(?!\w)"
 )
 
@@ -566,7 +567,11 @@ def _kept_groups(region: str, groups: list[str]) -> set[int]:
         lone_word = re.fullmatch(r"[A-Za-z]+", groups[index].strip()) and re.match(r"\d{1,4}\b", after)
         if (
             region[position - 1 : position].isalnum()
-            or (_LATIN.match(after) and re.sub(r"[\W_]", "", _TAG_WORDS.sub("", after)))
+            or (
+                _LATIN.match(after)
+                and re.sub(r"[\W_]", "", _TAG_WORDS.sub("", after))
+                and not _GROUP_FORMAT.fullmatch(after.strip())
+            )
             or lone_word
         ):
             kept.add(index)
@@ -622,6 +627,7 @@ def _analyse(text: str, groups: list[str], *, folder: bool) -> _Segment:
         stops["plus"] = plus.start()
     if extra := _EXTRA.search(region):
         stops["extra"] = extra.start()
+    roman_at = None
     if match := _SEASON_ORDINAL.search(region) or _SEASON.search(region):
         segment.season = segment.season if segment.season is not None else _last_season(match)
         if match.groupdict().get("p"):  # "S01P02"
@@ -632,7 +638,7 @@ def _analyse(text: str, groups: list[str], *, folder: bool) -> _Segment:
         stops["season"] = match.start()
     elif match := _SEASON_ROMAN.search(region):
         segment.season = segment.season if segment.season is not None else ROMAN[match["roman"]]
-        stops["season"] = match.start()
+        stops["season"] = roman_at = match.start()
     part_at = None
     if match := _PART.search(region):
         segment.part = _number(match["n"])
@@ -648,7 +654,10 @@ def _analyse(text: str, groups: list[str], *, folder: bool) -> _Segment:
         segment.media_format = _format_of(match["format"])
         if match.start() < len(region):
             stops["format"] = match.start()
-    elif match := _format_word(_SPECIAL.search(named_region), named_region):
+    # "Magic Should Be Special 2023 S02E04": a season's episode is no special, so the word is the title's
+    elif (match := _format_word(_SPECIAL.search(named_region), named_region)) and not (
+        marker and marker.season and not match["n"] and match.start() > start
+    ):
         segment.media_format = _format_of(match["format"])
         stops["format"] = match.start()
     if (
@@ -664,6 +673,19 @@ def _analyse(text: str, groups: list[str], *, folder: bool) -> _Segment:
         if part_at is not None and part_at > title_end:
             segment.part = None
             del stops["part"]
+        # "Show 02 - East Side Showdown II": and so does a Roman numeral
+        if roman_at is not None and roman_at > title_end:
+            segment.season = None
+            del stops["season"]
+        # "Show (1999) - Greed Island Final 08": the name goes on after its year
+        if (
+            gap
+            and gap < title_end
+            and _GROUP_YEAR.fullmatch(groups[gaps.index(gap)].strip())
+            and re.match(r"\s*-\s+[^\W\d_]", region[gap + 1 :])
+        ):
+            later = next((pos for index, pos in enumerate(gaps) if pos > gap and index not in kept), None)
+            stops["bracket"] = later if later is not None else len(region)
 
     # "Show.S01.BDRip.Group.Ep.22": the episode written after the technical words, which the search above never reads
     if segment.episode is None and not folder and (late := _LATE_EPISODE.search(tail)):
@@ -784,6 +806,8 @@ def _read_group(segment: _Segment, group: str) -> None:
             segment.episode = int(match["n"])
     elif (match := _BRACKETED_EPISODE.fullmatch(group)) and match["absolute"]:
         segment.absolute = int(match["absolute"])
+    elif match and match["kind"]:  # "[13(OVA)]"
+        segment.media_format = segment.media_format or _format_of(match["kind"])
     # "S02E12 (063)": a bare number after a season's episode is the absolute one
     elif segment.marked and segment.season and re.fullmatch(r"\d{2,4}", group) and segment.absolute is None:
         value = int(group)
@@ -830,6 +854,8 @@ def parse_release(name: str, *, folder: bool = False) -> Release:
     """
     # "01. Season 1 + Special", "02. OVA": the index orders the folders and is no title
     text = _prepare(_INDEXED.sub("", name) if folder else name)
+    if folder:
+        text = re.sub(r"^\s*(Season)\s+-\s+(?=\d)", r"\1 ", text, flags=re.IGNORECASE)  # "Season - 02/"
     if folder and _MOVIE_FOLDER.fullmatch(text.strip()):
         return Release(media_format="MOVIE")
     decimal = bool(_DECIMAL_EPISODE.search(text))
@@ -898,8 +924,8 @@ def parse_release(name: str, *, folder: bool = False) -> Release:
         skip = "an extra, not an episode" if _EXTRA_FOLDER.fullmatch(text.strip()) else None
     elif decimal and not media_format:
         skip = "a special between episodes"
-    elif any(segment.extra for segment in used):
-        skip = "an extra, not an episode"
+    elif any(segment.extra for segment in used) or re.fullmatch(r"\s*sample\s*(?:[(\[].*)?", text, re.IGNORECASE):
+        skip = "an extra, not an episode"  # "Sample (+Intro).mkv" is a clip of the release
     elif season == 0 and media_format is None:
         skip = "a season 0 special"
     elif episode == 0 and media_format is None:  # AniList has no episode 0; "Movie 00" and "OVA 00" name a format

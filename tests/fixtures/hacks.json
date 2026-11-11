@@ -1942,5 +1942,33 @@
       null,
       null
     ]
+  },
+  "H69 OVAs, specials and odd names from a nyaa and nekobt sample": {
+    "Sample Show - Season 1 + 2/Season - 02/Episode - 07.mkv": ["Sample Show", 7, 2, null, null, null],
+    "[Foobar] Sample Show Specials/[Foobar] Sample Show SP4 - Commander`s Melancholy [00A80315].mkv": [
+      "Sample Show", 4, null, null, null, "SPECIAL"
+    ],
+    "A.Sample.Should.Be.Special.2023.S02E04.1080p.CR.WEB-DL.DUAL.DDP2.0.H.264-Foobar.mkv": [
+      "A Sample Should Be Special", 4, 2, null, 2023, null
+    ],
+    "Sample Gear/Sample Gear Trick 02 - East Side Showdown II.mkv": ["Sample Gear Trick", 2, null, null, null, null],
+    "[Foobar] Sample no Shoujo (The Girl from the Other Side) - OVA (WEB 1080p FLAC) [B489060A].mkv": [
+      "Sample no Shoujo", 1, null, null, null, "OVA"
+    ],
+    "[Foobar] Sample x Show (1999) Greed Island Final/[Foobar] Sample x Show (1999) - Greed Island Final 08.mkv": [
+      "Sample x Show Greed Island Final", 8, null, null, 1999, null
+    ],
+    "[Foobar] Sample no Show Princess no Rondo [13(OVA)][Ma10p_1080p][x265_flac].mkv": [
+      "Sample no Show Princess no Rondo", 13, null, null, null, "OVA"
+    ],
+    "Sample_no_Show_II_-_Capitulo_08[HD][X264-AAC][1280x720][Sub_Esp].mp4": [
+      "Sample no Show II", 8, null, null, null, null
+    ],
+    "[Foobar] Sample Show Specials/[Foobar] Sample Show Special - Episode of Foo.mkv": [
+      "Sample Show", 1, null, null, null, "SPECIAL"
+    ],
+    "[Foobar] Sample! Vol.06 - Extra 01 (1080p_x264+AAC).mp4": "error",
+    "Sample Show [BD]/Sample/Sample (+Intro).mkv": "error",
+    "[Foobar] Sample Show/映像特典/[Foobar] Sample Show TV Making of 3DCG (BD 1920x1080p AVC FLAC).mkv": "error"
   }
 }

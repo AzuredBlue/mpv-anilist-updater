@@ -11,7 +11,12 @@ from .release import VIDEO_EXTENSIONS, Release, fold_title, parse_release
 log = logging.getLogger(__name__)
 
 # "Studio Ghibli - Movie 00 - Nausicaa": the film's own title comes after the number
-_MOVIE_SUBTITLE = re.compile(r"\bMovie\s*\d{1,2}\s*-\s*(?P<subtitle>[^\W\d_][^\[\(]+)", re.IGNORECASE)
+# and so does an OVA's or a special's: "Show OVA - Brother, Sister, Lover", "Show SP4 - At Work"
+_MOVIE_SUBTITLE = re.compile(
+    r"\b(?:Movie\s*(?:-\s*)?#?\d{1,2}|(?:OVA|OAD|ONA|Specials?|SP)\s*\d{0,2})(?:\s*\(\d{4}\))?\s*-\s*"
+    r"(?P<subtitle>[^\W\d_][^\[\(]+)",
+    re.IGNORECASE,
+)
 
 
 _PACK_WORDS = re.compile(
@@ -99,7 +104,7 @@ def _words(text: str) -> str | None:
 
 def _alt_title(name: str, release: Release) -> str | None:
     """The other name of the show in the file: a bracketed one, or the title after "Movie 01 -"."""
-    stem, _, extension = name.rpartition(".")
+    stem, _, extension = name.replace("_", " ").rpartition(".")
     if match := _MOVIE_SUBTITLE.search(stem if extension.lower() in VIDEO_EXTENSIONS else name):
         alt = match["subtitle"]
     else:
@@ -214,6 +219,7 @@ def parse_path(path: str) -> FileInfo:
         arc=_arc(parts, release),
         unused_season=_unused_season_folder(parent, grandparent, release),
         untitled=not release.title,
+        unnumbered=release.episode is None,
     )
     log.info(
         "Guessed: %s - E%s %s", " ".join(filter(None, (info.query, info.media_format))), episode, info.year or ""
