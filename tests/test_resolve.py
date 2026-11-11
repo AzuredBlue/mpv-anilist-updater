@@ -496,7 +496,7 @@ def test_resolve_ova_searches_its_own_format_and_the_special_one_only_when_it_fi
 
     class OtherKindClient(FakeClient):
         def search(self, title, year, formats):
-            return ([], [media(5, 1, fmt="SPECIAL", title="Show")]) if formats == ["SPECIAL"] else ([], [])
+            return ([], [media(5, 1, fmt="SPECIAL", title="Show")]) if formats == ["SPECIAL", "ONA"] else ([], [])
 
     assert resolve(OtherKindClient(), FileInfo("Show", 1, media_format="OVA")).anime_id == 5
 
@@ -1022,3 +1022,165 @@ def test_resolve_file_beyond_its_season_folder_is_not_cut_down_to_the_series():
     assert resolve(SeriesOnlyClient(), file).anime_id == 1
     with pytest.raises(SkipUpdate):
         resolve(SeriesOnlyClient(), replace(file, unused_season=True))
+
+
+class ByTitleClient(FakeClient):
+    """Finds entries only under the exact texts given, as AniList's search needs every word spelled its way."""
+
+    def __init__(self, found):
+        super().__init__()
+        self.found = found
+
+    def search(self, title, year, formats):
+        return [], [m for m in self.found.get(title, []) if m["format"] in formats]
+
+
+def test_resolve_title_spelled_almost_like_anilists_goes_before_one_sharing_its_first_words():
+    series = media(1, 62, title=f"HUNTER{TIMES_SIGN}HUNTER")
+    ova = media(2, 14, fmt="OVA", title=f"HUNTER{TIMES_SIGN}HUNTER: Greed Island Final")
+    client = ByTitleClient(
+        {"Hunter x Hunter": [series], "Greed Island Final": [ova], ova["title"]["romaji"]: [ova]}
+    )
+    info = resolve(client, FileInfo("Hunter x Hunter Greed Island Final", 11))
+    assert (info.anime_id, info.episode, info.guessed_name) == (2, 11, "Hunter x Hunter Greed Island Final")
+
+
+def test_resolve_title_spelled_almost_like_anilists_keeps_its_season():
+    first = media(1, 12, sequel=2, title="Hell Mode: Yarikomi-zuki no Gamer")
+    second = media(2, 13, prequel=1, title="Hell Mode: Yarikomi-zuki no Gamer 2nd Season")
+    client = ByTitleClient({"Hell Mode": [first, second], first["title"]["romaji"]: [first, second]})
+    info = resolve(client, FileInfo("Hell Mode Yarikomizuki no Gamer", 10, season=2))
+    assert (info.anime_id, info.episode) == (2, 10)
+
+
+def test_resolve_closest_title_must_have_the_same_numbers():
+    client = ByTitleClient({"Sample Show Movie": [media(1, 1, fmt="MOVIE", title="Sample Show Movie 3")]})
+    with pytest.raises(SkipUpdate):
+        resolve(client, FileInfo("Sample Show Movie 2", 1, unnumbered=True))
+
+
+def test_resolve_number_ending_the_title_of_a_file_without_one_is_its_episode():
+    ova = media(1, 4, fmt="OVA", title="King of Fighters: Another Day")
+    client = ByTitleClient({"The King of Fighters Another Day": [ova], ova["title"]["romaji"]: [ova]})
+    info = resolve(client, FileInfo("The King of Fighters Another Day 3", 1, unnumbered=True))
+    assert (info.anime_id, info.episode) == (1, 3)
+
+
+def _films():
+    return [
+        media(1, 1, fmt="MOVIE", sequel=2, title="Show the Movie: #1 Spring"),
+        media(2, 1, fmt="MOVIE", sequel=3, prequel=1, title="Show the Movie: #2 Summer"),
+        media(3, 1, fmt="MOVIE", prequel=2, title="Show the Movie: #3 Fall"),
+    ]
+
+
+def test_resolve_film_number_counts_the_films_whichever_the_search_ranks_first():
+    one, two, three = _films()
+    numbered = FileInfo("Show", 2, media_format="MOVIE")
+    assert resolve(FakeClient(everything=[three, one, two]), numbered).anime_id == 2
+    assert resolve(FakeClient(everything=[one, two, three]), replace(numbered, episode=3)).anime_id == 3
+
+
+def test_resolve_file_without_a_number_is_not_the_first_film_of_the_series():
+    one, two, three = _films()
+    assert (
+        resolve(FakeClient(everything=[three, one, two]), FileInfo("Show Fall", 1, unnumbered=True)).anime_id == 3
+    )
+
+
+def test_resolve_subtitle_of_a_film_names_its_entry():
+    first = media(1, 1, fmt="MOVIE", title="Show: Mezameru Shinpi")
+    second = media(2, 1, fmt="MOVIE", title="Show: Tabidachi no Yoake")
+    file = FileInfo("Show", 1, media_format="MOVIE", alt_title="Tabidachi no Yoake")
+    assert resolve(FakeClient(everything=[first, second]), file).anime_id == 2
+
+
+def test_resolve_subtitle_of_a_special_is_searched_when_the_shows_results_lack_it():
+    other = media(1, 1, fmt="SPECIAL", title="Show: Episode of Merry")
+    named = media(2, 1, fmt="SPECIAL", title="SHOW: Episode of Sabo")
+    client = ByTitleClient(
+        {"Show": [other], "Episode of Sabo": [named, media(3, 1, fmt="SPECIAL", title="Episode of Sabo")]}
+    )
+    file = FileInfo("Show", 1, media_format="SPECIAL", alt_title="Episode of Sabo", unnumbered=True)
+    assert resolve(client, file).anime_id == 2
+
+
+def test_resolve_numbered_special_is_of_the_entry_that_has_that_many():
+    one_off = media(1, 1, fmt="SPECIAL", title="Show: Cold")
+    several = media(2, 5, fmt="SPECIAL", title="Show: Extra Lessons")
+    info = resolve(FakeClient(everything=[one_off, several]), FileInfo("Show", 4, media_format="SPECIAL"))
+    assert (info.anime_id, info.episode) == (2, 4)
+    info = resolve(FakeClient(everything=[one_off, several]), FileInfo("Show", 14, media_format="SPECIAL"))
+    assert (info.anime_id, info.episode) == (1, 1)
+
+
+def test_resolve_season_named_by_its_ordinal_needs_no_counting():
+    seasons = [
+        media(1, 25, sequel=2, title="Show"),
+        media(2, 13, sequel=3, prequel=1, title="Show 2nd Season"),
+        media(3, 12, sequel=4, prequel=2, title="Show 2nd Season Part 2"),
+        media(4, 16, prequel=3, title="Show 3rd Season"),
+    ]
+    assert resolve(ByTitleClient({"Show": seasons}), FileInfo("Show", 1, season=3)).anime_id == 4
+
+
+def test_resolve_seasons_are_counted_from_the_first_whichever_the_search_ranks_first():
+    first = media(1, 25, sequel=2, title="Show SS")
+    second = media(2, 13, sequel=3, prequel=1, title="Show SS+ plus")
+    other = media(3, 12, prequel=2, title="Other")
+    client = ByTitleClient({"Show SS+": [second, first, other]})
+    assert resolve(client, FileInfo("Show SS+", 12, season=2)).anime_id == 2
+
+
+def test_resolve_year_names_the_entry_that_began_then():
+    series = media(1, 8, title="Show (TV)", start=2012)
+    series["title"]["english"] = "Show"
+    ova = media(2, 1, fmt="OVA", title="Show (OVA)", start=2010)
+    client = FakeClient(everything=[series, ova])
+    assert resolve(client, FileInfo("Show", 1, year=2010, unnumbered=True)).anime_id == 2
+    assert resolve(client, FileInfo("Show", 1, unnumbered=True)).anime_id == 1
+    assert resolve(client, FileInfo("Show", 5, year=2010)).anime_id == 1
+
+
+def test_resolve_episode_beyond_a_one_off_that_only_resembles_the_title_is_of_the_shorter_title():
+    special = media(1, 1, fmt="SPECIAL", title="AIR GEAR Special")
+    client = ByTitleClient({"Air Gear Trick": [special], "Air Gear": [media(2, 25, title="Air Gear")]})
+    info = resolve(client, FileInfo("Air Gear Trick", 12))
+    assert (info.anime_id, info.episode) == (2, 12)
+
+
+def test_resolve_episode_beyond_a_one_off_is_of_the_series_named_like_it():
+    special = media(1, 1, fmt="SPECIAL", title="Sora-iro Utility")
+    special["title"]["english"] = "Sorairo Utility"
+    series = media(2, 12, title="Sora-iro Utility (TV)")
+    assert resolve(FakeClient(everything=[special, series]), FileInfo("Sorairo Utility", 4)).anime_id == 2
+
+
+def test_resolve_file_without_a_number_is_not_searched_by_its_first_words():
+    client = ByTitleClient({"Lupin the Third": [media(1, 12, title="Lupin the Third Part 5")]})
+    assert resolve(client, FileInfo("Lupin the Third The Blood Spray", 5)).anime_id == 1
+    with pytest.raises(SkipUpdate):
+        resolve(client, FileInfo("Lupin the Third The Blood Spray", 1, unnumbered=True))
+
+
+def test_resolve_film_named_like_the_show_goes_before_one_named_more():
+    reboot = media(1, 1, fmt="MOVIE", title="Kidou Keisatsu Show REBOOT")
+    film = media(2, 1, fmt="MOVIE", title="Kidou Keisatsu Show the Movie")
+    file = FileInfo("Kidou Keisatsu Show", 1, media_format="MOVIE", unnumbered=True)
+    assert resolve(FakeClient(everything=[reboot, film]), file).anime_id == 2
+
+
+def test_resolve_film_with_a_year_is_the_one_released_then():
+    films = [
+        media(1, 1, fmt="MOVIE", title="SHOW STAMPEDE", start=2019),
+        media(2, 1, fmt="MOVIE", title="SHOW THE MOVIE: Dead End no Bouken", start=2003),
+    ]
+    file = FileInfo("Show", 4, year=2003, media_format="MOVIE")
+    assert resolve(FakeClient(everything=films), file).anime_id == 2
+
+
+def test_resolve_special_is_searched_without_the_word_for_its_format():
+    special = media(1, 8, fmt="SPECIAL", title="Kobato. Special: Hajimete no Kobato.")
+    client = ByTitleClient({"Kobato": [special]})
+    info = resolve(client, FileInfo("Kobato Specials", 2, media_format="SPECIAL"))
+    assert (info.anime_id, info.episode) == (1, 2)

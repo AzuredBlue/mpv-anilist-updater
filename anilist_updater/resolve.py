@@ -5,6 +5,7 @@ import re
 from collections import UserDict
 from collections.abc import Callable, Iterator
 from dataclasses import replace
+from difflib import SequenceMatcher
 from itertools import takewhile
 from typing import Any
 
@@ -25,6 +26,13 @@ _MOVIE_NUMBER = re.compile(r"\bMovie\s+\d+\b", re.IGNORECASE)
 DEFAULT_FORMATS = ["TV", "TV_SHORT", "MOVIE", "SPECIAL", "OVA", "ONA"]
 MAIN_FORMATS = {"TV", "ONA"}
 SINGLE_FORMATS = {"OVA", "SPECIAL", "MOVIE"}
+EXTRA_FORMATS = ["OVA", "SPECIAL", "ONA"]
+# Words that say what an entry is, which a release and AniList put in different places or leave out
+_FORMAT_WORDS = re.compile(
+    r"\b(?:(?:the\s+)?movie|gekijouban|ova|oad|oav|ona|specials?|tv)\b|\((?:19|20)\d\d\)", re.IGNORECASE
+)
+SIMILAR = 0.85  # two titles spelled at least this alike are the same one
+MIN_PREFIX = 8  # a title this long may be only the start of AniList's
 TV_FORMATS = {"TV", "TV_SHORT"}
 EXACT = 3  # the score of an entry titled exactly like the search
 # A search shortened to find an entry keeps at least this many letters, and drops at most this many words.
@@ -305,11 +313,14 @@ def _nth_season(client: AniListClient, file: FileInfo, formats: list[str]) -> An
         named = next((m for m in pool if _score(m, file.title) == EXACT and _depth(m, graph) > 1), None)
         if named and file.episode <= (named.get("episodes") or file.episode):
             return _to_info(named, file.episode, file)
-        seasons = main_series(pool, fetch=_fetcher(client))
-        if seasons and len(seasons) >= number:
-            season = seasons[number - 1]
-            if not season.get("episodes") or file.episode <= season["episodes"]:
-                return _to_info(season, file.episode, file)
+        # Counted from the first season named like the title, whichever one the search ranks first
+        seasons = main_series(pool, file.title, _fetcher(client)) or []
+        # AniList splits some seasons in two, so one named "4th Season" is the fourth whatever its place
+        ordinal = re.compile(rf"\b(?:{number}(?:st|nd|rd|th) Season|Season {number})\b", re.IGNORECASE)
+        named = next((s for s in seasons if any(ordinal.search(name) for name in _all_names(s))), None)
+        season = named or (seasons[number - 1] if len(seasons) >= number else None)
+        if season and (not season.get("episodes") or file.episode <= season["episodes"]):
+            return _to_info(season, file.episode, file)
     return None
 
 
@@ -406,11 +417,20 @@ def _alternatives(file: FileInfo) -> list[str]:
     if file.folder_title:
         texts.append(file.folder_title)
     # "Nekomonogatari (Shiro)": AniList may not name the bracketed word
-    if file.alt_title and title.endswith(f" {file.alt_title}"):
+    if file.alt_title and title.endswith(f" {file.alt_title}") and not file.media_format:
         texts.append(title[: -len(file.alt_title) - 1])
+    if file.media_format:  # "Show Specials" is "Show. Special: Subtitle" on AniList
+        texts.append(" ".join(_FORMAT_WORDS.sub(" ", title).split()))
+    return [text for text in dict.fromkeys(texts) if text != file.query]
+
+
+def _shortened(file: FileInfo) -> list[str]:
+    """The title without its last or first words, searched when nothing is spelled like the whole of it."""
+    title, texts = file.title, []
     words = title.split()
     # A shortened search finds the show's first entry or one of its extras, so it is no guess for a file that says which
-    named_film = file.media_format or file.unused_season or _MOVIE_NUMBER.search(title)
+    # nor for one without a number, a film or a one-off whose last words are all that tell it from the others
+    named_film = file.media_format or file.unused_season or file.unnumbered or _MOVIE_NUMBER.search(title)
     for dropped in range(1, 0 if named_film else min(MAX_DROPPED_WORDS, len(words) - 2) + 1):
         shortened = " ".join(words[:-dropped])
         if len(re.findall(r"[^\W\d_]", shortened)) >= MIN_LETTERS:
@@ -424,16 +444,81 @@ def _alternatives(file: FileInfo) -> list[str]:
     return [text for text in dict.fromkeys(texts) if text != file.query]
 
 
-def _respelled(client: AniListClient, file: FileInfo) -> AnimeInfo | None:
+def _respelled(client: AniListClient, file: FileInfo, formats: list[str]) -> AnimeInfo | None:
     """Resolve again under the spelling AniList uses, for a title nothing else found."""
-    if "'" in file.title:
-        return None
-    for spelled in _spellings(file.title):
+    spelled = [replace(file, title=title) for title in ([] if "'" in file.title else _spellings(file.title))]
+    if closest := _closest(client, file, formats):
+        spelled.append(closest)
+    for respelled in spelled:
         try:
-            return resolve(client, replace(file, title=spelled))
+            info = resolve(client, respelled)
         except SkipUpdate:
             continue
+        return replace(info, guessed_name=file.query)
     return None
+
+
+def _key(text: str) -> tuple[str, list[str]]:
+    """A title as compared across spellings, and the numbers that must not differ ("Movie 2" is not "Movie 3")."""
+    words = _FORMAT_WORDS.sub(" ", text).casefold()
+    return fold_title(words), re.findall(r"\d+|\b(?:ii|iii|iv|vi{0,3}|ix)\b", words)
+
+
+def _similarity(wanted: tuple[str, list[str]], name: str) -> float:
+    """How alike two titles are spelled, from 0 to 1; the file's may also be the start of a longer one."""
+    (text, numbers), (other, other_numbers) = wanted, _key(name)
+    if not text or not other:
+        return 0
+    if numbers != other_numbers:  # "Show Season 3" is no spelling of "Show"
+        return 0
+    if len(other) > len(text) >= MIN_PREFIX:
+        # The whole of a title is a better match than the start of one
+        return SequenceMatcher(None, text, other[: len(text)]).ratio() * 0.98
+    return SequenceMatcher(None, text, other).ratio()
+
+
+def _closest(client: AniListClient, file: FileInfo, formats: list[str]) -> FileInfo | None:
+    """The file under the AniList title spelled almost like its own, among the results for parts of the title.
+
+    AniList's search needs every word as it spells it, so "Hai Settei" never finds "Haisettei", nor "Kyoujin"
+    "Kyojin". A number that ends the title of a file without one is its episode ("Another Day 2").
+    """
+    words = file.title.split()
+    drops = range(1, min(MAX_DROPPED_WORDS, len(words) - 1) + 1)
+    parts = [" ".join(words[:-n]) for n in drops] + [" ".join(words[n:]) for n in drops]
+    parts += [" ".join(words[:2]), " ".join(words[-2:])]  # a long title can be misspelled in the middle
+    parts = [text for text in dict.fromkeys(parts) if len(re.findall(r"[^\W\d_]", text)) >= MIN_LETTERS]
+    wanted = [(_key(file.title), None)]
+    if file.unnumbered and len(words) > 1 and re.fullmatch(r"\d{1,2}", words[-1]):
+        wanted.append((_key(" ".join(words[:-1])), int(words[-1])))
+    formats = _wider(formats, file)
+    best: tuple[tuple[float, bool], str, int | None] = ((SIMILAR, True), "", None)
+    for start in range(0, len(parts), 3):
+        client.prefetch([(text, file.year) for text in parts[start : start + 3]], formats)
+        found = [
+            m
+            for text in parts[start : start + 3]
+            for pool in client.search(text, file.year, formats)
+            for m in pool
+        ]
+        for media, (key, episode) in ((m, w) for m in found for w in wanted):
+            if episode and episode > (media.get("episodes") or 0):
+                continue
+            for name in _all_names(media):
+                # Of two spelled as alike, the one of the file's format
+                if (score := (_similarity(key, name), media["format"] == file.media_format)) > best[0]:
+                    best = (score, name, episode)
+    _, name, episode = best
+    if not name or name == file.title:
+        return None
+    log.info("Closest AniList title to %r: %r", file.title, name)
+    return replace(file, title=name, episode=episode, unnumbered=False) if episode else replace(file, title=name)
+
+
+def _wider(formats: list[str], file: FileInfo) -> list[str]:
+    """The formats to search for an OVA or a special: AniList files the same kind of extra under any of them."""
+    extras = EXTRA_FORMATS if file.media_format in EXTRA_FORMATS[:2] else []
+    return [*formats, *(f for f in extras if f not in formats)]
 
 
 def _spellings(title: str) -> list[str]:
@@ -444,15 +529,10 @@ def _spellings(title: str) -> list[str]:
     return spelled
 
 
-def _variants(client: AniListClient, file: FileInfo, formats: list[str]) -> list[Media]:
+def _variants(client: AniListClient, file: FileInfo, formats: list[str], texts: list[str]) -> list[Media]:
     """The results of the first other search that finds an entry naming it, in batches of three per request."""
-    texts = _alternatives(file)
     first = next((w for w in file.title.split() if w.casefold() not in ARTICLES), file.title)
-    # AniList files the same kind of extra under either
-    formats = [
-        *formats,
-        *(f for f in ("OVA", "SPECIAL") if file.media_format in {"OVA", "SPECIAL"} and f not in formats),
-    ]
+    formats = _wider(formats, file)
     for start in range(0, len(texts), 3):
         client.prefetch([(text, file.year) for text in texts[start : start + 3]], formats)
         for text in texts[start : start + 3]:
@@ -515,7 +595,11 @@ def _by_arc(client: AniListClient, file: FileInfo, formats: list[str]) -> AnimeI
 
 
 def _stems(media: Media) -> set[str]:
-    return {fold_title(re.sub(r"\(?\b(?:19|20)\d\d\b\)?", "", name)) for name in media["title"].values() if name}
+    return {
+        fold_title(re.sub(r"\(?\b(?:19|20)\d\d\b\)?|\((?:TV|OVA|ONA)\)", "", name))
+        for name in media["title"].values()
+        if name
+    }
 
 
 def _start_year(media: Media) -> int | None:
@@ -538,13 +622,17 @@ def _pinned_by_year(season: Media, first: Media, file: FileInfo) -> bool:
 
 
 def _remake(results: list[Media], first: Media, episode: int) -> Media | None:
-    """An entry with the same name and format that is long enough ("Show (2006)" has 14 episodes, "Show (2009)" 28)."""
+    """An entry with the same name and format that is long enough ("Show (2006)" has 14 episodes, "Show (2009)" 28).
+
+    Or the series named like a one-off the search ranks first ("Show", a special, before "Show (TV)").
+    """
+    series = SEASON_FORMATS if first["format"] not in SEASON_FORMATS else ()
     return next(
         (
             m
             for m in results
             if m is not first
-            and m["format"] == first["format"]
+            and (m["format"] == first["format"] or m["format"] in series)
             and _stems(m) & _stems(first)
             and (m.get("episodes") or 0) >= episode
         ),
@@ -630,15 +718,22 @@ def _numbered_extra(results: list[Media], file: FileInfo) -> AnimeInfo | None:
 
 def _movie_series(first: Media, file: FileInfo, graph: _Graph) -> AnimeInfo | None:
     """The Nth film of a series of one-episode films numbered like episodes ("Heaven's Feel - 02" is the second)."""
-    if first["format"] != "MOVIE" or first.get("episodes") != 1 or file.season or file.part:
-        return None
     # "Kizumonogatari II - Nekketsu-hen" names its film, so its default episode 1 is no count
-    if file.episode == 1 and (
-        _score(first, file.title) == EXACT or (file.alt_title and _names(first, file.alt_title))
+    if first["format"] != "MOVIE" or first.get("episodes") != 1 or file.season or file.part or file.unnumbered:
+        return None
+    if (file.episode == 1 and _score(first, file.title) == EXACT) or (
+        file.alt_title and _names(first, file.alt_title)
     ):
         return None
     earlier = takewhile(lambda film: film["format"] == "MOVIE", _sole_prequels(first, graph))
-    films = [*reversed(list(earlier)), first]
+    films, seen = [*reversed(list(earlier)), first], {first["id"]}
+    # The search may rank an earlier film first, so the later ones are followed too
+    while len(films) < file.episode:
+        later = [s for s in _related(films[-1], "SEQUEL", graph) if s["format"] == "MOVIE" and s["id"] not in seen]
+        if len(later) != 1:
+            break
+        films.append(later[0])
+        seen.add(later[0]["id"])
     if file.episode > len(films):
         return None
     film = films[file.episode - 1]
@@ -655,10 +750,23 @@ def _parts_are_episodes(first: Media, file: FileInfo) -> bool:
 
 def _fit(results: list[Media], first: Media, file: FileInfo, graph: _Graph) -> AnimeInfo | None:
     """The entry for the file when its episode fits the best result, a remake of it or its part; else None."""
-    if file.media_format in SINGLE_FORMATS and first.get("episodes") == 1:  # "Show - 14 (Special)" is its only one
-        return _to_info(first, 1, file)
-    if not file.media_format and (film := _movie_series(first, file, graph)):
+    if file.media_format in {None, "MOVIE"} and (film := _movie_series(first, file, graph)):
         return film
+    if file.media_format in SINGLE_FORMATS and first.get("episodes") == 1:  # "Show - 14 (Special)" is its only one
+        # unless another entry of the show has that many: "Show SP4" is the fourth of "Show Specials", and
+        # "Show SP1" the first of them when they are named like the show and nothing more
+        wanted = _key(file.title)
+        longer = next(
+            (
+                m
+                for m in results
+                if not file.unnumbered
+                and (m.get("episodes") or 0) >= max(file.episode, 2)
+                and (_score(m, file.title) if file.episode > 1 else any(_key(n) == wanted for n in _all_names(m)))
+            ),
+            None,
+        )
+        return _to_info(longer, file.episode, file) if longer else _to_info(first, 1, file)
     if _parts_are_episodes(first, file):
         return _to_info(first, file.part, file)
     if not (first.get("episodes") and file.episode > first["episodes"]):
@@ -674,19 +782,92 @@ def _with_alt_title(results: list[Media], file: FileInfo) -> list[Media]:
     if not file.alt_title:
         return results
     named = next((m for m in results if _score(m, f"{file.title} {file.alt_title}") == EXACT), None)
+    # "Show Movie 01 - Subtitle", "Show OVA - Subtitle": the film or OVA that carries the subtitle
+    if not named and file.media_format and _is_subtitle(file.alt_title):
+        named = next((m for m in results if _has_phrase(m, file.alt_title)), None)
     return [named, *(m for m in results if m is not named)] if named else results
+
+
+def _plainly_named(results: list[Media], file: FileInfo) -> list[Media]:
+    """The film or OVA named like the show and nothing more goes first ("Show the Movie" before "Show: Reboot")."""
+    if not file.media_format or not results:
+        return results
+    wanted = _key(file.title)
+
+    def plain(media: Media) -> bool:
+        return any(_key(name) == wanted for name in _all_names(media))
+
+    named = None if plain(results[0]) else next((m for m in results if plain(m)), None)
+    return [named, *(m for m in results if m is not named)] if named else results
+
+
+def _is_subtitle(text: str) -> bool:
+    return len(text.split()) > 1 or len(text) >= MIN_LETTERS
+
+
+def _by_subtitle(client: AniListClient, file: FileInfo, results: list[Media], formats: list[str]) -> list[Media]:
+    """Search the subtitle of a film, OVA or special on its own when no result for the show carries it."""
+    alt = file.alt_title
+    if not (file.media_format and alt and _is_subtitle(alt)) or any(_has_phrase(m, alt) for m in results):
+        return results
+    first = next((w for w in file.title.split() if w.casefold() not in ARTICLES), file.title)
+    found = [m for m in client.search(alt, file.year, formats)[1] if _has_phrase(m, alt) and _names(m, first)]
+    return [*found, *results]
+
+
+def _of_that_year(results: list[Media], first: Media, file: FileInfo) -> Media | None:
+    """The entry named like the title that began in the file's year, when the best result began in another.
+
+    "Black Rock Shooter (2010)" is the OVA of 2010, though the series of 2012 is named the same.
+    """
+    if not file.year or (file.season or 0) > 1 or file.part or _start_year(first) == file.year:
+        return None
+    # "Show Movie 04 (2003)": a film or an OVA is dated by its own release
+    dated = [m for m in results if _start_year(m) == file.year]
+    if file.media_format in SINGLE_FORMATS and len(dated) == 1:
+        return dated[0]
+    return next(
+        (
+            m
+            for m in results
+            if _start_year(m) == file.year
+            and fold_title(file.title) in _stems(m)
+            and file.episode <= (m.get("episodes") or file.episode)
+        ),
+        None,
+    )
+
+
+def _shorter_title(
+    client: AniListClient, file: FileInfo, formats: list[str], results: list[Media]
+) -> AnimeInfo | None:
+    """The show named by the title's first words, when the results only resemble the title and hold no such episode.
+
+    "Air Gear Trick 12" finds only "Air Gear: Special Trick", a one-off.
+    """
+    if file.media_format or any(_score(m, file.title) for m in results):
+        return None
+    words = file.title.split()
+    for dropped in range(1, min(MAX_DROPPED_WORDS, len(words) - 1) + 1):
+        shortened = " ".join(words[:-dropped])
+        if len(re.findall(r"[^\W\d_]", shortened)) < MIN_LETTERS:
+            break
+        try:
+            info = _resolve_title(client, replace(file, title=shortened), formats)
+        except SkipUpdate:
+            continue
+        # Fewer words and another number as well would be two guesses
+        return replace(info, guessed_name=file.query) if info.episode == file.episode else None
+    return None
 
 
 def _resolve_title(client: AniListClient, file: FileInfo, formats: list[str]) -> AnimeInfo:
     user_list, everything = client.search(file.query, file.year, formats)
-    results = _with_alt_title(
-        _choose(user_list, everything, file.query, series=not file.media_format, marks=file.marks), file
-    )
-    # AniList files the same kind of extra under either
-    if not results and file.media_format in {"OVA", "SPECIAL"}:
-        other = "SPECIAL" if file.media_format == "OVA" else "OVA"
+    results = _choose(user_list, everything, file.query, series=not file.media_format, marks=file.marks)
+    results = _with_alt_title(_by_subtitle(client, file, _plainly_named(results, file), formats), file)
+    if not results and (others := [f for f in _wider(formats, file) if f not in formats]):
         results = [
-            m for m in _choose(*client.search(file.query, file.year, [other]), file.query) if _score(m, file.query)
+            m for m in _choose(*client.search(file.query, file.year, others), file.query) if _score(m, file.query)
         ]
     # "Show Season 2" can match only the specials of the second season
     later_season = (file.season or 0) > 1 and not (file.part or file.media_format)
@@ -694,9 +875,14 @@ def _resolve_title(client: AniListClient, file: FileInfo, formats: list[str]) ->
     if (not results or no_season) and (info := _nth_season(client, file, formats)):
         log.info("Season %s found by counting sequels: %s", file.query, info.anime_name)
         return info
-    results = results or _variants(client, file, formats)
+    results = results or _variants(client, file, formats, _alternatives(file))
     if not results:
-        if info := _absolute_from_base(client, file) or _respelled(client, file):
+        # A title spelled almost like the file's goes before one that only shares its first or last words
+        if info := _respelled(client, file, formats):
+            return info
+        results = _variants(client, file, formats, _shortened(file))
+    if not results:
+        if info := _absolute_from_base(client, file):
             return info
         raise SkipUpdate(f"Couldn't find an anime from this title! ({file.query}). Is it in your list?")
 
@@ -707,7 +893,8 @@ def _resolve_title(client: AniListClient, file: FileInfo, formats: list[str]) ->
         and file.year
         and next((m for m in results if _score(m, f"{file.title} ({file.year})") == EXACT), None)
     )
-    first = dated or first
+    first = dated or _of_that_year(results, first, file) or first
+    dated = dated or first is not _first(results, file)
     graph = _Graph([*everything, *results], _fetcher(client))
     seasons = _season_formats(first)
     if not (dated or (file.season or 0) > 1 or file.part) and first["format"] in seasons:
@@ -719,11 +906,8 @@ def _resolve_title(client: AniListClient, file: FileInfo, formats: list[str]) ->
         # "One Punch Man (2025) - 05" is the season that began in 2025, not the first season of the show
         if _pinned_by_year(started, first, file):
             first = started
-    if info := _fit(results, first, file, graph):
+    if info := _fit(results, first, file, graph) or _absolute_from_base(client, file):
         log.info("Final guessed anime: %s", info.anime_name)
-        return info
-
-    if info := _absolute_from_base(client, file):
         return info
 
     # The episode exceeds the season, so it is probably absolute. The user's list may lack some seasons.
@@ -754,6 +938,7 @@ def _resolve_title(client: AniListClient, file: FileInfo, formats: list[str]) ->
         or _without_year(client, file)
         or _number_in_title(client, file)
         or _without_folder_season(client, file)
+        or _shorter_title(client, file, formats, results)
     ):
         return info
     raise SkipUpdate(f"No valid seasons found for '{file.query}'.")
