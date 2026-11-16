@@ -1,5 +1,9 @@
 import io
 import json
+import os
+import subprocess  # ruff: ignore[suspicious-subprocess-import]
+import sys
+from pathlib import Path
 
 import pytest
 
@@ -80,3 +84,18 @@ def test_request_is_read_from_the_first_argument(monkeypatch):
     monkeypatch.setattr(AniListClient, "from_token_file", lambda: AniListClient(None))
     cli.main()
     assert json.loads(stdout.getvalue())["message"] == "Unknown action: bogus"
+
+
+def test_entry_point_runs_without_its_folder_on_the_path(tmp_path):
+    # Embeddable Pythons (a ._pth file) and PYTHONSAFEPATH don't add the script's folder to sys.path
+    entry_point = Path(__file__).parent.parent / "anilistUpdater.py"
+    env = {**os.environ, "PYTHONSAFEPATH": "1"}
+    result = subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true]
+        [sys.executable, str(entry_point), "{nope"],
+        capture_output=True,
+        text=True,
+        cwd=tmp_path,
+        env=env,
+        check=False,
+    )
+    assert json.loads(result.stdout)["message"] == "Invalid request."
