@@ -173,7 +173,7 @@ class AniListClient:
         return payload["data"]
 
     def prefetch(self, searches: list[tuple[str, int | None]], formats: list[str]) -> None:
-        """Run the searches not made yet in one request, for `search` to answer from.
+        """Run the searches not made yet in one request, for `search` and `related` to answer from.
 
         Args:
             searches (list[tuple[str, int | None]]): Titles and years to search.
@@ -187,7 +187,10 @@ class AniListClient:
             variables |= {f"s{i}": title, f"y{i}": year * 10000 if year else 1}
         data = self._post(_search_query(len(wanted)), variables)
         for i, (title, year) in enumerate(wanted):
-            self._searches[title, year, tuple(formats)] = (data[f"User{i}"]["media"], data[f"Global{i}"]["media"])
+            user, everything = data[f"User{i}"]["media"], data[f"Global{i}"]["media"]
+            self._searches[title, year, tuple(formats)] = (user, everything)
+            for media in [*user, *everything]:
+                self._entries.setdefault(media["id"], media)
 
     def search(
         self, title: str, year: int | None, formats: list[str]
