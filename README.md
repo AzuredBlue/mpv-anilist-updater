@@ -3,7 +3,7 @@
 A script for MPV that automatically updates your AniList based on the file you just watched.
 
 > [!IMPORTANT]
-> By default, the anime must be set to "watching", "planning" or "rewatching" to update progress. This is done in order to prevent updating the wrong show.<br>
+> By default, the anime must be set to "watching", "planning", "paused" or "rewatching" to update progress. This is done in order to prevent updating the wrong show.<br>
 > **Recommendation:** Check out the configuration options in your `anilistUpdater.conf` file to customize the script to your needs. See the [Configuration](#configuration-anilistupdaterconf) section for details.<br>
 
 For any issues, you can either open an issue on here, or message me on discord (azuredblue)
@@ -173,7 +173,7 @@ echo '{"action": "info", "path": "/anime/Frieren S2/[EMBER] Sousou no Frieren S2
 ```
 
 ```json
-{"ok": true, "kind": "success", "message": null, "info": {"anime_id": 182255, "anime_name": "Sousou no Frieren 2nd Season", "episode": 9, "current_progress": null, "total_episodes": 10, "current_status": null, "guessed_name": "Sousou no Frieren Season 2", "absolute_episode": 9, "mal_id": 59978}}
+{"ok": true, "kind": "success", "message": null, "info": {"anime_id": 182255, "anime_name": "Sousou no Frieren 2nd Season", "episode": 9, "current_progress": null, "total_episodes": 10, "current_status": null, "guessed_name": "Sousou no Frieren Season 2", "absolute_episode": 9, "mal_id": 59978}, "results": null, "score": null}
 ```
 
 - `kind` is `success`, `skip` (extras, no title, nothing found on AniList) or `error`. On `skip` and `error`, `info` is `null` and `message` says why.
