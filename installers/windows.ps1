@@ -20,9 +20,17 @@ function Remove-Path($Path) {
 # Native commands write progress to stderr, which "Stop" would turn into an error.
 function Test-Python {
 	$ErrorActionPreference = "Continue"
-	if (!(Get-Command python -ErrorAction SilentlyContinue)) { return $false }
-	python -c "import sys; sys.exit(sys.version_info < (3, 11))" 2> $null
-	return $LASTEXITCODE -eq 0
+	$Check = "import sys; sys.exit(sys.version_info < (3, 11))"
+	# On a default install `python` can be the Microsoft Store alias, which fails; the runtime then uses `py -3`
+	if (Get-Command python -ErrorAction SilentlyContinue) {
+		python -c $Check 2> $null
+		if ($LASTEXITCODE -eq 0) { return $true }
+	}
+	if (Get-Command py -ErrorAction SilentlyContinue) {
+		py -3 -c $Check 2> $null
+		return $LASTEXITCODE -eq 0
+	}
+	return $false
 }
 
 function Update-GitClone($Target) {

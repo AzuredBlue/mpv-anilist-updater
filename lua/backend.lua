@@ -33,13 +33,19 @@ function M.get_path()
         return (title:gsub("/", " "))
     end
 
-    -- Linux can report the working directory without a trailing slash
-    local directory = mp.get_property("working-directory") or ""
-    if not directory:find("[/\\]$") then
-        directory = directory .. "/"
+    local path = mp.get_property("path") or ""
+    if M.is_stream() then
+        -- a query string can hold secrets such as an api_key
+        path = path:gsub("[?#].*$", "")
+    else
+        -- Linux can report the working directory without a trailing slash
+        local directory = mp.get_property("working-directory") or ""
+        if not directory:find("[/\\]$") then
+            directory = directory .. "/"
+        end
+        -- "path" is sometimes absolute and sometimes relative
+        path = utils.join_path(directory, path)
     end
-    -- "path" is sometimes absolute and sometimes relative
-    local path = utils.join_path(directory, mp.get_property("path") or "")
 
     if (path:match("([^/\\]+)$") or ""):lower() == "file.mp4" and title and title ~= "" then
         return title
@@ -63,13 +69,25 @@ local function decode(success, result)
     if result.killed_by_us then
         return { ok = false, kind = "cancelled" }
     end
+    if result.error_string == "init" then
+        local tried = {}
+        for _, interpreter in ipairs(interpreters) do
+            tried[#tried + 1] = table.concat(interpreter, " ")
+        end
+        return {
+            ok = false,
+            kind = "error",
+            message = "Couldn't start Python (tried: " .. table.concat(tried, ", ") .. "). Is Python 3.11+ installed?",
+        }
+    end
 
     local response = utils.parse_json(result.stdout or "")
     if type(response) == "table" and response.kind then
         return response
     end
 
-    local reason = last_line(result.stderr) or result.error_string or ("exit status " .. tostring(result.status))
+    local error_string = result.error_string ~= "" and result.error_string or nil
+    local reason = last_line(result.stderr) or error_string or ("exit status " .. tostring(result.status))
     return { ok = false, kind = "error", message = reason }
 end
 
@@ -100,7 +118,11 @@ function M.call(action, fields, callback)
             -- Detection is moot once the file changes, but a write must finish.
             playback_only = action == "info",
         }, function(success, result)
-            if success and result and result.error_string == "init" and current < #interpreters then
+            -- 9009: the Windows Store alias of python starts, but only prints that Python isn't installed
+            local missing = success
+                and result
+                and (result.error_string == "init" or (result.status == 9009 and (result.stdout or "") == ""))
+            if missing and current < #interpreters then
                 current = current + 1
                 return run()
             end
