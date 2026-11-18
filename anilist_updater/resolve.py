@@ -149,6 +149,8 @@ class _Graph(UserDict[int, Media]):
             try:
                 self.update(self.fetch(missing))
             except AniListError as error:
+                if error.retryable:
+                    raise
                 log.info("Couldn't fetch related entries: %s", error)
 
 
@@ -374,9 +376,10 @@ def _without_folder_season(client: AniListClient, file: FileInfo) -> AnimeInfo |
     if not file.folder_season:
         return None
     try:
-        return resolve(client, replace(file, season=None, part=None, folder_season=False))
+        info = resolve(client, replace(file, season=None, part=None, folder_season=False))
     except SkipUpdate:
         return None
+    return replace(info, guessed_name=file.query)
 
 
 def _without_year(client: AniListClient, file: FileInfo) -> AnimeInfo | None:
@@ -454,7 +457,7 @@ def _respelled(client: AniListClient, file: FileInfo, formats: list[str]) -> Ani
             info = resolve(client, respelled)
         except SkipUpdate:
             continue
-        return replace(info, guessed_name=file.query)
+        return replace(info, guessed_name=file.query, absolute_episode=file.episode)
     return None
 
 
@@ -697,9 +700,10 @@ def _times_sign(client: AniListClient, file: FileInfo, formats: list[str]) -> An
     if not _TIMES.search(file.title):
         return None
     try:
-        return _resolve_title(client, replace(file, title=_TIMES.sub(TIMES_SIGN, file.title)), formats)
+        info = _resolve_title(client, replace(file, title=_TIMES.sub(TIMES_SIGN, file.title)), formats)
     except SkipUpdate:
         return None
+    return replace(info, guessed_name=file.query)
 
 
 def _numbered_extra(results: list[Media], file: FileInfo) -> AnimeInfo | None:
