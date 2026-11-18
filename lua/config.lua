@@ -22,7 +22,7 @@ local CONF_HEADER = [[# anilistUpdater Configuration
 ]]
 
 -- Every option and its default, in the order of the generated .conf. The Python side takes whatever is sent
--- and has no defaults of its own, so it gets every option that is not `lua_only`.
+-- (its own matching defaults only serve manual runs), so it gets every option that is not `lua_only`.
 local DEFAULTS = {
     { "DIRECTORIES", "", lua_only = true },
     { "EXCLUDED_DIRECTORIES", "", lua_only = true },
@@ -110,7 +110,7 @@ end
 local windows = mp.get_property("platform") == "windows"
 
 local function normalize(path)
-    path = path:gsub("\\", "/"):gsub("/$", "")
+    path = path:gsub("\\", "/"):gsub("/+$", "")
     return windows and path:lower() or path
 end
 
@@ -118,7 +118,7 @@ local function parse_directories(value)
     local directories = {}
     for entry in tostring(value):gmatch("[^,;]+") do
         local dir = entry:gsub("^%s+", ""):gsub("%s+$", ""):gsub("['\"]", "")
-        directories[#directories + 1] = normalize(dir)
+        directories[#directories + 1] = normalize(mp.command_native({ "expand-path", dir }))
     end
     return directories
 end

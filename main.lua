@@ -111,10 +111,12 @@ local function open(target, folder)
 end
 
 local function launch_anilist()
-    ensure_info(function(info)
+    ensure_info(function(info, response)
         if info and info.anime_id then
             osd('Opening AniList for "' .. (info.anime_name or "?") .. '"')
             open("https://anilist.co/anime/" .. info.anime_id)
+        elseif response and response.kind ~= "cancelled" and response.message then
+            notify(response, true)
         else
             mp.osd_message("Error: Anime info not loaded yet.", 3)
         end
