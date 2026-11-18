@@ -273,6 +273,10 @@ def test_absolute_number_beside_the_episode(path, absolute):
             "The Other Name",
         ),
         ("[Foobar] Sample Show - 03 [1080p].mkv", "Sample Show", None),
+        ("[Erai-raws] Sousou no Frieren - 05 [1080p][Multiple Subtitle][ABCD1234].mkv", "Sousou no Frieren", None),
+        ("[Group] Black Clover - 170 (END) [1080p].mkv", "Black Clover", None),
+        ("[Group] Show - 05 [Japanese Audio][1080p].mkv", "Show", None),
+        ("[Group] Show - 05 [Netflix][1080p].mkv", "Show", None),
     ],
 )
 def test_other_name_of_the_show(path, title, alt_title):

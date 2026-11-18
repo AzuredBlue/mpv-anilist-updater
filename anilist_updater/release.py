@@ -3,7 +3,7 @@
 Fansub and scene names follow a few conventions, and every rule here is a pattern seen in them. The release group
 and bracketed tags are set aside, the text before the first technical token is searched for an episode marker,
 and the title is whatever precedes the earliest marker. Nothing after the episode marker is interpreted, because
-that is the episode's own title.
+that is the episode's own title (only extra tags such as NCOP are still read there).
 
 Compared with other parsers on 2,535 files (paths with folders) sampled across about 2,000 nyaa and nekobt
 torrents: 2,291 labeled episodes and 244 extras (S00 files left out). Each path was labeled blind by a model and
@@ -100,11 +100,14 @@ _TECH = re.compile(
     r"|BD|WEB-?DL|WEB-?Rip|HDTV|DVD(?:Rip)?|Remux)\b",
     re.IGNORECASE,
 )
-_EXTRA = re.compile(
-    r"\b(?:NC(?:OP|ED)\d*[a-z]?|(?:OP|ED)\d+(?:v\d+)?[a-z]?|(?:OP|ED)v\d+|Creditless|Play All"
-    r"|Clean\s+(?:Opening|Ending)|(?:Opening|Ending)\s+Clean|Making\s+of|Extra\s+\d{1,2})\b",
+_EXTRA_TOKEN = re.compile(
+    r"\b(?:NC(?:OP|ED)\d*[a-z]?|(?:OP|ED)\d+(?:v\d+)?[a-z]?|(?:OP|ED)v\d+|Creditless"
+    r"|Clean\s+(?:Opening|Ending)|(?:Opening|Ending)\s+Clean)\b",
     re.IGNORECASE,
 )
+# Phrases an episode's own title can hold: "Making of a Legend", "Play All Night"
+_EXTRA_PHRASE = re.compile(r"\b(?:Play All|Making\s+of|Extra\s+\d{1,2})\b", re.IGNORECASE)
+_EXTRA = re.compile(f"{_EXTRA_TOKEN.pattern}|{_EXTRA_PHRASE.pattern}", re.IGNORECASE)
 # Bracketed extras of a BD release: "[Menu01]", "[CM02]", "[PV]"
 _EXTRA_GROUP = re.compile(
     r"(?:Menu|CM|PV|IV|Preview|Trailer|Making|Interview|Audio Drama|Drama CD|Behind the Scenes|Commentary)"
@@ -283,7 +286,8 @@ _CODEC = re.compile(
 )
 # Release notes in brackets; any other bracketed words are an alternative title: "(From the New World)"
 _TAG_WORDS = re.compile(
-    r"Dual|Multi|Audio|Subs?|Eng(?:lish)?|Dub(?:bed|s)?|Batch|Weekly|Uncensored|Remaster(?:ed)?|P\d+|Raws?"
+    r"Dual|Multi(?:ple)?|Audio|Subtitles?|Subs?|Japanese|END|Netflix|Eng(?:lish)?|Dub(?:bed|s)?|Batch|Weekly"
+    r"|Uncensored|Remaster(?:ed)?|P\d+|Raws?"
     r"|[HS]ardsub|MSubs?|OmeU|OmU|OV|DF|Synchro|VOSTFR|JPN|ENG|ESP|simple|CHT|CHS|BIG5|GB|Baha|MP4|MKV",
     re.IGNORECASE,
 )
@@ -585,18 +589,19 @@ def _analyse(text: str, groups: list[str], *, folder: bool) -> _Segment:
     tail, text = text[len(head) :], head
     movie = _MOVIE.search(text)
     text = _MOVIE.sub(" ", text)
-    segment.extra = bool(
-        _EXTRA.search(text)
-        or any(
-            _EXTRA.search(group) or _EXTRA_GROUP.fullmatch(group.strip()) or _EXTRA_GROUP_WORD.search(group)
-            for group in groups
-        )
-    )
 
     log.debug("    searched zone: %r", text)
 
     marker = _find_marker(text)
     region = text[: marker.start] if marker else text
+    segment.extra = bool(
+        _EXTRA_TOKEN.search(text)
+        or _EXTRA_PHRASE.search(region)
+        or any(
+            _EXTRA.search(group) or _EXTRA_GROUP.fullmatch(group.strip()) or _EXTRA_GROUP_WORD.search(group)
+            for group in groups
+        )
+    )
     if marker:
         segment.marked, segment.episode, segment.season, segment.version = (
             True,

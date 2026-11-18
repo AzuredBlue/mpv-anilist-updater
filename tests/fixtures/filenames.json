@@ -424,5 +424,61 @@
     null,
     null,
     null
+  ],
+  "Show - S01E05 - The Making of a Monster.mkv": [
+    "Show",
+    5,
+    1,
+    null,
+    null,
+    null
+  ],
+  "[Group] Show - 05 - Making of a Legend [1080p].mkv": [
+    "Show",
+    5,
+    null,
+    null,
+    null,
+    null
+  ],
+  "[Group] Show - 05 - Extra 1 Hour of Love [1080p].mkv": [
+    "Show",
+    5,
+    null,
+    null,
+    null,
+    null
+  ],
+  "[Group] Show - 05 - Play All Night [1080p].mkv": [
+    "Show",
+    5,
+    null,
+    null,
+    null,
+    null
+  ],
+  "/home/me/Videos/05.mkv": [
+    "Videos",
+    5,
+    null,
+    null,
+    null,
+    null
+  ],
+  "C:/Users/me/Videos/05.mkv": [
+    "Videos",
+    5,
+    null,
+    null,
+    null,
+    null
+  ],
+  "/home/me/Frieren/05.mkv": [
+    "Frieren",
+    5,
+    null,
+    null,
+    null,
+    null
   ]
 }
