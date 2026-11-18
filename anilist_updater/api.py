@@ -157,7 +157,10 @@ class AniListClient:
             with urllib.request.urlopen(request, timeout=TIMEOUT) as response:  # ruff: ignore[suspicious-url-open-usage]
                 payload = json.load(response)
         except urllib.error.HTTPError as e:
-            raise AniListError(_error_message(e), e.code, retryable=e.code in {403, 429} or e.code >= 500) from e
+            message = _error_message(e)
+            if message == "Invalid token":
+                raise AniListError(message, 401) from e
+            raise AniListError(message, e.code, retryable=e.code in {403, 429} or e.code >= 500) from e
         except (OSError, http.client.HTTPException) as e:
             raise AniListError(f"Couldn't reach AniList: {e}", retryable=True) from e
         except ValueError as e:
@@ -165,6 +168,8 @@ class AniListClient:
 
         if errors := payload.get("errors"):
             raise AniListError(errors[0].get("message", "Unknown error"))
+        if "data" not in payload:
+            raise AniListError("AniList sent an unreadable response.", retryable=True)
         return payload["data"]
 
     def prefetch(self, searches: list[tuple[str, int | None]], formats: list[str]) -> None:

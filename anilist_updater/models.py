@@ -125,7 +125,16 @@ class Options:
     @classmethod
     def from_dict(cls, data: Mapping[str, Any] | None) -> Self:
         """Build from request JSON, whose keys are upper case."""
-        return cls(**_known(cls, {k.lower(): v for k, v in (data or {}).items()}))
+        values = _known(cls, {k.lower(): v for k, v in (data or {}).items()})
+        for field in fields(cls):
+            value = values.get(field.name)
+            if (
+                isinstance(field.default, bool)
+                and isinstance(value, str)
+                and value.lower() in {"yes", "true", "no", "false"}
+            ):
+                values[field.name] = value.lower() in {"yes", "true"}
+        return cls(**values)
 
     @property
     def sliding(self) -> bool:
