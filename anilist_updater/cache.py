@@ -5,7 +5,7 @@ import logging
 import os
 import time
 from collections.abc import Callable, Generator
-from contextlib import contextmanager
+from contextlib import AbstractContextManager, contextmanager
 from dataclasses import asdict, dataclass
 from functools import cached_property
 from pathlib import Path
@@ -24,12 +24,58 @@ LOCK_STALE = 120
 
 
 def _write_json(path: Path, payload: object) -> None:
-    """Replace `path` with `payload` in one step, so an interrupted run can't leave half a file."""
+    """Replace `path` with `payload` in one step, so an interrupted run can't leave half a file.
+
+    Raises:
+        PermissionError: If another process keeps `path` open through all the retries.
+    """
     import tempfile  # ruff: ignore[import-outside-top-level]
 
     with tempfile.NamedTemporaryFile("w", dir=path.parent, suffix=".tmp", delete=False, encoding="utf-8") as tmp:
         json.dump(payload, tmp, ensure_ascii=False, indent=2)
-    Path(tmp.name).replace(path)
+    try:  # ruff: ignore[too-many-statements-in-try-clause]
+        for attempt in range(5):
+            try:
+                Path(tmp.name).replace(path)
+            except PermissionError:
+                if attempt == 4:
+                    raise
+                time.sleep(0.05)
+            else:
+                break
+    except BaseException:
+        Path(tmp.name).unlink(missing_ok=True)
+        raise
+
+
+@contextmanager
+def _locked(lock: Path) -> Generator[None, None, None]:
+    """Hold the lock file `lock` while a change is read and written, so two runs can't overwrite each other.
+
+    The lock is a file created exclusively, which every OS does atomically. One left behind by a killed run
+    is taken over after `LOCK_STALE` seconds; if it can't be had in `LOCK_WAIT` the change goes ahead
+    anyway, as losing the update is worse than the small chance of a clash.
+    """
+    deadline, held = time.monotonic() + LOCK_WAIT, False
+    while not held and time.monotonic() < deadline:
+        try:
+            os.close(os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY))
+            held = True
+        except FileExistsError:
+            try:
+                if time.time() - lock.stat().st_mtime > LOCK_STALE:
+                    lock.unlink(missing_ok=True)
+                    continue
+            except OSError:
+                pass
+            time.sleep(0.05)
+        except OSError:
+            break
+    try:
+        yield
+    finally:
+        if held:
+            lock.unlink(missing_ok=True)
 
 
 def _key(filepath: str, title: str) -> str:
@@ -195,15 +241,16 @@ class Cache:
         """Write the cache if it changed, atomically so an interrupted run can't corrupt it."""
         if not (self._changed or self._dropped):
             return
-        payload = {key: value for key, value in self._read().items() if key not in self._dropped}
-        payload.update({key: self._entries[key].to_json() for key in self._changed})
-        try:
-            _write_json(self._path, payload)
-        except OSError as e:
-            log.warning("Failed saving cache: %s", e)
-        else:
-            self._changed.clear()
-            self._dropped.clear()
+        with _locked(self._path.with_suffix(".lock")):
+            payload = {key: value for key, value in self._read().items() if key not in self._dropped}
+            payload.update({key: self._entries[key].to_json() for key in self._changed})
+            try:
+                _write_json(self._path, payload)
+            except OSError as e:
+                log.warning("Failed saving cache: %s", e)
+            else:
+                self._changed.clear()
+                self._dropped.clear()
 
 
 class Pending:
@@ -226,35 +273,8 @@ class Pending:
             return []
         return [item for item in raw if isinstance(item, dict) and isinstance(item.get("path"), str)]
 
-    @contextmanager
-    def _locked(self) -> Generator[None, None, None]:
-        """Hold `queue.lock` while a change is read and written, so two runs can't overwrite each other.
-
-        The lock is a file created exclusively, which every OS does atomically. One left behind by a killed run
-        is taken over after `LOCK_STALE` seconds; if it can't be had in `LOCK_WAIT` the change goes ahead
-        anyway, as losing the update is worse than the small chance of a clash.
-        """
-        lock = self._path.with_suffix(".lock")
-        deadline, held = time.monotonic() + LOCK_WAIT, False
-        while not held and time.monotonic() < deadline:
-            try:
-                os.close(os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY))
-                held = True
-            except FileExistsError:
-                try:
-                    if time.time() - lock.stat().st_mtime > LOCK_STALE:
-                        lock.unlink(missing_ok=True)
-                        continue
-                except OSError:
-                    pass
-                time.sleep(0.05)
-            except OSError:
-                break
-        try:
-            yield
-        finally:
-            if held:
-                lock.unlink(missing_ok=True)
+    def _locked(self) -> AbstractContextManager[None]:
+        return _locked(self._path.with_suffix(".lock"))
 
     def _write(self, items: list[dict[str, Any]]) -> None:
         if items:

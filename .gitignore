@@ -3,6 +3,8 @@ anilistUpdater.conf
 cache.json
 queue.json
 queue.lock
+cache.lock
+*.tmp
 __pycache__
 .vscode
 .pytest_cache
