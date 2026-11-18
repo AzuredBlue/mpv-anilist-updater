@@ -39,7 +39,7 @@ def _update_message(before: AnimeInfo, after: AnimeInfo, saves: list[Save]) -> s
     name = before.anime_name or before.guessed_name
     if before.current_progress is None and before.current_status is None:
         return f'Added "{name}" to your list with progress: {after.current_progress}'
-    if len(saves) > 1:
+    if len(saves) > 1 or after.current_status != before.current_status:
         return f'Updated "{name}" to {after.current_status} with progress: {after.current_progress}'
     return f'Updated "{name}" to: {after.current_progress}'
 
@@ -215,7 +215,7 @@ class Service:
             SkipUpdate: If the correction changes nothing.
         """
         if info is None:
-            file = parse_path(path)
+            file = parse_path(path, skip=False)
             info = AnimeInfo(episode=file.episode, guessed_name=file.query, absolute_episode=file.episode)
 
         changes = []
@@ -226,6 +226,8 @@ class Service:
 
         current_episode = info.episode or info.absolute_episode
         episode = max(1, correction.episode or current_episode)
+        if correction.episode and info.total_episodes and episode > info.total_episodes:
+            raise SkipUpdate(f"Episode {episode} is past the last of {info.total_episodes}.")
         episode_changed = episode != current_episode
         if episode_changed:
             changes.append(f"Mapped {info.absolute_episode}->{episode}")

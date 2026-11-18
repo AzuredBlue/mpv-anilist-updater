@@ -19,6 +19,7 @@ class RecordingClient(FakeClient):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.saves, self.scores, self.searches = [], [], 0
+        self.statuses = {}
 
     def search(self, title, year, formats):
         self.searches += 1
@@ -28,7 +29,8 @@ class RecordingClient(FakeClient):
         self.saves.append((anime_id, status, progress))
         if score is not None:
             self.scores.append(score)
-        return {"status": status or "CURRENT", "progress": progress}
+        status = self.statuses[anime_id] = status or self.statuses.get(anime_id, "CURRENT")
+        return {"status": status, "progress": progress}
 
 
 def make(tmp_path, client, **options):
@@ -325,7 +327,7 @@ def test_a_queued_first_episode_of_a_rewatch_is_sent_before_the_second(tmp_path)
     service.update(PATH, episode(1))
     client.down = False
     service.update(PATH, episode(2))
-    assert client.saves == [(1, Status.REPEATING, 0), (1, None, 1), (1, Status.CURRENT, 2)]
+    assert client.saves == [(1, Status.REPEATING, 0), (1, None, 1), (1, Status.REPEATING, 2)]
     assert not (tmp_path / "queue.json").exists()
 
 

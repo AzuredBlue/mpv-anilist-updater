@@ -172,11 +172,12 @@ def _unused_season_folder(parent: Release | None, grandparent: Release | None, r
     return (parent.season or 0) > 1 and bool(folder) and own.startswith(folder) and own != folder
 
 
-def parse_path(path: str) -> FileInfo:
+def parse_path(path: str, *, skip: bool = True) -> FileInfo:
     """Extract title, episode, year and format from a media path.
 
     Args:
         path (str): Path to the video, or the media title for streams.
+        skip (bool): Raise for files that aren't episodes to record, False to parse them anyway.
 
     Returns:
         FileInfo: What the path says about the media.
@@ -191,8 +192,8 @@ def parse_path(path: str) -> FileInfo:
     parent = parse_release(parts[-2], folder=True) if len(parts) > 1 else None
     release = _named_special(release, parent) or release
     grandparent = parse_release(parts[-3], folder=True) if len(parts) > 2 else None
-    if skip := _skip_reason(release, parent, grandparent):
-        raise ParseError(f"'{name}' is {skip}. Not updating.")
+    if skip and (reason := _skip_reason(release, parent, grandparent)):
+        raise ParseError(f"'{name}' is {reason}. Not updating.")
 
     details = _Details(release.season, release.part, release.year, release.media_format)
     if parent and not parent.title:  # "OVA/", "Specials/"
