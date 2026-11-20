@@ -63,6 +63,7 @@ _TRANSLATION = str.maketrans(
         "\u00b4": "'",
         "\u301c": "~",
         "\u2044": " ",
+        "\ua789": ":",
         "\u2010": "-",
         "\u2011": "-",
         "\u2012": "-",
@@ -78,7 +79,7 @@ _CJK = re.compile(r"[぀-ヿ㐀-䶿一-鿿가-힯؀-ۿ]")
 # "中文配": a dub's language, not a title word
 _DUB_TAG = re.compile(r"(?:^|\s)[一-鿿]*配(?=\s|$)")
 _HANGUL = re.compile(r"[ᄀ-ᇿ가-힯]")
-_NOISE = re.compile(r"[\\/:!*?\"<>|._\-~\[\](){}\x00。、・「」『』]")
+_NOISE = re.compile(r"[\\/:!*?\"<>|._\-~\[\](){}\x00。、・「」『』《》]")
 _TRAILING = re.compile(
     r"(?:\s+(?:v\d+|subbed|dubbed|raws?|vostfr|f?hd|remaster(?:ed)?|dual audio|complete (?:version|edition)))+$",
     re.IGNORECASE,
