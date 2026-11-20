@@ -269,7 +269,7 @@ _GROUP_SEASONS = re.compile(
     re.IGNORECASE,
 )
 _GROUP_YEAR = re.compile(r"(?P<year>(?:19[5-9]|20[0-3])\d)(?:\s*-\s*(?:19|20)\d\d)?")
-_GROUP_FORMAT = re.compile(r"(?P<format>OVA|OAV|OAD|ONA|TVSP|SP|Specials?)\s*(?P<n>\d{0,2})")
+_GROUP_FORMAT = re.compile(r"(?P<format>OVA|OAV|OAD|ONA|TVSP|SP|Specials?)\s*(?P<n>\d{0,2})(?:v\d+)?")
 # Bracketed tags that can't be the title of an all-bracket name
 _TAG = re.compile(r"GB|BIG5|CHT|CHS|MP4|MKV|AAC|FLAC|OPUS|Multi[- ]?Subs?|Dual[- ]?Audio", re.IGNORECASE)
 

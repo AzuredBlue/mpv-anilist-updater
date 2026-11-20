@@ -25,6 +25,7 @@ _PACK_WORDS = re.compile(
 
 # A folder that only sorts the files ("Show/Series/" next to "Show/OVA/"), never the show's name
 _GENERIC_FOLDER = re.compile(r"Series|TV|Anime|Episodes?|Videos?", re.IGNORECASE)
+_SPS_FOLDER = re.compile(r"SPs", re.IGNORECASE)
 _ARC_FOLDER = re.compile(r"Season\s*\d{1,2}\s*(?:\(Part[^)]*\))?\s*-?\s*(?P<arc>[^\W\d_][^\[\(]*)", re.IGNORECASE)
 
 
@@ -91,12 +92,17 @@ def _title_from_folders(parts: list[str], details: _Details) -> str:
     return number
 
 
-def _skip_reason(release: Release, parent: Release | None, grandparent: Release | None = None) -> str | None:
+def _skip_reason(
+    release: Release, parent: Release | None, grandparent: Release | None = None, folder: str = ""
+) -> str | None:
     """Why the file isn't an episode, from its name or from a parent folder like "Extras" or "Season 00"."""
     if release.skip or parent is None:
         return release.skip
     if parent.skip:
         return parent.skip
+    # "SPs/[Group] Show [Mini Anime 01]": beside the numbered specials, a file with no number or format is a bonus
+    if _SPS_FOLDER.fullmatch(folder.strip()) and release.episode is None and not release.media_format:
+        return "an extra, not an episode"
     if grandparent and grandparent.skip and "extra" in grandparent.skip:  # "Extras/Eyecatches/"
         return grandparent.skip
     if parent.season == 0 and not parent.title and not (release.media_format or parent.media_format):
@@ -192,7 +198,7 @@ def parse_path(path: str, *, skip: bool = True) -> FileInfo:
     parent = parse_release(parts[-2], folder=True) if len(parts) > 1 else None
     release = _named_special(release, parent) or release
     grandparent = parse_release(parts[-3], folder=True) if len(parts) > 2 else None
-    if skip and (reason := _skip_reason(release, parent, grandparent)):
+    if skip and (reason := _skip_reason(release, parent, grandparent, parts[-2] if parent else "")):
         raise ParseError(f"'{name}' is {reason}. Not updating.")
 
     details = _Details(release.season, release.part, release.year, release.media_format)

@@ -1970,5 +1970,19 @@
     "[Foobar] Sample! Vol.06 - Extra 01 (1080p_x264+AAC).mp4": "error",
     "Sample Show [BD]/Sample/Sample (+Intro).mkv": "error",
     "[Foobar] Sample Show/映像特典/[Foobar] Sample Show TV Making of 3DCG (BD 1920x1080p AVC FLAC).mkv": "error"
+  },
+  "H70 an SPs folder holds numbered specials beside unnumbered bonus files": {
+    "[Foobar] Sample Show [Ma10p_1080p]/SPs/[Foobar] Sample Show [Mini Anime 01][Ma10p_1080p][x265_flac].mkv": "error",
+    "[Foobar] Sample Show [Ma10p_1080p]/SPs/[Foobar] Sample Show [Copyright][Ma10p_1080p][x265].mkv": "error",
+    "[Foobar] Sample Show [Ma10p_1080p]/SPs/[Foobar] Sample Show [CM01v2][Ma10p_1080p][x265_flac].mkv": "error",
+    "[Foobar] Sample Show [Ma10p_1080p]/SPs/[Foobar] Sample Show [SP02v2][Ma10p_1080p][x265_flac].mkv": [
+      "Sample Show", 2, null, null, null, "SPECIAL"
+    ],
+    "[Foobar] Sample Show [Ma10p_1080p]/SPs/[Foobar] Sample Show [SP][Ma10p_1080p][x265_flac].mkv": [
+      "Sample Show", 1, null, null, null, "SPECIAL"
+    ],
+    "[Foobar] Sample Show/Specials/[Foobar] Sample Show Harumatsuri (2010) [0912D4FC].mkv": [
+      "Sample Show Harumatsuri", 1, null, null, 2010, "SPECIAL"
+    ]
   }
 }
