@@ -102,7 +102,7 @@ _TECH = re.compile(
     re.IGNORECASE,
 )
 _EXTRA_TOKEN = re.compile(
-    r"\b(?:NC(?:OP|ED)\d*[a-z]?|(?:OP|ED)\d+(?:v\d+)?[a-z]?|(?:OP|ED)v\d+|Creditless"
+    r"\b(?:NC(?:OP|ED)\d*(?:v\d+)?[a-z]?|(?:OP|ED)\d+(?:v\d+)?[a-z]?|(?:OP|ED)v\d+|Creditless"
     r"|Clean\s+(?:Opening|Ending)|(?:Opening|Ending)\s+Clean)\b",
     re.IGNORECASE,
 )
