@@ -1990,5 +1990,16 @@
     "[Foobar] Sample Show/Specials/[Foobar] Sample Show Harumatsuri (2010) [0912D4FC].mkv": [
       "Sample Show Harumatsuri", 1, null, null, 2010, "SPECIAL"
     ]
+  },
+  "H71 a revised number before a dash ends the title": {
+    "[Foobar] Sample Show 02v2 - The Foo of the Bar - Other Words (BD 720p) [CB194F3A].mkv": [
+      "Sample Show", 2, null, null, null, null
+    ],
+    "[Foobar] Sample Show 10v2 - Foo - Back to the Bar Part 1-3 - Help (BD 720p) [A7EC2CC1].mkv": [
+      "Sample Show", 10, null, null, null, null
+    ],
+    "[Foobar] Sample Show 01v2 - Foo Without Bar - Death Race 2010 (BD 720p) [32949214].mkv": [
+      "Sample Show", 1, null, null, null, null
+    ]
   }
 }

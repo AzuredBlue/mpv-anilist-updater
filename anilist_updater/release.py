@@ -224,7 +224,7 @@ _LEADING_EPISODE = re.compile(
     r"\s*(?P<ep>0\d{1,3}|[1-9]\d{1,2})(?:v\d+)?(?:\s+-\s+|\.\s+|(?<=\b0\d)\s+)(?=\S)", re.IGNORECASE
 )
 # "Monster 34 - At the End of Darkness", "The Animatrix 08 A Detective Story"
-_TITLE_NUMBER_DASH = re.compile(r"(?<=\S\s)(?P<ep>0\d{1,2}|[1-9]\d{1,3})\s+-\s+(?=[^\W\d])")
+_TITLE_NUMBER_DASH = re.compile(r"(?<=\S\s)(?P<ep>0\d{1,2}|[1-9]\d{1,3})(?:v\d+)?\s+-\s+(?=[^\W\d])")
 _QUOTED_EPISODE = re.compile(
     r"(?<=\S\s)(?P<ep>0\d{1,2}|[1-9]\d{1,2})\s+['\"“](?P<title>.+?)['\"”](?:\s*(?:$|\x00))"
 )
@@ -651,9 +651,10 @@ def _analyse(text: str, groups: list[str], *, folder: bool) -> _Segment:
         stops["part"] = part_at = match.start()
     if match := _VOLUME.search(region):
         stops["volume"] = match.start()
+    year_at = None
     if (match := _YEAR.search(region)) and region[: match.start()].strip():
         segment.year = int(match["year"])
-        stops["year"] = match.start()
+        stops["year"] = year_at = match.start()
     pack = _PACK.search(text)
     named, named_region = (text[: pack.start()], region[: pack.start()]) if pack else (text, region)
     if match := _format_word(_FORMAT.search(named), named):
@@ -683,6 +684,10 @@ def _analyse(text: str, groups: list[str], *, folder: bool) -> _Segment:
         if roman_at is not None and roman_at > title_end:
             segment.season = None
             del stops["season"]
+        # "Show 01v2 - Death Race 2010": and so does a year
+        if year_at is not None and year_at > title_end > start:
+            segment.year = None
+            del stops["year"]
         # "Show (1999) - Greed Island Final 08": the name goes on after its year
         if (
             gap
