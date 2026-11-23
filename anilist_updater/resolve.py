@@ -533,32 +533,30 @@ def _spellings(title: str) -> list[str]:
 
 
 def _variants(client: AniListClient, file: FileInfo, formats: list[str], texts: list[str]) -> list[Media]:
-    """The results of the first other search that finds an entry naming it, in batches of three per request."""
+    """The results of the first other search that finds an entry naming it, one at a time."""
     first = next((w for w in file.title.split() if w.casefold() not in ARTICLES), file.title)
     formats = _wider(formats, file)
-    for start in range(0, len(texts), 3):
-        client.prefetch([(text, file.year) for text in texts[start : start + 3]], formats)
-        for text in texts[start : start + 3]:
-            user_list, everything = client.search(text, file.year, formats)
-            other_name = text == file.alt_title
-            # A tail of the title must be whole words of the entry's title, which must still carry the first word
-            tail = text not in {file.title, file.alt_title, file.folder_title} and file.title.endswith(f" {text}")
-            pool = [
-                m
-                for m in _choose(user_list, everything, text)
-                if (_score(m, text) or (other_name and _has_words(m, text)))
-                and (not tail or (_names(m, first) and _has_phrase(m, text)))
-            ]
-            if not file.media_format:
-                pool.sort(key=lambda m: m["format"] not in SEASON_FORMATS)
-            # A search without the season finds some season of the show, so count the seasons that lead there
-            if pool and (file.season or 0) > 1 and not file.part and text != file.folder_title:
-                graph = _Graph([*user_list, *everything], _fetcher(client))
-                if _depth(pool[0], graph) != file.season:
-                    continue
-            if pool:
-                log.info("Found by searching %r instead of %r", text, file.query)
-                return pool
+    for text in texts:
+        user_list, everything = client.search(text, file.year, formats)
+        other_name = text == file.alt_title
+        # A tail of the title must be whole words of the entry's title, which must still carry the first word
+        tail = text not in {file.title, file.alt_title, file.folder_title} and file.title.endswith(f" {text}")
+        pool = [
+            m
+            for m in _choose(user_list, everything, text)
+            if (_score(m, text) or (other_name and _has_words(m, text)))
+            and (not tail or (_names(m, first) and _has_phrase(m, text)))
+        ]
+        if not file.media_format:
+            pool.sort(key=lambda m: m["format"] not in SEASON_FORMATS)
+        # A search without the season finds some season of the show, so count the seasons that lead there
+        if pool and (file.season or 0) > 1 and not file.part and text != file.folder_title:
+            graph = _Graph([*user_list, *everything], _fetcher(client))
+            if _depth(pool[0], graph) != file.season:
+                continue
+        if pool:
+            log.info("Found by searching %r instead of %r", text, file.query)
+            return pool
     return []
 
 
@@ -656,8 +654,6 @@ def resolve(client: AniListClient, file: FileInfo) -> AnimeInfo:
         AnimeInfo: The entry and the file's episode relative to it.
     """
     formats = _formats(file)
-    # The fallbacks search these again, so they share the first request
-    client.prefetch([(file.query, file.year), (file.title, file.year), (file.query, None)], formats)
     if file.absolute and file.absolute != file.episode and (info := _by_absolute(client, file, formats)):
         return info
     if file.arc and (info := _by_arc(client, file, formats)):
