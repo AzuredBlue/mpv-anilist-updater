@@ -43,8 +43,8 @@ _BY_IDS = (
 )
 
 
-def _search_query(count: int) -> str:
-    """A query for `count` searches, each with a global page `Global{i}` and a user list page `User{i}`."""
+def _search_query(count: int, *, user_lists: bool = True) -> str:
+    """A query for `count` searches: a global page `Global{i}` each, and with `user_lists` a user list page."""
     variables = ", ".join(f"$s{i}: String, $y{i}: FuzzyDateInt" for i in range(count))
     pages = "\n".join(
         f"""{name}{i}: Page(page: 1, perPage: 20) {{
@@ -52,7 +52,7 @@ def _search_query(count: int) -> str:
                   status_not: NOT_YET_RELEASED{on_list}) {{ ...MediaFields }}
         }}"""
         for i in range(count)
-        for name, on_list in (("Global", ""), ("User", ", onList: true"))
+        for name, on_list in (("Global", ""), ("User", ", onList: true"))[: 2 if user_lists else 1]
     )
     return f"{_MEDIA_FIELDS} query($formats: [MediaFormat], {variables}) {{ {pages} }}"
 
@@ -185,9 +185,10 @@ class AniListClient:
         variables: dict[str, Any] = {"formats": formats}
         for i, (title, year) in enumerate(wanted):
             variables |= {f"s{i}": title, f"y{i}": year * 10000 if year else 1}
-        data = self._post(_search_query(len(wanted)), variables)
+        data = self._post(_search_query(len(wanted), user_lists=bool(self._token)), variables)
         for i, (title, year) in enumerate(wanted):
-            user, everything = data[f"User{i}"]["media"], data[f"Global{i}"]["media"]
+            user = data[f"User{i}"]["media"] if self._token else []
+            everything = data[f"Global{i}"]["media"]
             self._searches[title, year, tuple(formats)] = (user, everything)
             for media in [*user, *everything]:
                 self._entries.setdefault(media["id"], media)

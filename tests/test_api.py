@@ -81,6 +81,20 @@ def test_prefetch_searches_in_one_request_and_search_answers_from_it(monkeypatch
     }
 
 
+def test_without_a_token_the_search_skips_the_user_list_pages(monkeypatch):
+    queries = []
+
+    def fake_post(query, _variables):
+        queries.append(query)
+        return {"Global0": {"media": [{"id": 1}]}}
+
+    client = api.AniListClient(None)
+    monkeypatch.setattr(client, "_post", fake_post)
+    assert client.search("Show", None, ["TV"]) == ([], [{"id": 1}])
+    assert "Global0" in queries[0]
+    assert "User" not in queries[0]
+
+
 def test_search_makes_a_request_only_for_a_search_not_made_yet(monkeypatch):
     calls = []
 
